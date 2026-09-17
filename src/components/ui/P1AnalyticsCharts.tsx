@@ -50,7 +50,7 @@ export const ProcessingFlowAreaChart: React.FC<ProcessingFlowAreaChartProps> = (
   const chartData = data && data.length > 0 ? data : defaultData
 
   return (
-    <div className={`p-4 bg-slate-900/90 border border-slate-800 rounded-2xl flex flex-col ${className}`}>
+    <div className={`dashboard-analytics-card p-4 bg-slate-900/90 border border-slate-800 rounded-2xl flex flex-col ${className}`}>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-emerald-400" />
@@ -64,9 +64,7 @@ export const ProcessingFlowAreaChart: React.FC<ProcessingFlowAreaChartProps> = (
               key={r}
               type="button"
               onClick={() => setRange(r)}
-              className={`px-2 py-0.5 rounded font-medium transition-colors ${
-                range === r ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`dashboard-range-button ${range === r ? 'active' : ''}`}
             >
               {r}
             </button>
@@ -79,8 +77,8 @@ export const ProcessingFlowAreaChart: React.FC<ProcessingFlowAreaChartProps> = (
           <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id="colorIngresados" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.4} />
-                <stop offset="95%" stopColor="#38bdf8" stopOpacity={0.0} />
+                <stop offset="5%" stopColor="#6f9d7c" stopOpacity={0.34} />
+                <stop offset="95%" stopColor="#6f9d7c" stopOpacity={0.0} />
               </linearGradient>
               <linearGradient id="colorRevisados" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#10b981" stopOpacity={0.5} />
@@ -102,7 +100,7 @@ export const ProcessingFlowAreaChart: React.FC<ProcessingFlowAreaChartProps> = (
               type="monotone"
               dataKey="ingresados"
               name="Predios Ingresados"
-              stroke="#38bdf8"
+              stroke="#6f9d7c"
               strokeWidth={2}
               fillOpacity={1}
               fill="url(#colorIngresados)"
@@ -147,7 +145,7 @@ export const MaturityRadarChart: React.FC<MaturityRadarChartProps> = ({ data, cl
   const chartData = data && data.length > 0 ? data : defaultRadarData
 
   return (
-    <div className={`p-4 bg-slate-900/90 border border-slate-800 rounded-2xl flex flex-col ${className}`}>
+    <div className={`dashboard-analytics-card p-4 bg-slate-900/90 border border-slate-800 rounded-2xl flex flex-col ${className}`}>
       <div className="flex items-center gap-2 mb-2">
         <ShieldCheck className="w-4 h-4 text-indigo-400" />
         <h3 className="text-xs font-semibold text-slate-100">
@@ -174,8 +172,8 @@ export const MaturityRadarChart: React.FC<MaturityRadarChartProps> = ({ data, cl
             <Radar
               name="Completitud Real (%)"
               dataKey="actual"
-              stroke="#818cf8"
-              fill="#6366f1"
+              stroke="#2f8151"
+              fill="#64a579"
               fillOpacity={0.4}
             />
             <Tooltip
@@ -221,7 +219,7 @@ export const AiConfidenceDonutChart: React.FC<AiConfidenceDonutChartProps> = ({
   const total = highCount + mediumCount + lowCount
 
   return (
-    <div className={`p-4 bg-slate-900/90 border border-slate-800 rounded-2xl flex flex-col ${className}`}>
+    <div className={`dashboard-analytics-card p-4 bg-slate-900/90 border border-slate-800 rounded-2xl flex flex-col ${className}`}>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <Activity className="w-4 h-4 text-emerald-400" />
@@ -406,7 +404,7 @@ export const BatchesTreemap: React.FC<BatchesTreemapProps> = ({ batches, classNa
   }
 
   return (
-    <div className={`p-4 bg-slate-900/90 border border-slate-800 rounded-2xl flex flex-col ${className}`}>
+    <div className={`dashboard-analytics-card p-4 bg-slate-900/90 border border-slate-800 rounded-2xl flex flex-col ${className}`}>
       <div className="flex items-center gap-2 mb-2">
         <Layers className="w-4 h-4 text-emerald-400" />
         <h3 className="text-xs font-semibold text-slate-100">

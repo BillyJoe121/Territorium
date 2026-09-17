@@ -1,5 +1,5 @@
 import React from 'react'
-import { FolderKanban, CheckCircle2, AlertTriangle, Layers, TrendingUp, ShieldAlert } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, Layers, ShieldAlert } from 'lucide-react'
 
 export interface KpiMetric {
   id: string
@@ -72,7 +72,6 @@ export function BentoGridKpis({ metrics = DEFAULT_METRICS }: BentoGridKpisProps)
             <span className="bento-kpi-value">{metric.value}</span>
             {metric.trend && (
               <span className={`bento-kpi-trend ${metric.trendPositive ? 'positive' : 'negative'}`}>
-                {metric.trendPositive ? <TrendingUp size={12} /> : <AlertTriangle size={12} />}
                 <span>{metric.trend}</span>
               </span>
             )}

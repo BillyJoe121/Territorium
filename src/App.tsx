@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, Archive, ArrowRight, Bot, CheckCircle2, ChevronRight, ClipboardCheck, Cloud, Download, FilePlus2, FileText, FolderKanban, LayoutDashboard, LoaderCircle, LogOut, Plus, RefreshCw, RotateCcw, Search, Settings2, Share2, Shield, ShieldCheck, SlidersHorizontal, Trash2, UploadCloud, Users, WifiOff, X, XCircle } from 'lucide-react'
+import { AlertTriangle, Archive, ArrowRight, CheckCircle2, ClipboardCheck, Cloud, Download, FilePlus2, FileText, FolderKanban, LayoutDashboard, LoaderCircle, LogOut, Plus, RefreshCw, RotateCcw, Search, Settings2, Share2, Shield, ShieldCheck, SlidersHorizontal, Trash2, UploadCloud, Users, WifiOff, X, XCircle } from 'lucide-react'
 import { Toaster, toast as sonnerToast } from 'sonner'
 import { BentoGridKpis, type KpiMetric } from './components/ui/BentoGridKpis'
 import { DashboardCharts, type PropertyStatusData, type DiscrepancyCategoryData } from './components/ui/DashboardCharts'
@@ -1156,17 +1156,17 @@ function Dashboard({ project, batches, records, reviews, onGo }: { project: Proj
   ]
 
   return (
-    <>
-      <div className="hero">
-        <div>
+    <div className="dashboard-page">
+      <div className="hero dashboard-hero">
+        <div className="dashboard-hero-copy">
           <p className="eyebrow">EXPEDIENTE ACTIVO</p>
           <h2>{project.name}</h2>
           <p>{project.municipality}, {project.department}. Controla la extracción documental con revisión humana y trazabilidad.</p>
-          <button className="button primary" onClick={() => onGo('carga')}><UploadCloud size={18} />Cargar nuevo lote</button>
+          <button className="button primary" onClick={() => onGo('carga')}>Cargar nuevo lote</button>
         </div>
-        <div className="hero-orbit">
-          <Bot size={44} />
-          <span>IA<br />asistida</span>
+        <div className="dashboard-hero-meta">
+          <span>IA asistida</span>
+          <small>Revisión humana<br />antes de certificar</small>
         </div>
       </div>
 
@@ -1177,18 +1177,18 @@ function Dashboard({ project, batches, records, reviews, onGo }: { project: Proj
       <DashboardCharts statusData={statusData} discrepancyData={discrepancyData} />
 
       {/* Visualización Analítica Ejecutiva P1 (US-234, US-235, US-236, US-238) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
+      <div className="dashboard-analytics-grid">
         <ProcessingFlowAreaChart />
         <MaturityRadarChart />
         <AiConfidenceDonutChart />
         <BatchesTreemap />
       </div>
 
-      <div className="two-column">
-        <section className="card">
+      <div className="two-column dashboard-bottom-grid">
+        <section className="card dashboard-operations-card">
           <div className="section-title">
             <div><p className="eyebrow">OPERACIÓN</p><h3>Últimos lotes</h3></div>
-            <button className="text-button" onClick={() => onGo('carga')}>Ver todos <ChevronRight size={16} /></button>
+            <button className="text-button" onClick={() => onGo('carga')}>Ver todos</button>
           </div>
           {batches.slice(0, 4).map((batch) => (
             <div className="list-row" key={batch.id}>
@@ -1203,10 +1203,10 @@ function Dashboard({ project, batches, records, reviews, onGo }: { project: Proj
           {!batches.length && <EmptyState text="Aún no hay lotes procesados." />}
         </section>
 
-        <section className="card emphasis">
+        <section className="card emphasis dashboard-quality-card">
           <div className="section-title">
             <div><p className="eyebrow">CONTROL DE CALIDAD</p><h3>Revisión pendiente</h3></div>
-            <button className="text-button" onClick={() => onGo('revision')}>Resolver <ChevronRight size={16} /></button>
+            <button className="text-button" onClick={() => onGo('revision')}>Resolver</button>
           </div>
           {reviews.slice(0, 3).map((review) => (
             <div className="review-row" key={review.id}>
@@ -1220,7 +1220,7 @@ function Dashboard({ project, batches, records, reviews, onGo }: { project: Proj
           {!reviews.length && <EmptyState text="No hay decisiones pendientes." />}
         </section>
       </div>
-    </>
+    </div>
   )
 }
 
