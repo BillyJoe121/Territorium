@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.local
+.DS_Store
+*.tsbuildinfo
+supabase/.temp/
+worker/.venv/
+__pycache__/
+.forge/
+.myconfig/
+graphify-out/cache/
+graphify-out/*/
+graphify-out/.graphify_*
+graphify-out/manifest.json
