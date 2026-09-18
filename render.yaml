@@ -49,7 +49,6 @@ services:
     dockerContext: ./worker
     healthCheckPath: /health
     autoDeployTrigger: checksPass
-    maxShutdownDelaySeconds: 60
     envVars:
       - key: SUPABASE_URL
         sync: false
