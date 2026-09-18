@@ -40,6 +40,7 @@ import {
   DEFAULT_PROMPT_VERSIONS,
   testPromptInSandbox,
 } from '../lib/extractorConfig'
+import { GuideSidebar } from './pmo/AdminComponents'
 
 interface ConfigurationViewProps {
   configs: ExtractorConfig[]
@@ -252,37 +253,17 @@ export function ConfigurationView({
         </div>
       )}
 
-      {/* Selector de Pestañas */}
-      <div className="config-tabs-nav">
-        <button
-          className={`config-tab-btn ${activeTab === 'extractores' ? 'active' : ''}`}
-          onClick={() => setActiveTab('extractores')}
-        >
-          <Sliders size={18} />
-          <span>Extractores y Modelos (US-056, US-060)</span>
-        </button>
-        <button
-          className={`config-tab-btn ${activeTab === 'prompts' ? 'active' : ''}`}
-          onClick={() => setActiveTab('prompts')}
-        >
-          <Layers size={18} />
-          <span>Versiones de Prompts (US-057)</span>
-        </button>
-        <button
-          className={`config-tab-btn ${activeTab === 'playground' ? 'active' : ''}`}
-          onClick={() => setActiveTab('playground')}
-        >
-          <Cpu size={18} />
-          <span>Banco de Pruebas / Sandbox (US-062)</span>
-        </button>
-        <button
-          className={`config-tab-btn ${activeTab === 'telemetria' ? 'active' : ''}`}
-          onClick={() => setActiveTab('telemetria')}
-        >
-          <Zap size={18} />
-          <span>Telemetría y Trazabilidad IA (US-059)</span>
-        </button>
-      </div>
+      <GuideSidebar
+        title="Secciones de configuración"
+        activeId={activeTab}
+        onSelect={(id) => setActiveTab(id as TabKey)}
+        items={[
+          { id: 'extractores', label: 'Extractores y modelos' },
+          { id: 'prompts', label: 'Versiones de prompts' },
+          { id: 'playground', label: 'Banco de pruebas' },
+          { id: 'telemetria', label: 'Telemetría de IA' },
+        ]}
+      />
 
       {/* PESTAÑA 1: EXTRACTORES Y MODELOS (US-056, US-060) */}
       {activeTab === 'extractores' && (

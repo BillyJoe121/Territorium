@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import './styles.css'
 import './production.css'
+import './ui-system.css'
 import { AuthProvider } from './auth/AuthContext'
 import { ErrorBoundary } from './ErrorBoundary'
 

@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, Archive, ArrowRight, CheckCircle2, ClipboardCheck, Cloud, Download, FilePlus2, FileText, FolderKanban, LayoutDashboard, LoaderCircle, LogOut, Plus, RefreshCw, RotateCcw, Search, Settings2, Share2, Shield, ShieldCheck, SlidersHorizontal, Trash2, UploadCloud, Users, WifiOff, X, XCircle } from 'lucide-react'
+import { Activity, AlertTriangle, Archive, ArrowRight, CheckCircle, CheckCircle2, ClipboardCheck, Cloud, Download, FilePlus2, FileSpreadsheet, FileText, FolderKanban, Landmark, LayoutDashboard, LoaderCircle, LogOut, Plus, RefreshCw, RotateCcw, Search, Settings2, Share2, Shield, ShieldCheck, SlidersHorizontal, Trash2, UploadCloud, Users, WifiOff, X, XCircle } from 'lucide-react'
 import { Toaster, toast as sonnerToast } from 'sonner'
 import { BentoGridKpis, type KpiMetric } from './components/ui/BentoGridKpis'
 import { DashboardCharts, type PropertyStatusData, type DiscrepancyCategoryData } from './components/ui/DashboardCharts'
@@ -12,6 +12,16 @@ import { NotaryLinksAdminModal, type NotaryLinkRecord } from './components/ui/No
 import { ExcelExportConfigModal } from './components/ui/ExcelExportConfigModal'
 import { InviteUserModal } from './components/ui/InviteUserModal'
 import { TemplateEditorWithVariables } from './components/TemplateEditorWithVariables'
+import { OperationalHomeView } from './components/views/OperationalHomeView'
+import { ProjectDetailView } from './components/views/ProjectDetailView'
+import { ProcessingMonitorView } from './components/views/ProcessingMonitorView'
+import { DiscrepanciesView } from './components/views/DiscrepanciesView'
+import { NegotiationView } from './components/views/NegotiationView'
+import { DeliverablesView } from './components/views/DeliverablesView'
+import { NotaryPortalAdminView } from './components/views/NotaryPortalAdminView'
+import { AuditTrailView } from './components/views/AuditTrailView'
+import { PageHeader } from './components/common/PageHeader'
+import { EmptyState as NewEmptyState } from './components/common/EmptyState'
 import {
   ProcessingFlowAreaChart,
   MaturityRadarChart,
@@ -82,18 +92,97 @@ import type {
   VisualDensity,
 } from './types'
 
-type Screen = 'inicio' | 'expedientes' | 'carga' | 'revision' | 'exportar' | 'usuarios' | 'configuracion' | 'trazabilidad' | 'papelera' | 'lotes_nuevo' | 'formatos_editor'
-const menu: { id: Screen; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: 'inicio', label: 'Inicio', icon: LayoutDashboard },
-  { id: 'expedientes', label: 'Expedientes', icon: FolderKanban },
-  { id: 'carga', label: 'Cargar y procesar', icon: UploadCloud },
-  { id: 'revision', label: 'Revisión humana', icon: ClipboardCheck },
-  { id: 'exportar', label: 'Exportaciones', icon: Download },
-  { id: 'usuarios', label: 'Participantes', icon: Users },
-  { id: 'configuracion', label: 'Configuración', icon: Settings2 },
-  { id: 'trazabilidad', label: 'Trazabilidad', icon: ShieldCheck },
-  { id: 'papelera', label: 'Papelera', icon: Trash2 },
+export type Screen =
+  | 'inicio'
+  | 'expedientes'
+  | 'proyecto_detalle'
+  | 'carga'
+  | 'monitor'
+  | 'discrepancias'
+  | 'revision'
+  | 'negociacion'
+  | 'formatos_editor'
+  | 'exportar'
+  | 'portal_notarial'
+  | 'trazabilidad'
+  | 'usuarios'
+  | 'configuracion'
+  | 'papelera'
+  | 'lotes_nuevo'
+
+export interface NavItem {
+  id: Screen
+  label: string
+  icon: typeof LayoutDashboard
+  requiresProject?: boolean
+}
+
+export interface NavGroup {
+  title: string
+  items: NavItem[]
+}
+
+const navGroups: NavGroup[] = [
+  {
+    title: 'Visión General',
+    items: [
+      { id: 'inicio', label: 'Inicio Operativo', icon: LayoutDashboard },
+      { id: 'expedientes', label: 'Expedientes Prediales', icon: FolderKanban },
+    ],
+  },
+  {
+    title: 'Operación del Expediente',
+    items: [
+      { id: 'carga', label: 'Ingesta y Manifiesto', icon: UploadCloud, requiresProject: true },
+      { id: 'monitor', label: 'Monitor de Procesamiento', icon: Activity, requiresProject: true },
+      { id: 'revision', label: 'Estación de Revisión', icon: ClipboardCheck, requiresProject: true },
+      { id: 'discrepancias', label: 'Excepciones y Conflictos', icon: AlertTriangle, requiresProject: true },
+      { id: 'negociacion', label: 'Negociación y Avalúos', icon: Landmark, requiresProject: true },
+      { id: 'exportar', label: 'Entregables y Cierre', icon: Download, requiresProject: true },
+    ],
+  },
+  {
+    title: 'Gobernanza y Sistema',
+    items: [
+      { id: 'usuarios', label: 'Participantes y Roles', icon: Users },
+      { id: 'trazabilidad', label: 'Auditoría Forense', icon: ShieldCheck },
+      { id: 'portal_notarial', label: 'Portal Notarial', icon: Share2 },
+      { id: 'configuracion', label: 'Configuración Técnica', icon: Settings2 },
+    ],
+  },
 ]
+
+const projectScopedScreens: Screen[] = [
+  'carga',
+  'monitor',
+  'discrepancias',
+  'revision',
+  'negociacion',
+  'exportar',
+  'formatos_editor',
+  'lotes_nuevo',
+  'proyecto_detalle',
+]
+const screenRequiresProject = (screen: Screen) => projectScopedScreens.includes(screen)
+
+const screenLabels: Record<Screen, { title: string; eyebrow: string }> = {
+  inicio: { title: 'Inicio Operativo', eyebrow: 'PANEL DE CONTROL TERRITORIUM' },
+  expedientes: { title: 'Expedientes Prediales', eyebrow: 'INVENTARIO DE PROYECTOS' },
+  proyecto_detalle: { title: 'Ficha del Proyecto', eyebrow: 'DETALLE Y ETAPAS OPERATIVAS' },
+  carga: { title: 'Ingesta y Manifiesto', eyebrow: 'RECEPCIÓN DOCUMENTAL' },
+  monitor: { title: 'Monitor de Procesamiento', eyebrow: 'PIPELINE EN TIEMPO REAL' },
+  discrepancias: { title: 'Excepciones y Conflictos', eyebrow: 'CONCILIACIÓN FÍSICA Y JURÍDICA' },
+  revision: { title: 'Estación de Revisión Humana', eyebrow: 'CERTIFICACIÓN DE ATRIBUTOS' },
+  negociacion: { title: 'Negociación y Afectaciones', eyebrow: 'CATASTRO, AVALÚOS Y COMPENSACIÓN' },
+  formatos_editor: { title: 'Plantillas y Minutas', eyebrow: 'GENERACIÓN DOCUMENTAL' },
+  exportar: { title: 'Entregables y Cierre', eyebrow: 'MATRICES EXCEL Y DOCUMENTOS' },
+  portal_notarial: { title: 'Portal Notarial y Terceros', eyebrow: 'ENLACES SEGUROS HMAC Y OTP' },
+  trazabilidad: { title: 'Auditoría Forense', eyebrow: 'REGISTRO INMUTABLE SHA-256' },
+  usuarios: { title: 'Participantes y Roles', eyebrow: 'GOBERNANZA RBAC' },
+  configuracion: { title: 'Configuración Técnica', eyebrow: 'SISTEMA, IA Y PROMPTS' },
+  papelera: { title: 'Papelera de Reciclaje', eyebrow: 'RECUPERACIÓN SEGURA' },
+  lotes_nuevo: { title: 'Carga de Lote Asistida', eyebrow: 'INGESTA A PANTALLA COMPLETA' },
+}
 
 const kindLabels: Record<DocumentKind, string> = { estudio_titulos: 'Estudio de títulos', plano: 'Plano', linderos: 'Linderos / Cabida', negociacion: 'Negociación', soporte: 'Soporte', sin_clasificar: 'Sin clasificar' }
 const stateLabels: Record<JobState, string> = { pendiente: 'Pendiente', en_proceso: 'En proceso', requiere_revision: 'Requiere revisión', completado: 'Completado', fallido: 'Fallido', cancelado: 'Cancelado' }
@@ -109,9 +198,15 @@ function classify(name: string): DocumentKind {
 }
 
 function Brand() {
-  return <div className="brand" aria-label="Territorium, gestión predial, ordenamiento y derecho de tierras">
-    <div className="brand-mark"><i /><b /><em /></div><div><strong>TERRIT<span>O</span>RIUM</strong><small>GESTIÓN PREDIAL, ORDENAMIENTO Y DERECHO DE TIERRAS</small></div>
-  </div>
+  return (
+    <div className="brand" aria-label="Territorium, gestión predial y derecho de tierras">
+      <div className="brand-mark">T</div>
+      <div className="brand-copy">
+        <strong>TERRITORIUM</strong>
+        <small>GESTIÓN PREDIAL</small>
+      </div>
+    </div>
+  )
 }
 
 function App() {
@@ -200,7 +295,25 @@ function App() {
         if (hash.startsWith('#/app/')) {
           const parts = hash.replace('#/app/', '').split('?')
           const targetScreen = parts[0] as Screen
-          if (['inicio', 'expedientes', 'carga', 'revision', 'exportar', 'usuarios', 'configuracion', 'trazabilidad', 'papelera', 'lotes_nuevo', 'formatos_editor'].includes(targetScreen)) {
+          const validScreens: Screen[] = [
+            'inicio',
+            'expedientes',
+            'proyecto_detalle',
+            'carga',
+            'monitor',
+            'discrepancias',
+            'revision',
+            'negociacion',
+            'formatos_editor',
+            'exportar',
+            'portal_notarial',
+            'trazabilidad',
+            'usuarios',
+            'configuracion',
+            'papelera',
+            'lotes_nuevo',
+          ]
+          if (validScreens.includes(targetScreen)) {
             setScreen(targetScreen)
           }
         }
@@ -230,6 +343,10 @@ function App() {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
   }, [])
   const activeProject = state.projects.find((project) => project.id === activeProjectId)
+  const clearProjectContext = () => {
+    setActiveProjectId('')
+    setScreen('inicio')
+  }
   const update = (next: PlatformState) => { setState(next); saveState(next) }
   const audit = (projectId: string, action: string, detail: string): AuditEvent => ({ id: makeId('audit'), projectId, at: date(), action, detail })
   const toast = (message: string) => {
@@ -237,6 +354,16 @@ function App() {
     sonnerToast.success(message)
     window.setTimeout(() => setNotice(null), 4000)
   }
+
+  // Las rutas operativas trabajan sobre un expediente concreto. Si se abre una
+  // URL profunda sin contexto, llevamos al usuario al selector en lugar de
+  // renderizar una pantalla vacía o una vista con datos ambiguos.
+  useEffect(() => {
+    if (!publicPortalToken && screenRequiresProject(screen) && !activeProject) {
+      setScreen('expedientes')
+      toast('Selecciona un expediente para continuar.')
+    }
+  }, [activeProject, publicPortalToken, screen])
 
   const refresh = useCallback(async (silent = false) => {
     if (!remote || !user) return
@@ -717,15 +844,29 @@ function App() {
   const masterRecords: PropertyMasterRecord[] = projectRecords.map((r) =>
     convertPropertyRecordToMasterRecord(r, state.documents.filter((d) => d.projectId === activeProjectId))
   )
-  const content = !activeProject && screen !== 'expedientes' ? <EmptyProject onCreate={() => setScreen('expedientes')} /> : {
-    inicio: <Dashboard project={activeProject!} batches={projectBatches} records={projectRecords} reviews={pendingReviews} onGo={setScreen} />,
+  const content = {
+    inicio: (
+      <OperationalHomeView
+        projects={state.projects}
+        batches={state.batches}
+        records={state.records}
+        reviews={state.reviews}
+        activeProject={activeProject}
+        onNavigate={(screen: any) => setScreen(screen)}
+        onSelectProject={(projId: string) => {
+          setActiveProjectId(projId)
+          setScreen('proyecto_detalle')
+        }}
+        onClearContext={clearProjectContext}
+      />
+    ),
     expedientes: (
       <ProjectsManagementView
         projects={state.projects}
         activeId={activeProjectId}
         onSelect={(id) => {
           setActiveProjectId(id)
-          setScreen('inicio')
+          setScreen('proyecto_detalle')
         }}
         onCreate={handleCreateProject}
         onUpdateMetadata={handleUpdateProjectMetadata}
@@ -737,7 +878,19 @@ function App() {
         busyAction={busyAction}
       />
     ),
-    carga: (
+    proyecto_detalle: activeProject ? (
+      <ProjectDetailView
+        project={activeProject}
+        batches={projectBatches}
+        records={projectRecords}
+        reviews={state.reviews.filter((r) => projectRecords.some((rec) => rec.id === r.recordId))}
+        documents={state.documents.filter((doc) => doc.projectId === activeProjectId)}
+        onNavigate={(targetScreen: any) => setScreen(targetScreen)}
+      />
+    ) : (
+      <ProjectRequired onSelect={() => setScreen('expedientes')} />
+    ),
+    carga: activeProject ? (
       <IngestionView
         project={activeProject!}
         batches={projectBatches}
@@ -750,8 +903,58 @@ function App() {
         busyAction={busyAction}
         uploadProgress={uploadProgress}
       />
+    ) : (
+      <ProjectRequired onSelect={() => setScreen('expedientes')} />
     ),
-    revision: (
+    monitor: activeProject ? (
+      <ProcessingMonitorView
+        project={activeProject}
+        batches={projectBatches}
+        tasks={state.tasks?.filter((t) => t.projectId === activeProjectId) || []}
+        onReprocessTask={handleReprocessTask}
+        onCancelBatch={cancelBatch}
+        onNavigateToReview={() => setScreen('revision')}
+      />
+    ) : (
+      <ProjectRequired onSelect={() => setScreen('expedientes')} />
+    ),
+    discrepancias: activeProject ? (
+      <DiscrepanciesView
+        records={masterRecords}
+        projectName={activeProject.name}
+        onResolveDiscrepancy={async (recordId, attrKey, resolvedValue, justification) => {
+          await saveAttributes(recordId, { [attrKey]: resolvedValue })
+          update({
+            ...state,
+            audit: [
+              audit(
+                activeProjectId,
+                'Discrepancia Resuelta',
+                `Atributo ${attrKey} resuelto a: "${resolvedValue}". Justificación: ${justification}`
+              ),
+              ...state.audit,
+            ],
+          })
+          toast('Discrepancia resuelta y registrada en auditoría forense.')
+        }}
+        onOpenEvidence={async (docId: string) => {
+          const doc = state.documents.find((d) => d.id === docId)
+          if (doc?.storagePath) {
+            try {
+              const url = await getSignedDocumentUrl(doc.storagePath)
+              window.open(url, '_blank', 'noopener,noreferrer')
+            } catch {
+              toast('No fue posible abrir documento fuente.')
+            }
+          } else {
+            toast('Documento disponible localmente.')
+          }
+        }}
+      />
+    ) : (
+      <ProjectRequired onSelect={() => setScreen('expedientes')} />
+    ),
+    revision: activeProject ? (
       <ReviewStationView
         records={masterRecords}
         documents={state.documents.filter((doc) => doc.projectId === activeProjectId)}
@@ -779,62 +982,127 @@ function App() {
         onNotice={toast}
         onError={(msg) => setError(msg)}
       />
+    ) : (
+      <ProjectRequired onSelect={() => setScreen('expedientes')} />
     ),
-    exportar: (
+    negociacion: activeProject ? (
+      <NegotiationView
+        records={projectRecords}
+        projectName={activeProject.name}
+        onUpdateRecord={async (recordId: string, updatedFields: Record<string, string>) => {
+          await saveAttributes(recordId, updatedFields)
+          toast('Ficha de negociación actualizada.')
+        }}
+      />
+    ) : (
+      <ProjectRequired onSelect={() => setScreen('expedientes')} />
+    ),
+    formatos_editor: activeProject ? (
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--color-border-subtle)' }}>
+          <div>
+            <p className="eyebrow">EDITOR DE MINUTAS Y ESCRITURAS</p>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Editor de Plantillas Jurídicas</h2>
+            <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              Inserte variables dinámicas para estandarizar la generación de minutas de servidumbre.
+            </p>
+          </div>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
-            onClick={() => setIsExcelConfigModalOpen(true)}
+            onClick={() => setScreen('exportar')}
           >
-            <Settings2 size={14} /> Configurar Hojas y Columnas (US-266)
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => setScreen('formatos_editor')}
-          >
-            <FileText size={14} /> Editor de Minutas Dinámicas (US-210)
+            Volver a Entregables
           </button>
         </div>
-        <ExportsView
-          records={masterRecords}
-          projectName={activeProject?.name ?? 'Expediente Territorial'}
-          userEmail={user?.email ?? 'operador@territorium.com'}
-          aiLogs={state.aiLogs || []}
-          onNotice={toast}
-          onError={(msg) => setError(msg)}
-          onDownload={async (criteria) => {
-            try {
-              await downloadMasterRecordsXlsx(masterRecords, {
-                projectName: activeProject?.name,
-                batchId: projectBatches[0]?.id ?? 'LOTE-ACTIVO',
-                batchVersion: 1,
-                userEmail: user?.email,
-                inclusionCriteria: criteria,
-              })
-              toast(`Libro CORRESPONDENCIA descargado (${criteria}).`)
-            } catch (caught) {
-              setError(caught instanceof Error ? caught.message : 'No fue posible generar el Excel.')
-            }
-          }}
-        />
+        <TemplateEditorWithVariables onNotice={toast} />
+        <DynamicTemplateEditor projectId={activeProjectId} />
       </div>
+    ) : (
+      <ProjectRequired onSelect={() => setScreen('expedientes')} />
+    ),
+    exportar: activeProject ? (
+      <DeliverablesView
+        records={masterRecords}
+        projectName={activeProject.name}
+        userEmail={user?.email ?? 'operador@territorium.com'}
+        onDownloadExcel={async (criteria: 'approved_only' | 'all') => {
+          try {
+            await downloadMasterRecordsXlsx(masterRecords, {
+              projectName: activeProject?.name,
+              batchId: projectBatches[0]?.id ?? 'LOTE-ACTIVO',
+              batchVersion: 1,
+              userEmail: user?.email,
+              inclusionCriteria: criteria === 'approved_only' ? 'only_approved' : 'all',
+            })
+            toast(`Libro CORRESPONDENCIA descargado (${criteria}).`)
+          } catch (caught) {
+            setError(caught instanceof Error ? caught.message : 'No fue posible generar el Excel.')
+          }
+        }}
+        onDownloadZip={async (criteria: 'approved_only' | 'all') => {
+          toast(`Paquete ZIP documental preparado (${criteria}).`)
+        }}
+        onNavigateToTemplates={() => setScreen('formatos_editor')}
+        onNavigateToReviews={() => setScreen('revision')}
+      />
+    ) : (
+      <ProjectRequired onSelect={() => setScreen('expedientes')} />
+    ),
+    portal_notarial: (
+      <NotaryPortalAdminView
+        links={notaryLinks}
+        projects={state.projects}
+        activeProjectId={activeProjectId}
+        onCreateLink={(newLink: any) => {
+          setNotaryLinks((prev) => [newLink, ...prev])
+          toast('Enlace notarial seguro generado con firma HMAC y OTP.')
+        }}
+        onRevokeLink={(tokenId: string) => {
+          setNotaryLinks((prev) =>
+            prev.map((l) => (l.payload.tokenId === tokenId ? { ...l, isRevoked: true } : l))
+          )
+          toast('Enlace notarial revocado inmediatamente.')
+        }}
+      />
+    ),
+    trazabilidad: (
+      <AuditTrailView
+        events={state.audit}
+        activeProjectId={activeProjectId}
+        projects={state.projects}
+      />
     ),
     usuarios: (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-xs text-slate-400">Gestione el equipo del proyecto y sus permisos por rol RBAC.</p>
+          <div>
+            <p className="eyebrow">GOBERNANZA Y ACCESOS</p>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Participantes y Roles</h2>
+            <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              Gestione el equipo del proyecto y sus permisos por rol RBAC (6 perfiles canónicos).
+            </p>
+          </div>
           <button
             type="button"
             className="btn btn-primary btn-sm"
             onClick={() => setIsInviteUserModalOpen(true)}
           >
-            <Plus size={14} /> Invitar Miembro (US-267)
+            <Plus size={14} /> Invitar Miembro
           </button>
         </div>
-        <UsersManagementView project={activeProject!} onNotice={toast} onError={(msg) => setError(msg)} />
+        {activeProject ? (
+          <UsersManagementView project={activeProject} onNotice={toast} onError={(msg) => setError(msg)} />
+        ) : (
+          <div className="card" style={{ padding: '24px' }}>
+            <p style={{ color: 'var(--color-text-secondary)', marginBottom: '16px' }}>
+              Selecciona un proyecto para gestionar sus participantes específicos.
+            </p>
+            {state.projects[0] && (
+              <UsersManagementView project={state.projects[0]} onNotice={toast} onError={(msg) => setError(msg)} />
+            )}
+          </div>
+        )}
       </div>
     ),
     configuracion: (
@@ -858,65 +1126,78 @@ function App() {
           isLocalMode={dataMode === 'local'}
         />
         <SsoAndNotificationSettings />
-        <DynamicTemplateEditor
-          projectId={activeProjectId || 'default-project'}
-        />
       </div>
     ),
-    trazabilidad: <AuditView events={state.audit.filter((event) => event.projectId === activeProjectId)} />,
     papelera: (
-      <div className="card space-y-4">
+      <div className="card space-y-4" style={{ padding: '24px' }}>
         <div className="section-title">
           <div>
-            <p className="eyebrow">RECUPERACIÓN Y SEGURIDAD (US-207)</p>
+            <p className="eyebrow">RECUPERACIÓN Y SEGURIDAD</p>
             <h2>Papelera de Expedientes</h2>
-            <p className="text-xs text-slate-400">Expedientes archivados o eliminados. Puede restaurarlos en cualquier momento sin pérdida de datos.</p>
+            <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              Expedientes archivados o retirados de la bandeja activa. Puede restaurarlos en cualquier momento.
+            </p>
           </div>
         </div>
         {state.projects.filter((p) => p.isArchived).length > 0 ? (
           <div className="space-y-2">
-            {state.projects.filter((p) => p.isArchived).map((p) => (
-              <div key={p.id} className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between">
-                <div>
-                  <strong className="text-slate-200">{p.name}</strong>
-                  <p className="text-xs text-slate-400">{p.municipality}, {p.department} · Archivado el {p.archivedAt ? new Date(p.archivedAt).toLocaleDateString() : 'recientemente'}</p>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={async () => {
-                    await handleToggleArchiveProject(p.id, false)
-                    toast(`Expediente ${p.name} restaurado con éxito.`)
-                  }}
+            {state.projects
+              .filter((p) => p.isArchived)
+              .map((p) => (
+                <div
+                  key={p.id}
+                  className="p-3 border rounded-xl flex items-center justify-between"
+                  style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border-subtle)' }}
                 >
-                  <RotateCcw size={14} /> Restaurar Expediente
-                </button>
-              </div>
-            ))}
+                  <div>
+                    <strong style={{ color: 'var(--color-text-primary)' }}>{p.name}</strong>
+                    <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                      {p.municipality}, {p.department} · Archivado el{' '}
+                      {p.archivedAt ? new Date(p.archivedAt).toLocaleDateString('es-CO') : 'recientemente'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={async () => {
+                      await handleToggleArchiveProject(p.id, false)
+                      toast(`Expediente ${p.name} restaurado con éxito.`)
+                    }}
+                  >
+                    <RotateCcw size={14} /> Restaurar Expediente
+                  </button>
+                </div>
+              ))}
           </div>
         ) : (
-          <EmptyState text="No hay expedientes en la papelera." />
+          <NewEmptyState
+            title="Papelera vacía"
+            description="No hay expedientes archivados o en espera de purga en este momento."
+            icon={<Trash2 size={24} />}
+          />
         )}
       </div>
     ),
-    lotes_nuevo: (
-      <div className="card space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+    lotes_nuevo: activeProject ? (
+      <div className="card space-y-4" style={{ padding: '24px' }}>
+        <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--color-border-subtle)' }}>
           <div>
-            <p className="eyebrow">ASISTENTE DE INGESTA A PANTALLA COMPLETA (US-208)</p>
-            <h2>Carga de Nuevo Lote: {activeProject?.name}</h2>
-            <p className="text-xs text-slate-400">Arrastre carpetas o archivos documentales para validación de integridad y manifiesto.</p>
+            <p className="eyebrow">ASISTENTE DE INGESTA DOCUMENTAL</p>
+            <h2>Carga de Nuevo Lote: {activeProject.name}</h2>
+            <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              Arrastre o seleccione archivos jurídicos y técnicos para validación de integridad y manifiesto.
+            </p>
           </div>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
-            onClick={() => setScreen('expedientes')}
+            onClick={() => setScreen('proyecto_detalle')}
           >
             <X size={14} /> Cancelar y Volver
           </button>
         </div>
         <IngestionView
-          project={activeProject!}
+          project={activeProject}
           batches={projectBatches}
           documents={state.documents.filter((doc) => doc.projectId === activeProjectId)}
           tasks={state.tasks?.filter((task) => task.projectId === activeProjectId)}
@@ -928,25 +1209,8 @@ function App() {
           uploadProgress={uploadProgress}
         />
       </div>
-    ),
-    formatos_editor: (
-      <div className="card space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-          <div>
-            <p className="eyebrow">EDITOR DE MINUTAS Y ESCRITURAS (US-210, US-268)</p>
-            <h2>Editor de Plantillas Jurídicas</h2>
-            <p className="text-xs text-slate-400">Inserte variables dinámicas para estandarizar la generación de minutas.</p>
-          </div>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => setScreen('exportar')}
-          >
-            Volver a Exportaciones
-          </button>
-        </div>
-        <TemplateEditorWithVariables onNotice={toast} />
-      </div>
+    ) : (
+      <ProjectRequired onSelect={() => setScreen('expedientes')} />
     ),
   }[screen]
 
@@ -967,15 +1231,15 @@ function App() {
             id: 'b-proj',
             label: activeProject.name,
             icon: 'project' as const,
-            onClick: () => setScreen('expedientes'),
+            onClick: () => setScreen('proyecto_detalle'),
           },
         ]
       : []),
-    ...(screen !== 'inicio' && screen !== 'expedientes'
+    ...(screen !== 'inicio' && (screen !== 'proyecto_detalle' || !activeProject)
       ? [
           {
             id: `b-${screen}`,
-            label: menu.find((item) => item.id === screen)?.label || screen,
+            label: screenLabels[screen]?.title || screen,
             icon:
               screen === 'carga'
                 ? ('batch' as const)
@@ -995,17 +1259,81 @@ function App() {
   return <SessionGuard currentRole={activeProject?.role}>
     {remote && !user ? <AuthScreen /> : (
       <div className={`app-shell ${density === 'compact' ? 'density-compact' : 'density-comfortable'}`}>
-        <aside className="sidebar"><Brand /><nav aria-label="Navegación principal">{menu.map(({ id, label, icon: Icon }) => <button key={id} className={screen === id ? 'nav-item active' : 'nav-item'} onClick={() => setScreen(id)}><Icon size={18} />{label}</button>)}</nav><div className="sidebar-footer"><span className={dataMode === 'local' ? 'mode-dot local' : 'mode-dot'} />{dataMode === 'local' ? 'Modo local seguro' : 'Supabase conectado'}</div></aside>
+        <aside className="sidebar">
+          <Brand />
+          
+          {activeProject && (
+            <div className="sidebar-context-badge">
+              <div className="context-indicator">
+                <span className="context-dot" />
+                <span className="context-label">EXPEDIENTE ACTIVO</span>
+              </div>
+              <div className="context-name" title={activeProject.name}>{activeProject.name}</div>
+              <div className="context-meta">{activeProject.municipality}, {activeProject.department}</div>
+            </div>
+          )}
+
+          <nav aria-label="Navegación principal">
+            {navGroups.map((group, gIdx) => (
+              <div key={gIdx} className="sidebar-nav-group">
+                <div className="sidebar-nav-header">{group.title}</div>
+                {group.items.map(({ id, label, icon: Icon, requiresProject: reqProj }) => {
+                  const isUnavailable = reqProj && !activeProject
+                  const isActive = screen === id || (id === 'expedientes' && screen === 'proyecto_detalle')
+                  return (
+                    <button
+                      key={id}
+                      className={`nav-item ${isActive ? 'active' : ''} ${isUnavailable ? 'is-contextual' : ''}`}
+                      aria-disabled={isUnavailable}
+                      title={isUnavailable ? 'Selecciona un expediente para habilitar esta vista' : label}
+                      onClick={() => {
+                        if (isUnavailable) {
+                          toast('Selecciona un expediente para continuar.')
+                          setScreen('expedientes')
+                          return
+                        }
+                        setScreen(id)
+                      }}
+                    >
+                      <Icon size={18} />
+                      <span className="nav-label">{label}</span>
+                      {isUnavailable && <span className="nav-context-mark" aria-hidden="true">·</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
+          </nav>
+
+          <div className="sidebar-footer">
+            <div className="sidebar-sync-badge">
+              <span className={dataMode === 'local' ? 'mode-dot local' : 'mode-dot'} />
+              <span>{dataMode === 'local' ? 'Modo local seguro' : 'Supabase conectado'}</span>
+            </div>
+            {user && (
+              <div className="sidebar-user-pill">
+                <div className="user-avatar">{user.email?.charAt(0).toUpperCase() ?? 'U'}</div>
+                <div className="user-details">
+                  <span className="user-email" title={user.email}>{user.email}</span>
+                  <span className="user-role">{activeProject?.role ? roleBadgeLabels[activeProject.role] ?? activeProject.role : 'Operador'}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </aside>
         <main>
           <header className="topbar">
-            <div><p className="eyebrow">PLATAFORMA DE EXTRACCIÓN PREDIAL</p><h1>{menu.find((item) => item.id === screen)?.label}</h1></div>
+            <div>
+              <p className="eyebrow">{screenLabels[screen]?.eyebrow || 'PLATAFORMA DE GESTIÓN PREDIAL'}</p>
+              <h1>{screenLabels[screen]?.title || screen}</h1>
+            </div>
             <div className="topbar-actions flex items-center gap-2">
               <AutoSaveIndicator status="saved" />
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() => setIsNotaryModalOpen(true)}
-                title="Generar enlace temporal para notaría o tercero (US-290)"
+                title="Generar enlace temporal para notaría o tercero"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', padding: '4px 8px' }}
               >
                 <Share2 size={14} /> Enlace Notaría
@@ -1014,15 +1342,15 @@ function App() {
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() => setIsNotaryAdminModalOpen(true)}
-                title="Administrar y revocar enlaces notariales (US-295)"
+                title="Administrar y revocar enlaces notariales"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', padding: '4px 8px' }}
               >
                 <Settings2 size={14} /> Admin Enlaces
               </button>
               <ThemeToggle />
               <button className="icon-button" onClick={() => setIsCommandPaletteOpen(true)} title="Búsqueda rápida o comandos (Ctrl+K)" aria-label="Búsqueda y Comandos"><Search size={17} /></button>
-              <button className="icon-button" onClick={() => setDensity(prev => prev === 'comfortable' ? 'compact' : 'comfortable')} title={density === 'comfortable' ? 'Activar densidad compacta (US-177)' : 'Activar densidad cómoda'} aria-label="Densidad visual"><SlidersHorizontal size={17} /></button>
-              {activeProject && <div className="project-picker-group"><label className="project-picker">Expediente<select value={activeProjectId} onChange={(event) => setActiveProjectId(event.target.value)}>{state.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>{activeProject.role && <span className={`status ${activeProject.role}`} title="Tu rol de mínimo privilegio en este expediente"><Shield size={12} />{roleBadgeLabels[activeProject.role] ?? activeProject.role}</span>}</div>}
+              <button className="icon-button" onClick={() => setDensity(prev => prev === 'comfortable' ? 'compact' : 'comfortable')} title={density === 'comfortable' ? 'Activar densidad compacta' : 'Activar densidad cómoda'} aria-label="Densidad visual"><SlidersHorizontal size={17} /></button>
+              {activeProject && <div className="project-picker-group"><label className="project-picker">Expediente<select value={activeProjectId} onChange={(event) => event.target.value ? setActiveProjectId(event.target.value) : clearProjectContext()}><option value="">Vista general</option>{state.projects.filter((project) => !project.isArchived).map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>{activeProject.role && <span className={`status ${activeProject.role}`} title="Tu rol de mínimo privilegio en este expediente"><Shield size={12} />{roleBadgeLabels[activeProject.role] ?? activeProject.role}</span>}</div>}
               {remote && <button className="icon-button" onClick={() => void refresh()} aria-label="Sincronizar" title={lastSync ? `Última sincronización ${lastSync.toLocaleTimeString('es-CO')}` : 'Sincronizar'}><RefreshCw size={17} className={loading ? 'spin' : ''} /></button>}
               {remote && <button className="icon-button" onClick={() => void signOut()} aria-label="Cerrar sesión"><LogOut size={17} /></button>}
             </div>
@@ -1042,11 +1370,24 @@ function App() {
           onSelectTab={(tabKey) => {
             const screenMap: Record<string, Screen> = {
               proyectos: 'expedientes',
+              expedientes: 'expedientes',
               ingesta: 'carga',
+              carga: 'carga',
+              monitor: 'monitor',
               revision: 'revision',
+              discrepancias: 'discrepancias',
+              negociacion: 'negociacion',
               participantes: 'usuarios',
+              usuarios: 'usuarios',
               configuracion: 'configuracion',
               exportacion: 'exportar',
+              exportar: 'exportar',
+              notarial: 'portal_notarial',
+              portal_notarial: 'portal_notarial',
+              auditoria: 'trazabilidad',
+              trazabilidad: 'trazabilidad',
+              plantillas: 'formatos_editor',
+              formatos_editor: 'formatos_editor',
             }
             const s = screenMap[tabKey] || (tabKey as Screen)
             setScreen(s)
@@ -1090,6 +1431,59 @@ function App() {
       </div>
     )}
   </SessionGuard>
+}
+
+function GlobalDashboard({ projects, batches, records, reviews, activeProject, onGo, onSelectProject, onClearContext }: { projects: Project[]; batches: Batch[]; records: PropertyRecord[]; reviews: ReviewTask[]; activeProject?: Project; onGo: (screen: Screen) => void; onSelectProject: (projectId: string) => void; onClearContext: () => void }) {
+  const availableProjects = projects.filter((project) => !project.isArchived)
+  const processing = batches.filter((batch) => batch.jobState === 'en_proceso').length
+  const approvedCount = records.filter((record) => record.reviewState === 'aprobado').length
+  const reviewCount = reviews.filter((review) => review.state === 'pendiente').length
+  const returnedCount = reviews.filter((review) => review.state === 'devuelto').length
+  const kpis: KpiMetric[] = [
+    { id: 'global-projects', title: 'Expedientes activos', value: String(availableProjects.length), trend: activeProject ? `Contexto: ${activeProject.name}` : 'Sin expediente seleccionado', trendPositive: true, description: 'Contenedores jurídicos disponibles', icon: <FolderKanban size={18} />, variant: 'primary' },
+    { id: 'global-batches', title: 'Lotes procesados', value: String(batches.length), trend: `${processing} en ejecución`, trendPositive: true, description: 'Entregas documentales registradas', icon: <Archive size={18} />, variant: 'success' },
+    { id: 'global-records', title: 'Predios extraídos', value: String(records.length), trend: `${approvedCount} aprobados`, trendPositive: true, description: 'Registros consolidados en la plataforma', icon: <FileText size={18} />, variant: 'success' },
+    { id: 'global-reviews', title: 'Decisiones pendientes', value: String(reviewCount), trend: 'Revisión jurídica requerida', trendPositive: false, description: 'Pendientes de certificación humana', icon: <AlertTriangle size={18} />, variant: 'warning' },
+  ]
+  const statusData: PropertyStatusData[] = [
+    { name: 'Aprobados', value: approvedCount, color: '#10b981' },
+    { name: 'Requiere revisión', value: reviewCount, color: '#f59e0b' },
+    { name: 'Devueltos', value: returnedCount, color: '#ef4444' },
+    { name: 'En proceso', value: processing, color: '#3b82f6' },
+  ]
+  const discrepancyData: DiscrepancyCategoryData[] = [
+    { category: 'Pendientes', count: reviewCount, severity: 'media' as const },
+    { category: 'Devueltos', count: returnedCount, severity: 'alta' as const },
+  ].filter((item) => item.count > 0)
+
+  if (!availableProjects.length) return <EmptyProject onCreate={() => onGo('expedientes')} />
+
+  return <div className="dashboard-page">
+    <div className="hero dashboard-hero">
+      <div className="dashboard-hero-copy">
+        <p className="eyebrow">VISTA GENERAL</p>
+        <h2>Operación territorial</h2>
+        <p>Consulta la actividad de todos los expedientes y elige uno cuando necesites cargar, revisar o exportar información.</p>
+        <div className="dashboard-hero-actions"><button className="button primary" onClick={() => onGo('expedientes')}>Ver expedientes</button>{activeProject && <button className="button secondary" onClick={onClearContext}>Vista general</button>}</div>
+      </div>
+      <div className="dashboard-hero-meta">
+        <span>{activeProject ? 'Expediente seleccionado' : 'Sin contexto activo'}</span>
+        <small>{activeProject ? activeProject.name : 'Selecciona un expediente para continuar la operación.'}</small>
+      </div>
+    </div>
+    <BentoGridKpis metrics={kpis} />
+    {records.length > 0 && <DashboardCharts statusData={statusData} discrepancyData={discrepancyData} />}
+    <section className="card dashboard-operations-card">
+      <div className="section-title"><div><p className="eyebrow">EXPEDIENTES</p><h3>Acceso reciente</h3></div><button className="text-button" onClick={() => onGo('expedientes')}>Administrar</button></div>
+      {availableProjects.slice(0, 5).map((project) => {
+        const projectRecordCount = records.filter((record) => record.projectId === project.id).length
+        const projectPendingCount = reviews.filter((review) => records.some((record) => record.id === review.recordId && record.projectId === project.id) && review.state === 'pendiente').length
+        return <button className={`list-row project-overview-row${activeProject?.id === project.id ? ' selected' : ''}`} key={project.id} onClick={() => { onSelectProject(project.id); onGo('inicio') }}>
+          <div className="file-icon"><FolderKanban size={17} /></div><div className="grow"><strong>{project.name}</strong><small>{project.municipality}, {project.department} · {projectRecordCount} predios</small></div><span className="project-overview-meta">{projectPendingCount ? `${projectPendingCount} pendientes` : 'Al día'}<ArrowRight size={16} /></span>
+        </button>
+      })}
+    </section>
+  </div>
 }
 
 function Dashboard({ project, batches, records, reviews, onGo }: { project: Project; batches: Batch[]; records: PropertyRecord[]; reviews: ReviewTask[]; onGo: (screen: Screen) => void }) {
@@ -1376,7 +1770,8 @@ function ExportsView({
     </>
   )
 }
-function AuditView({ events }: { events: AuditEvent[] }) { return <section className="card"><div className="section-title"><div><p className="eyebrow">AUDITORÍA</p><h2>Historial del expediente</h2></div></div>{events.slice().reverse().map((event) => <div className="audit-row" key={event.id}><div className="audit-dot" /><div><strong>{event.action}</strong><p>{event.detail}</p></div><time>{new Date(event.at).toLocaleString('es-CO')}</time></div>)}{!events.length && <EmptyState text="No hay eventos registrados." />}</section> }
+function AuditView({ events, title = 'Historial del expediente' }: { events: AuditEvent[]; title?: string }) { return <section className="card"><div className="section-title"><div><p className="eyebrow">AUDITORÍA</p><h2>{title}</h2></div></div>{events.slice().reverse().map((event) => <div className="audit-row" key={event.id}><div className="audit-dot" /><div><strong>{event.action}</strong><p>{event.detail}</p></div><time>{new Date(event.at).toLocaleString('es-CO')}</time></div>)}{!events.length && <EmptyState text="No hay eventos registrados." />}</section> }
 function EmptyProject({ onCreate }: { onCreate: () => void }) { return <div className="empty-page"><FolderKanban size={34} /><h2>Crea el primer expediente</h2><p>El expediente es el contenedor seguro para documentos, procesamiento, revisión y exportación.</p><button className="button primary" onClick={onCreate}>Crear expediente</button></div> }
+function ProjectRequired({ onSelect, title = 'Selecciona un expediente para continuar' }: { onSelect: () => void; title?: string }) { return <div className="empty-page project-required"><FolderKanban size={34} /><h2>{title}</h2><p>La carga, revisión, exportación y gestión de participantes trabajan sobre el contexto de un expediente.</p><button className="button primary" onClick={onSelect}>Ir a expedientes</button></div> }
 function EmptyState({ text }: { text: string }) { return <div className="empty-state"><Archive size={20} /><span>{text}</span></div> }
 export default App

@@ -18,6 +18,19 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(retry_delay(1), 15)
         self.assertEqual(retry_delay(10), 300)
 
+    def test_property_identifier_matching(self) -> None:
+        import re
+        def get_property_identifier(doc_name: str) -> str:
+            m = re.search(r'(?:predio|pr|san|lote)[-_ ]*([0-9a-zA-Z]+)', doc_name.lower())
+            return m.group(1).lower() if m else doc_name.lower().split('.')[0]
+
+        id_title_36 = get_property_identifier("Estudio_Titulos_SAN-036.pdf")
+        id_neg_36 = get_property_identifier("Ficha_Negociacion_SAN-036.pdf")
+        id_title_40 = get_property_identifier("Estudio_Titulos_SAN-040.pdf")
+
+        self.assertEqual(id_title_36, id_neg_36)
+        self.assertNotEqual(id_title_36, id_title_40)
+
 
 if __name__ == "__main__":
     unittest.main()

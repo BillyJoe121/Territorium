@@ -31,6 +31,36 @@ const roleDescriptions: Record<ProjectRole, { label: string; desc: string; color
     desc: 'Acceso de solo lectura para auditoría y descarga de exportaciones aprobadas.',
     color: '#5e655e',
   },
+  administrador: {
+    label: 'Administrador',
+    desc: 'Gestión global de seguridad, configuraciones del sistema y usuarios.',
+    color: '#168b40',
+  },
+  operador: {
+    label: 'Operador',
+    desc: 'Operación de ingesta, preprocesamiento y orquestación de tareas.',
+    color: '#2871a9',
+  },
+  analista_predial: {
+    label: 'Analista Predial',
+    desc: 'Análisis de títulos, folio de matrícula y concordancia física.',
+    color: '#0284c7',
+  },
+  revisor_juridico: {
+    label: 'Revisor Jurídico',
+    desc: 'Revisión y validación de reglas jurídicas de tradición y gravámenes.',
+    color: '#a45d12',
+  },
+  aprobador: {
+    label: 'Aprobador',
+    desc: 'Autoridad final de aprobación o rechazo de estudios de títulos y minutas.',
+    color: '#7c3aed',
+  },
+  auditor: {
+    label: 'Auditor',
+    desc: 'Fiscalización y trazabilidad forense de operaciones y accesos sensibles.',
+    color: '#5e655e',
+  },
 }
 
 export function UsersManagementView({ project, onNotice, onError }: UsersManagementViewProps) {

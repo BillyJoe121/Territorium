@@ -2,7 +2,165 @@ export type DocumentKind = 'estudio_titulos' | 'plano' | 'linderos' | 'negociaci
 export type JobState = 'pendiente' | 'en_proceso' | 'requiere_revision' | 'completado' | 'fallido' | 'cancelado'
 export type ReviewState = 'pendiente' | 'aprobado' | 'devuelto'
 
-export type ProjectRole = 'owner' | 'operator' | 'reviewer' | 'viewer'
+export type CanonicalRole =
+  | 'administrador'
+  | 'operador'
+  | 'analista_predial'
+  | 'revisor_juridico'
+  | 'aprobador'
+  | 'auditor'
+
+export type ProjectRole =
+  | CanonicalRole
+  | 'owner'
+  | 'operator'
+  | 'reviewer'
+  | 'viewer'
+
+export type UserRole =
+  | CanonicalRole
+  | 'ADMIN'
+  | 'OPERADOR'
+  | 'REVISOR'
+  | 'CONSULTOR'
+
+export interface RolePermissions {
+  canManageUsers: boolean
+  canUploadBatches: boolean
+  canEditAttributes: boolean
+  canApproveProperties: boolean
+  canExportData: boolean
+  canAuditLogs: boolean
+  canConfigureAI: boolean
+  canViewObservability: boolean
+  canPurgeData: boolean
+  canApproveLegal: boolean
+  canApproveTechnical: boolean
+  canConfigureTenant: boolean
+  canEditManual: boolean
+  canExportCertified: boolean
+}
+
+export function normalizeRole(role?: ProjectRole | UserRole | string | null): CanonicalRole {
+  const r = (role || '').toLowerCase().trim()
+  if (r === 'owner' || r === 'admin' || r === 'administrador') return 'administrador'
+  if (r === 'operator' || r === 'operador') return 'operador'
+  if (r === 'analista' || r === 'analista_predial') return 'analista_predial'
+  if (r === 'reviewer' || r === 'revisor' || r === 'revisor_juridico') return 'revisor_juridico'
+  if (r === 'aprobador' || r === 'approver') return 'aprobador'
+  if (r === 'viewer' || r === 'consultor' || r === 'auditor') return 'auditor'
+  return 'auditor'
+}
+
+export function getRolePermissions(role?: ProjectRole | UserRole | string | null): RolePermissions {
+  const norm = normalizeRole(role)
+  switch (norm) {
+    case 'administrador':
+      return {
+        canManageUsers: true,
+        canUploadBatches: true,
+        canEditAttributes: true,
+        canApproveProperties: true,
+        canExportData: true,
+        canAuditLogs: true,
+        canConfigureAI: true,
+        canViewObservability: true,
+        canPurgeData: true,
+        canApproveLegal: true,
+        canApproveTechnical: true,
+        canConfigureTenant: true,
+        canEditManual: true,
+        canExportCertified: true,
+      }
+    case 'aprobador':
+      return {
+        canManageUsers: false,
+        canUploadBatches: false,
+        canEditAttributes: true,
+        canApproveProperties: true,
+        canExportData: true,
+        canAuditLogs: true,
+        canConfigureAI: false,
+        canViewObservability: true,
+        canPurgeData: false,
+        canApproveLegal: true,
+        canApproveTechnical: true,
+        canConfigureTenant: false,
+        canEditManual: true,
+        canExportCertified: true,
+      }
+    case 'revisor_juridico':
+      return {
+        canManageUsers: false,
+        canUploadBatches: false,
+        canEditAttributes: true,
+        canApproveProperties: false,
+        canExportData: true,
+        canAuditLogs: true,
+        canConfigureAI: false,
+        canViewObservability: true,
+        canPurgeData: false,
+        canApproveLegal: true,
+        canApproveTechnical: false,
+        canConfigureTenant: false,
+        canEditManual: true,
+        canExportCertified: true,
+      }
+    case 'analista_predial':
+      return {
+        canManageUsers: false,
+        canUploadBatches: true,
+        canEditAttributes: true,
+        canApproveProperties: false,
+        canExportData: false,
+        canAuditLogs: false,
+        canConfigureAI: false,
+        canViewObservability: true,
+        canPurgeData: false,
+        canApproveLegal: false,
+        canApproveTechnical: false,
+        canConfigureTenant: false,
+        canEditManual: true,
+        canExportCertified: false,
+      }
+    case 'operador':
+      return {
+        canManageUsers: false,
+        canUploadBatches: true,
+        canEditAttributes: false,
+        canApproveProperties: false,
+        canExportData: false,
+        canAuditLogs: false,
+        canConfigureAI: false,
+        canViewObservability: true,
+        canPurgeData: false,
+        canApproveLegal: false,
+        canApproveTechnical: false,
+        canConfigureTenant: false,
+        canEditManual: false,
+        canExportCertified: false,
+      }
+    case 'auditor':
+    default:
+      return {
+        canManageUsers: false,
+        canUploadBatches: false,
+        canEditAttributes: false,
+        canApproveProperties: false,
+        canExportData: true,
+        canAuditLogs: true,
+        canConfigureAI: false,
+        canViewObservability: true,
+        canPurgeData: false,
+        canApproveLegal: false,
+        canApproveTechnical: false,
+        canConfigureTenant: false,
+        canEditManual: false,
+        canExportCertified: false,
+      }
+  }
+}
+
 export type SessionStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'session_expired'
 
 export type DuplicateDecision = 'omit' | 'replace' | 'keep_version'
@@ -11,7 +169,6 @@ export type TextOrigin = 'native' | 'ocr' | 'hybrid' | 'exception'
 export type PreprocessingStatus = 'ready' | 'needs_ocr' | 'ocr_in_progress' | 'ocr_completed' | 'exception' | 'corrupt'
 
 export type TaskStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'blocked'
-export type UserRole = 'ADMIN' | 'OPERADOR' | 'REVISOR' | 'CONSULTOR'
 export type ExtractionStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'requires_review' | 'blocked'
 export type DependencyStatus = 'ready' | 'waiting' | 'blocked'
 export type ExceptionCategory =

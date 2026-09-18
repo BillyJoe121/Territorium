@@ -17,7 +17,7 @@ interface StatusPillProps {
   showIcon?: boolean
 }
 
-export function StatusPill({ status, label, size = 'md', showIcon = true }: StatusPillProps) {
+export function StatusPill({ status, label, size = 'md', showIcon = false }: StatusPillProps) {
   const normalized = status.toLowerCase()
 
   let colorClass = 'status-pill-neutral'

@@ -2,8 +2,11 @@
 create extension if not exists pgcrypto with schema extensions;
 create schema if not exists private;
 
-create type public.project_role as enum ('owner', 'operator', 'reviewer', 'viewer');
-create type public.job_status as enum ('queued', 'running', 'needs_review', 'completed', 'failed', 'cancelled');
+create type public.project_role as enum (
+  'owner', 'operator', 'reviewer', 'viewer',
+  'administrador', 'operador', 'analista_predial', 'revisor_juridico', 'aprobador', 'auditor'
+);
+create type public.job_status as enum ('queued', 'running', 'blocked', 'needs_review', 'completed', 'failed', 'cancelled');
 create type public.document_kind as enum ('title_study', 'plan', 'negotiation', 'support', 'unclassified');
 create type public.review_status as enum ('pending', 'approved', 'returned');
 
@@ -110,6 +113,27 @@ $$;
 revoke all on function private.has_project_role(uuid, public.project_role[]) from public;
 grant usage on schema private to authenticated;
 grant execute on function private.has_project_role(uuid, public.project_role[]) to authenticated;
+
+-- Compatibility overload used by later migrations. The canonical role migration
+-- replaces it with the complete legacy/canonical capability mapping.
+create or replace function private.has_project_role(target_project uuid, accepted_role text)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1
+    from public.project_members pm
+    where pm.project_id = target_project
+      and pm.user_id = (select auth.uid())
+      and (
+        accepted_role = 'viewer'
+        or pm.role::text = accepted_role
+        or (accepted_role = 'owner' and pm.role::text = 'administrador')
+        or (accepted_role = 'operator' and pm.role::text in ('owner', 'administrador', 'operador'))
+        or (accepted_role = 'reviewer' and pm.role::text in ('owner', 'administrador', 'revisor_juridico', 'aprobador'))
+      )
+  );
+$$;
+revoke all on function private.has_project_role(uuid, text) from public;
+grant execute on function private.has_project_role(uuid, text) to authenticated;
 
 create or replace function private.add_project_owner()
 returns trigger language plpgsql security definer set search_path = '' as $$

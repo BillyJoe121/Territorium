@@ -167,12 +167,24 @@ async def process_job(gateway: SupabaseGateway, provider: OpenAIExtractionProvid
                 for doc, ext in independent_tasks
             ])
 
-        # US-046: Negociación solo se ejecuta si los insumos requeridos están listos
+        # US-046: Negociación solo se ejecuta si el estudio de títulos para el mismo predio está completado
+        def get_property_identifier(doc_name: str) -> str:
+            import re
+            m = re.search(r'(?:predio|pr|san|lote)[-_ ]*([0-9a-zA-Z]+)', doc_name.lower())
+            return m.group(1).lower() if m else doc_name.lower().split('.')[0]
+
         for doc, ext in dependent_tasks:
             t_id = doc_task_map.get(doc.id)
-            # Verificar si existe estudio de títulos completado
-            has_title = any(d.id in completed_tasks for d, e in independent_tasks if e == ExtractorKey.TITLE_STUDY)
-            if has_title or not independent_tasks:
+            doc_predio = get_property_identifier(doc.original_name)
+
+            # Verificar si existe estudio de títulos completado para este mismo predio
+            matching_title_tasks = [
+                d.id for d, e in independent_tasks
+                if e == ExtractorKey.TITLE_STUDY and (get_property_identifier(d.original_name) == doc_predio or len(independent_tasks) == 1)
+            ]
+            has_title = bool(matching_title_tasks) and all(d_id in completed_tasks for d_id in matching_title_tasks)
+
+            if has_title:
                 await execute_task_item(doc, ext, t_id)
             else:
                 if t_id:
@@ -181,8 +193,8 @@ async def process_job(gateway: SupabaseGateway, provider: OpenAIExtractionProvid
                         status="blocked",
                         dependency_status="blocked",
                         error_code="DEPENDENCY_MISSING",
-                        error_message="Requiere estudio de títulos completado para procesar la negociación.",
-                        suggested_action="Cargar o reprocesar el estudio de títulos previo para habilitar la negociación."
+                        error_message=f"Requiere estudio de títulos completado para el predio '{doc_predio}' antes de procesar la negociación.",
+                        suggested_action="Cargar o reprocesar el estudio de títulos correspondiente a este predio para habilitar la negociación."
                     )
                 processed_count += 1
                 progress = round((processed_count / total_items) * 100)

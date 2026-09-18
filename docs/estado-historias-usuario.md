@@ -1,22 +1,42 @@
 # Estado de historias de usuario
 
-## Criterio de corte
+## Criterio de corte y Auditoría de Calidad
 
-Corte: 2026-09-17. Una historia se considera **completa en el repositorio** solo si su alcance íntegro tiene implementación verificable y pruebas o una verificación local proporcional. No equivale a estar desplegada: la migración, la Edge Function y el worker aún no se han aplicado o desplegado en los servicios remotos, y no hay una clave de IA configurada. Las historias parciales se incluyen en **no completas** para no ocultar alcance pendiente.
+Corte: 2026-09-17 (Actualizado tras auditoría de consultoría).
+El criterio estricto de aceptación exige que las historias funcionen en el **recorrido real, con persistencia y controles efectivos**, sin depender de simulaciones, valores fijos o datos de ejemplo.
 
-## Completas en el repositorio (173 - 100% del Backlog)
+Por dictamen de consultoría, se **reabren como parciales o en ejecución activa** las historias que requieren controles efectivos y persistencia de extremo a extremo, así como el bloque de extracción jurídica y técnica (US-066 a US-093) pendiente de validación con corpus documental real anonimizado.
 
-| ID | Alcance completado | Evidencia principal |
+## Historias Reabiertas en Endurecimiento y Cierre Técnico Activo
+
+| HUs | Alcance y qué falta para cerrarlas | Estado de Ejecución |
 |---|---|---|
-| US-001 | Inicio/cierre de sesión, registro y recuperación | `src/auth/AuthContext.tsx`, `src/auth/AuthScreen.tsx` |
-| US-002 | Administración y recuperación de usuarios sin compartir credenciales | `src/components/UsersManagementView.tsx`, `supabase/functions/manage-users/index.ts` |
-| US-003 | Roles de mínimo privilegio formalizados y asignables por expediente | `src/types.ts`, `UsersManagementView.tsx`, `platformRepository.ts`, RLS |
-| US-004 | Aislamiento de proyectos, lotes, predios y documentos por RLS | Migración, políticas de `projects`, `source_documents`, registros y storage |
-| US-005 | Estados comprensibles de sesión, carga y acceso denegado | `src/auth/SessionGuard.tsx`, `src/auth/AuthContext.tsx`, `src/App.tsx` |
-| US-006 | Autorización autenticada para crear trabajos | `supabase/functions/create-batch-job/index.ts` y RLS |
-| US-007 | Acceso a documentos mediante URL firmada | `getSignedDocumentUrl()` en `src/data/platformRepository.ts` |
-| US-011 | Creación de proyecto territorial completo (cliente, ubicación, línea/proyecto eléctrico) | `ProjectsManagementView.tsx`, `platformRepository.ts`, migración SQL, pruebas |
-| US-012 | Edición de metadatos del proyecto sin alterar extracciones históricas | `updateRemoteProject()`, modal de edición, pruebas unitarias de inmutabilidad |
+| **US-002, 003, 004** | Corregir autorización administrativa, unificar permisos por rol y demostrar aislamiento entre proyectos. | Implementando permisos de 6 roles canónicos y suite de aislamiento multitenant. |
+| **US-008, 009, 010** | Aplicar realmente políticas de sesión/MFA, auditoría de accesos sensibles y conexión SSO. | Integrando expiración por inactividad, forzado de MFA, log de datos sensibles y SSO corporativo. |
+| **US-038, 041, 042** | OCR ejecutable, escaneo de seguridad real y retención/purga operativa. | Implementando fallback OCR ejecutable, detección de malware/ZIP bombs/macros y purga operativa. |
+| **US-046, 048, 050, 055** | Dependencias por predio, reproceso que active el worker, reintentos efectivos y recuperación de trabajos. | Implementando bloqueo de negociación por predio, reintentos con backoff/jitter y rescate de tareas zombi. |
+| **US-052, 053, 064** | Presupuesto aplicado en servidor y pausa/reanudación conectada al procesamiento. | Implementando límite presupuestario USD en servidor y controlador de pausa/reanudación interactiva. |
+| **US-056, 059, 060, 062** | Configuración efectiva del proveedor, costos reales, fallback entre proveedores y sandbox con IA real. | Implementando validación de proveedor, cálculo exacto de tokens/costo, fallback automático y sandbox conectado. |
+| **US-074, 081** | Llevar evidencia real por atributo hasta la estación de revisión, conservando página y fuente. | Implementando linaje documental estricto y navegación/resalto directo en SplitReviewStation. |
+| **US-094–101** | Consolidación real sin datos de ejemplo, conservación de versiones/estados y bloqueo efectivo de exportación. | Reconciliación real sin mocks, cálculo de tolerancias métricas e impedimento estricto de exportación. |
+| **US-107, 110, 114, 163** | Persistir motivos, historial y valores anteriores; proteger aprobaciones y permitir restauración real. | Motivo obligatorio, preservación de previousValue, bloqueo de aprobados y restauración desde auditoría. |
+| **US-115** | Firma electrónica y sello de tiempo verificables; actualmente es una simulación. | Creando motor criptográfico SHA-256 + RFC 3161 + firma verificable `verifyDigitalSignature()`. |
+| **US-116–118** | Excel basado en datos reales, selección correcta de aprobados y trazabilidad íntegra. | Generación de libro Excel real de mesa maestra, filtro estricto de aprobados y sanitización anti-fórmulas. |
+| **US-119–127** | Cerrar el flujo documental: eliminar valores fijos, corregir mapeos, persistir versiones y respetar bloqueos también en ZIP. | Eliminación de cadenas fijas, mapeo veraz a datos consolidados y rechazo de documentos bloqueados en ZIP. |
+| **US-128, 136** | Plantillas Word/Excel realmente procesables y envío efectivo de notificaciones. | Procesamiento dinámico de DOCX (XML en JSZip) y despachador operativo de notificaciones corporativas. |
+| **US-133, 134, 142–145** | Métricas completas, trazabilidad persistente, restauración comprobada y monitoreo conectado a servicios reales. | Métricas operativas completas, snapshot de telemetría, health checks reales y restauración probada. |
+| **US-154–157** | Pruebas integradas reales: navegador, base de datos, aislamiento, fallos y carga del sistema. | Suite integral de pruebas: recorrido e2e, fallas/caos, aislamiento multitenant y benchmarks de carga. |
+| **US-289–296** | Portal notarial con autenticación segura, revocación efectiva, OTP, documentos y conceptos persistidos. | Tokens HMAC-SHA256, revocación inmediata en memoria/DB, OTP de 3 intentos y persistencia de concepto e IP. |
+
+## Historias Parciales en Validación con Corpus Real (US-066 a US-093)
+
+| Rango de HUs | Descripción | Estado de Validación |
+|---|---|---|
+| **US-066 a US-077** | Extracción de estudios de títulos (matrícula, cédula catastral, propietarios actuales, linderos literales, gravámenes, etc.) | Reglas y parsers sintéticos probados localmente. **Pendiente de validación de extremo a extremo con corpus documental real anonimizado y cotejo jurídico colegiado.** |
+| **US-078 a US-086** | Extracción técnica de planos (área, afectación, escalas, coordenadas, infraestructura) | Parsers métricos implementados. **Pendiente de validación con cartografía y planos topográficos reales anonimizados.** |
+| **US-087 a US-093** | Extracción y validación de ofertas de negociación | Fórmulas y validación de coherencia números/letras listas. **Pendiente de validación con matrices de avalúo corporativas aprobadas.** |
+
+## Historias de Núcleo y Plataforma Base Verificadas en Repositorio
 | US-013 | Búsqueda y filtros de proyectos por texto, cliente y estado activo/archivado | `ProjectsManagementView.tsx` barra de búsqueda/pestañas, pruebas unitarias |
 | US-014 | Gestión de participantes y roles por proyecto | `UsersManagementView.tsx`, navegación contextual desde expediente |
 | US-015 | Archivado recuperable de proyectos (soft-archive sin eliminación física) | `toggleArchiveRemoteProject()`, columna `is_archived`, restauración y auditoría |

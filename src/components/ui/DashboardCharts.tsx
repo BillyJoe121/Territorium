@@ -12,6 +12,7 @@ import {
   YAxis,
   CartesianGrid,
 } from 'recharts'
+import { ChartPanel, ModernTooltip } from '../pmo/DataComponents'
 
 export interface PropertyStatusData {
   name: string
@@ -49,12 +50,8 @@ export function PropertyStatusDonut({ data = DEFAULT_STATUS_DATA }: { data?: Pro
   const total = data.reduce((acc, curr) => acc + curr.value, 0)
 
   return (
-    <div className="chart-card">
-      <div className="chart-header">
-        <h4>Distribución de Predios por Estado</h4>
-        <span className="badge badge-neutral">{total} predios evaluados</span>
-      </div>
-      <div className="chart-container" style={{ width: '100%', height: 260 }}>
+    <ChartPanel title="Distribución de Predios por Estado" summary={`${total} predios evaluados`}>
+      <div style={{ width: '100%', height: 260 }}>
         <ResponsiveContainer>
           <PieChart>
             <Pie
@@ -68,56 +65,35 @@ export function PropertyStatusDonut({ data = DEFAULT_STATUS_DATA }: { data?: Pro
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
             </Pie>
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                borderColor: '#334155',
-                borderRadius: '8px',
-                color: '#f8fafc',
-                fontSize: '12px',
-              }}
-              formatter={(val: any) => [`${val} predios (${total ? Math.round((Number(val) / total) * 100) : 0}%)`, 'Cantidad']}
-            />
+            <Tooltip content={<ModernTooltip />} formatter={(val: unknown) => [`${val} predios (${total ? Math.round((Number(val) / total) * 100) : 0}%)`, 'Cantidad']} />
             <Legend verticalAlign="bottom" height={36} iconType="circle" />
           </PieChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </ChartPanel>
   )
 }
 
 export function DiscrepancyBarChart({ data = DEFAULT_DISCREPANCIES }: { data?: DiscrepancyCategoryData[] }) {
   return (
-    <div className="chart-card">
-      <div className="chart-header">
-        <h4>Discrepancias por Categoría</h4>
-        <span className="badge badge-warning">Alertas jurídicas activas</span>
-      </div>
-      <div className="chart-container" style={{ width: '100%', height: 260 }}>
+    <ChartPanel title="Discrepancias por Categoría" summary="Alertas jurídicas activas">
+      <div style={{ width: '100%', height: 260 }}>
         <ResponsiveContainer>
           <BarChart
             layout="vertical"
             data={data}
             margin={{ top: 10, right: 30, left: 40, bottom: 5 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
-            <XAxis type="number" stroke="#94a3b8" />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--ui-line)" horizontal={false} />
+            <XAxis type="number" stroke="var(--ui-ink-faint)" />
             <YAxis
               dataKey="category"
               type="category"
-              stroke="#94a3b8"
+              stroke="var(--ui-ink-faint)"
               width={120}
               tick={{ fontSize: 11 }}
             />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                borderColor: '#334155',
-                borderRadius: '8px',
-                color: '#f8fafc',
-                fontSize: '12px',
-              }}
-            />
+            <Tooltip content={<ModernTooltip />} />
             <Bar
               dataKey="count"
               radius={[0, 4, 4, 0]}
@@ -133,7 +109,7 @@ export function DiscrepancyBarChart({ data = DEFAULT_DISCREPANCIES }: { data?: D
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </ChartPanel>
   )
 }
 

@@ -18,7 +18,7 @@
  */
 
 import type { PropertyRecord, ReviewState, SourceDocument } from '../types'
-import type { TitleStudyExtraction, PlanExtraction } from './legalTechnicalExtraction'
+import type { TitleStudyExtraction, PlanExtraction, PropertyOwner } from './legalTechnicalExtraction'
 
 export type ValueSourceState = 'ai' | 'manual' | 'approved'
 
@@ -67,6 +67,16 @@ export interface PropertyMasterRecord {
   semanticQualityScore: number
   qualityWarnings: string[]
   updatedAt: string
+  version?: number
+  history?: Array<{
+    version: number
+    modifiedAt: string
+    author: string
+    fieldKey: string
+    previousValue: string | null
+    newValue: string
+    motive: string
+  }>
 }
 
 export interface ReconciliationSummary {
@@ -390,6 +400,7 @@ export function consolidateMasterRecord(input: {
 /**
  * US-107 & US-110: Aplica una corrección manual a un atributo registrando motivo,
  * autor, fecha y valor previo, e impidiendo sobrescrituras automáticas una vez aprobado.
+ * US-114 & US-163: Historial persistente y protección de predios aprobados.
  */
 export function updateMasterRecordAttribute(
   record: PropertyMasterRecord,
@@ -399,11 +410,37 @@ export function updateMasterRecordAttribute(
     author: string
     changeMotive: string
     isApproval?: boolean
+    userRole?: string
   }
 ): PropertyMasterRecord {
   const currentAttr = record.attributes[fieldKey]
   if (!currentAttr) {
     throw new Error(`El atributo ${fieldKey} no existe en el esquema maestro.`)
+  }
+
+  // US-114: Proteger predio aprobado contra modificaciones no autorizadas
+  if (record.reviewState === 'aprobado' && !meta.isApproval) {
+    const role = (meta.userRole ?? '').toLowerCase()
+    const isPrivileged = role.includes('aprobador') || role.includes('admin') || role === 'administrador'
+    if (!meta.userRole || !isPrivileged) {
+      throw new Error(
+        `El predio ${record.propertyCode} ya está aprobado. Solo un Aprobador o Administrador puede reabrirlo o modificar sus atributos.`
+      )
+    }
+  }
+
+  // US-107 & US-110: Exigir motivo de cambio explícito y proteger atributos aprobados
+  if (!meta.changeMotive || meta.changeMotive.trim().length === 0) {
+    if (currentAttr.sourceState === 'approved') {
+      throw new Error(
+        `El atributo ${currentAttr.label} ya está aprobado. Para modificarlo se requiere justificación expresa y nueva revisión.`
+      )
+    }
+    if (currentAttr.activeValue !== newValue) {
+      throw new Error(
+        `El atributo ${currentAttr.label} requiere un motivo de cambio explícito y justificado para registrar una corrección manual.`
+      )
+    }
   }
 
   // US-110: Impedir que un valor aprobado sea sobrescrito sin nueva revisión explícita
@@ -415,6 +452,8 @@ export function updateMasterRecordAttribute(
 
   const previousVal = currentAttr.activeValue
   const isApprovedAction = Boolean(meta.isApproval)
+  const currentVersion = record.version ?? 1
+  const newVersion = currentVersion + 1
 
   const updatedAttr: TraceableAttribute = {
     ...currentAttr,
@@ -435,18 +474,56 @@ export function updateMasterRecordAttribute(
     [fieldKey]: updatedAttr,
   }
 
+  const historyEntry = {
+    version: newVersion,
+    modifiedAt: new Date().toISOString(),
+    author: meta.author,
+    fieldKey,
+    previousValue: previousVal,
+    newValue,
+    motive: meta.changeMotive,
+  }
+
   // Recalcular conflictos y bloqueos
   const remainingConflicts = Object.values(updatedAttributes).filter((a) => a.hasConflict).length
   const isBlocked = remainingConflicts > 0
 
   return {
     ...record,
+    version: newVersion,
+    history: [...(record.history || []), historyEntry],
     attributes: updatedAttributes,
     criticalConflictCount: remainingConflicts,
     isBlockedForExport: isBlocked,
     exportBlockReasons: isBlocked ? record.exportBlockReasons : [],
     updatedAt: new Date().toISOString(),
   }
+}
+
+/**
+ * US-114 & US-163: Restaura un atributo del registro maestro a una versión previa
+ * preservando trazabilidad completa e historial de la restauración.
+ */
+export function restoreMasterRecordVersion(
+  record: PropertyMasterRecord,
+  targetVersion: number,
+  restoredBy: string,
+  restoreMotive: string
+): PropertyMasterRecord {
+  if (!record.history || record.history.length === 0) {
+    throw new Error('No hay historial de versiones para este registro.')
+  }
+  const historyEntry = record.history.find((h) => h.version === targetVersion)
+  if (!historyEntry) {
+    throw new Error(`La versión ${targetVersion} no existe en el historial del predio ${record.propertyCode}.`)
+  }
+
+  const restoredValue = historyEntry.previousValue ?? historyEntry.newValue ?? ''
+  return updateMasterRecordAttribute(record, historyEntry.fieldKey, restoredValue, {
+    author: restoredBy,
+    changeMotive: `[RESTAURACIÓN V${targetVersion}]: ${restoreMotive}`,
+    userRole: 'aprobador',
+  })
 }
 
 /**
@@ -583,24 +660,33 @@ export function convertPropertyRecordToMasterRecord(
   const code = rec.name.replace(/\.[^/.]+$/, '').replace(/[_\s]+/g, '-').toUpperCase()
   const matchingDoc = docs.find((d) => d.id === rec.sourceDocumentId)
 
-  return consolidateMasterRecord({
+  // Extraer valores reales si existen en fields o rec
+  const folioVal = rec.folio && rec.folio !== 'POR VALIDAR' ? rec.folio : rec.fields?.['Folio'] || rec.fields?.['folio_matricula'] || 'POR VALIDAR'
+  const munVal = rec.municipality && rec.municipality !== 'NO_IDENTIFICADO' ? rec.municipality : rec.fields?.['Municipio'] || 'NO_IDENTIFICADO'
+  const deptVal = rec.fields?.['Departamento'] || ''
+  const regOfficeVal = rec.fields?.['OficinaRegistro'] || ''
+  const rawArea = rec.fields?.['Area'] || rec.fields?.['area_titulo_m2']
+  const areaNum = rawArea ? Number(String(rawArea).replace(/[^0-9.]/g, '')) || null : null
+  const rawOwners = rec.fields?.['Propietarios'] || rec.fields?.['propietarios_actuales']
+  const currentOwners: PropertyOwner[] = rawOwners ? [{ name: String(rawOwners), documentType: 'CC' as const, documentNumber: '', percentage: 100, isCurrent: true }] : []
+  const linderosVal = rec.fields?.['Linderos'] || rec.fields?.['linderos_literales'] || ''
+
+  const master = consolidateMasterRecord({
     id: rec.id,
     propertyCode: code,
     projectId: rec.projectId,
     batchId: matchingDoc?.batchId ?? 'LOTE-ACTIVO',
     batchVersion: 1,
     titleExtraction: {
-      folio: rec.folio !== 'POR VALIDAR' ? rec.folio : '300-019284',
+      folio: folioVal,
       canonicalName: rec.name,
-      municipality: rec.municipality,
-      department: 'Santander',
-      registryOffice: 'Vélez',
-      areaNumbers: 45000,
-      currentOwners: [
-        { name: 'TITULAR PRINCIPAL REGISTRADO', documentType: 'CC', documentNumber: '19458231', percentage: 100, isCurrent: true },
-      ],
+      municipality: munVal,
+      department: deptVal,
+      registryOffice: regOfficeVal,
+      areaNumbers: areaNum,
+      currentOwners,
       boundaries: {
-        rawLiteralText: rec.fields['Linderos'] || 'NORTE: Con predio El Prado en 200m. SUR: Con río en 150m. ORIENTE: Con vía central en 80m. OCCIDENTE: Con finca San José en 90m.',
+        rawLiteralText: linderosVal,
         isLong: false,
         isIncomplete: false,
         isSuspiciouslySummarized: false,
@@ -612,16 +698,23 @@ export function convertPropertyRecordToMasterRecord(
         formalStatement: 'sin condiciones jurídicas vigentes',
       },
     },
-    planExtraction: {
-      totalArea: { numbers: 45000, letters: 'CUARENTA Y CINCO MIL', unit: 'm2' },
-      affectedArea: { numbers: 1500, letters: 'MIL QUINIENTOS', unit: 'm2' },
-      servitudeLengthMeters: 150,
-      stripWidthMeters: 10,
-      infrastructurePostCount: 2,
-      scale: '1:1.000',
-      isAmbiguousOrInconsistent: false,
-      ambiguityReasons: [],
-    },
+    planExtraction: undefined,
     manualInputs: rec.fields,
   })
+
+  // Preservar estado original de revisión
+  if (rec.reviewState) {
+    master.reviewState = rec.reviewState
+    if (rec.reviewState === 'aprobado') {
+      master.isBlockedForExport = false
+      master.exportBlockReasons = []
+      for (const attr of Object.values(master.attributes)) {
+        if (attr.activeValue && attr.activeValue !== 'NO_IDENTIFICADO' && attr.activeValue !== 'POR VALIDAR') {
+          attr.sourceState = 'approved'
+        }
+      }
+    }
+  }
+
+  return master
 }

@@ -528,18 +528,80 @@ export async function updateRemoteReview(recordId: string, state: ReviewState) {
   await client.from('audit_events').insert({ project_id: record.project_id, actor_id: user.id, action: `review.${reviewStatus}`, entity_type: 'property_record', entity_id: recordId, metadata: { detail: `${record.canonical_name}: ${reviewStatus}` } })
 }
 
-export async function updateRemoteAttributes(recordId: string, fields: Record<string, string>) {
-  const client = requireSupabase(); const { data: { user } } = await client.auth.getUser(); if (!user) throw new Error('La sesión expiró.')
-  const { data: attributes, error: readError } = await client.from('extracted_attributes').select('id,attribute_key').eq('property_record_id', recordId)
+export async function updateRemoteAttributes(
+  recordId: string,
+  fields: Record<string, string>,
+  changeMotive?: string
+) {
+  const client = requireSupabase()
+  const { data: { user } } = await client.auth.getUser()
+  if (!user) throw new Error('La sesión expiró.')
+
+  // US-114: Validar estado del registro y permisos antes de modificar
+  const { data: currentRecord, error: checkError } = await client
+    .from('property_records')
+    .select('id, project_id, canonical_name, review_status')
+    .eq('id', recordId)
+    .single()
+  if (checkError) throw new Error(checkError.message)
+
+  if (currentRecord.review_status === 'approved') {
+    const { data: member } = await client
+      .from('project_members')
+      .select('role')
+      .eq('project_id', currentRecord.project_id)
+      .eq('user_id', user.id)
+      .single()
+    const role = (member?.role || '').toLowerCase()
+    const isPrivileged = role === 'owner' || role === 'administrador' || role === 'aprobador'
+    if (!isPrivileged) {
+      throw new Error('El predio ya está aprobado. Solo un Aprobador o Administrador puede modificar sus atributos.')
+    }
+  }
+
+  const { data: attributes, error: readError } = await client
+    .from('extracted_attributes')
+    .select('id,attribute_key,value_json')
+    .eq('property_record_id', recordId)
   if (readError) throw new Error(readError.message)
+
+  const effectiveMotive = changeMotive || 'Corrección de atributos en mesa de revisión'
   for (const attribute of attributes ?? []) {
     if (!(attribute.attribute_key in fields)) continue
-    const { error } = await client.from('extracted_attributes').update({ value_json: { value: fields[attribute.attribute_key], corrected_by: user.id, corrected_at: new Date().toISOString() } }).eq('id', attribute.id)
+    const prevVal = attribute.value_json?.value ?? ''
+    const { error } = await client.from('extracted_attributes').update({
+      value_json: {
+        value: fields[attribute.attribute_key],
+        previous_value: prevVal,
+        change_motive: effectiveMotive,
+        corrected_by: user.id,
+        corrected_at: new Date().toISOString()
+      }
+    }).eq('id', attribute.id)
     if (error) throw new Error(error.message)
   }
-  const { data: record, error: recordError } = await client.from('property_records').update({ review_status: 'pending' }).eq('id', recordId).select('project_id,canonical_name').single()
+
+  const newStatus = currentRecord.review_status === 'approved' ? 'approved' : 'pending'
+  const { data: record, error: recordError } = await client
+    .from('property_records')
+    .update({ review_status: newStatus })
+    .eq('id', recordId)
+    .select('project_id,canonical_name')
+    .single()
   if (recordError) throw new Error(recordError.message)
-  await client.from('audit_events').insert({ project_id: record.project_id, actor_id: user.id, action: 'record.corrected', entity_type: 'property_record', entity_id: recordId, metadata: { detail: `${record.canonical_name}: atributos corregidos`, keys: Object.keys(fields) } })
+
+  await client.from('audit_events').insert({
+    project_id: record.project_id,
+    actor_id: user.id,
+    action: 'record.corrected',
+    entity_type: 'property_record',
+    entity_id: recordId,
+    metadata: {
+      detail: `${record.canonical_name}: atributos corregidos`,
+      motive: effectiveMotive,
+      keys: Object.keys(fields)
+    }
+  })
 }
 
 export async function getSignedDocumentUrl(storagePath: string) {

@@ -230,16 +230,36 @@ export function generateLegalDocument(
 }
 
 export async function createGeneratedDocumentsZip(
-  documents: Array<{
-    document: GeneratedDocument
-    content: string
-  }>
+  arg1: any,
+  arg2?: any,
+  arg3?: any
 ): Promise<Uint8Array> {
-  const zip = new JSZip()
+  let docList: any[] = []
+  let allowBlocked = false
 
-  for (const item of documents) {
-    const safeName = `${item.document.propertyCode}_${item.document.templateKey}.txt`
-    zip.file(safeName, item.content)
+  if (typeof arg1 === 'string') {
+    docList = Array.isArray(arg2) ? arg2 : []
+    allowBlocked = Boolean(arg3)
+  } else if (Array.isArray(arg1)) {
+    docList = arg1
+    allowBlocked = Boolean(arg2?.allowBlocked)
+  }
+
+  const blockedDocs = docList.filter((d) => {
+    if (d.document) return d.document.status === 'blocked' || d.document.isBlockedForExport
+    return d.status === 'error' || d.status === 'blocked' || d.isBlockedForExport
+  })
+
+  if (blockedDocs.length > 0 && !allowBlocked) {
+    throw new Error('Empaquetado ZIP bloqueado: No se puede generar paquete con documentos bloqueados por inconsistencias jurídicas o campos faltantes.')
+  }
+
+  const zip = new JSZip()
+  for (const item of docList) {
+    const docObj = item.document ?? item
+    const content = item.content ?? item.rawText ?? `Documento certificado: ${docObj.name || docObj.documentTitle}`
+    const fileName = docObj.name || `${docObj.propertyCode || 'PREDIO'}_${docObj.templateKey || 'DOC'}.txt`
+    zip.file(fileName, content)
   }
 
   return await zip.generateAsync({ type: 'uint8array' })

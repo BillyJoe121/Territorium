@@ -193,20 +193,106 @@ export function classifyTaskException(error: unknown, attemptCount: number, maxA
   }
 }
 
-export function createReprocessTask(task: DocumentTask): DocumentTask {
+export function createReprocessTask(task: any, reason?: string): any {
   const now = new Date().toISOString()
+  const depends = task.dependsOnExtractors || task.dependsOnTaskIds || []
   return {
     ...task,
-    status: 'queued',
-    dependencyStatus: task.dependsOnExtractors.length > 0 ? 'waiting' : 'ready',
+    status: task.status === 'failed' && task.retryCount !== undefined ? 'pending' : 'queued',
+    dependencyStatus: depends.length > 0 ? 'waiting' : 'ready',
     attemptCount: 0,
+    retryCount: 0,
+    assignedTo: undefined,
+    leaseExpiresAt: undefined,
+    lastError: undefined,
     errorCode: null,
     errorMessage: null,
     exceptionCategory: null,
-    suggestedAction: null,
+    suggestedAction: reason ?? null,
     startedAt: null,
     completedAt: null,
     updatedAt: now,
+  }
+}
+
+/**
+ * US-050: Reintentos transitorios con espera incremental exponencial y variación aleatoria (jitter).
+ */
+export function calculateExponentialRetryDelay(attempt: number, baseSeconds: number = 5, maxSeconds: number = 300): number {
+  const exponential = baseSeconds * Math.pow(2, Math.min(attempt, 6))
+  const jitter = Math.random() * (baseSeconds / 2)
+  return Math.min(Math.round(exponential + jitter), maxSeconds)
+}
+
+/**
+ * US-055: Recuperación de trabajos huérfanos o zombis con lease de ejecución expirado.
+ */
+export function recoverExpiredLeaseTasks(tasks: any[], currentDate: Date = new Date()): {
+  recoveredTasks: any[]
+  recoveredCount: number
+} {
+  const nowMs = currentDate.getTime()
+  let recoveredCount = 0
+
+  const recoveredTasks = tasks.map((task) => {
+    if (task.status === 'running' && task.leaseExpiresAt) {
+      const leaseMs = new Date(task.leaseExpiresAt).getTime()
+      if (nowMs > leaseMs) {
+        recoveredCount++
+        const isPendingType = task.retryCount !== undefined && task.taskType !== undefined
+        return {
+          ...task,
+          status: isPendingType ? 'pending' : 'queued',
+          assignedTo: undefined,
+          leaseExpiresAt: undefined,
+          lastError: 'Lease expirado del trabajador. Tarea recuperada automáticamente.',
+          errorCode: 'LEASE_EXPIRED_RECOVERED',
+          errorMessage: 'El lease del trabajador expiró. Tarea recuperada automáticamente para reintento.',
+          updatedAt: currentDate.toISOString(),
+        }
+      }
+    }
+    return task
+  })
+
+  return { recoveredTasks, recoveredCount }
+}
+
+/**
+ * US-064: Controlador de Pausa / Reanudación interactivo para la ejecución de procesamiento.
+ */
+export class JobExecutionController {
+  private _isPaused: boolean = false
+  private _isCancelled: boolean = false
+  private _pauseReason: string = ''
+
+  pause(reason?: string): void {
+    this._isPaused = true
+    if (reason) this._pauseReason = reason
+  }
+
+  resume(): void {
+    this._isPaused = false
+    this._pauseReason = ''
+  }
+
+  cancel(): void {
+    this._isCancelled = true
+  }
+
+  isPaused(): boolean {
+    return this._isPaused
+  }
+
+  isCancelled(): boolean {
+    return this._isCancelled
+  }
+
+  async executeOrWait<T>(action: () => Promise<T>): Promise<T> {
+    while (this._isPaused) {
+      await new Promise((r) => setTimeout(r, 20))
+    }
+    return await action()
   }
 }
 
@@ -214,19 +300,61 @@ export interface TaskExecutionResult {
   taskId: string
   success: boolean
   tokensUsed: number
+  costUsd?: number
   error?: string
 }
 
 export async function executeTasksWithConcurrencyLimit(
-  tasks: DocumentTask[],
+  tasks: any[],
   maxConcurrency: number,
-  taskExecutor: (task: DocumentTask) => Promise<{ success: boolean; tokensUsed: number; error?: string }>,
-  onProgress?: (completed: number, total: number, activeTasks: string[]) => void,
-  tokenBudget: number = 250000
-): Promise<{ results: TaskExecutionResult[]; totalTokens: number; budgetExceeded: boolean }> {
-  const readyTasks = tasks.filter((t) => t.status === 'queued' && t.dependencyStatus === 'ready')
+  taskExecutor: (task: any) => Promise<{ success?: boolean; tokensUsed?: number; costUsd?: number; error?: string } | any>,
+  arg4?: any,
+  tokenBudget: number = 250000,
+  costBudgetUsd?: number,
+  controller?: JobExecutionController
+): Promise<{ results: TaskExecutionResult[]; totalTokens: number; totalCostUsd: number; budgetExceeded: boolean; isPaused: boolean }> {
+  let onProgress: ((completed: number, total: number, activeTasks: string[]) => void) | undefined
+  let effectiveBudgetCap = costBudgetUsd
+  let accumulatedCost = 0
+
+  if (typeof arg4 === 'function') {
+    onProgress = arg4
+  } else if (arg4 && typeof arg4 === 'object') {
+    if (arg4.budgetCapUsd !== undefined) effectiveBudgetCap = arg4.budgetCapUsd
+    if (arg4.currentAccumulatedCostUsd !== undefined) accumulatedCost = arg4.currentAccumulatedCostUsd
+  }
+
+  function isControllerCancelled(ctrl?: any): boolean {
+    if (!ctrl) return false
+    return typeof ctrl.isCancelled === 'function' ? ctrl.isCancelled() : Boolean(ctrl.isCancelled)
+  }
+
+  function isControllerPaused(ctrl?: any): boolean {
+    if (!ctrl) return false
+    return typeof ctrl.isPaused === 'function' ? ctrl.isPaused() : Boolean(ctrl.isPaused)
+  }
+
+  if (effectiveBudgetCap !== undefined && accumulatedCost >= effectiveBudgetCap) {
+    return {
+      results: [],
+      totalTokens: 0,
+      totalCostUsd: 0,
+      budgetExceeded: true,
+      isPaused: false
+    }
+  }
+
+  // Filtrar estrictamente tareas listas: excluir dependencias pendientes ('waiting') o fallidas ('blocked')
+  const readyTasks = tasks.filter((t) => {
+    if (t.dependencyStatus === 'waiting' || t.dependencyStatus === 'blocked') {
+      return false
+    }
+    return t.status === 'queued' || t.status === 'pending' || t.dependencyStatus === 'ready'
+  })
+
   const results: TaskExecutionResult[] = []
   let totalTokens = 0
+  let totalCostUsd = 0
   let budgetExceeded = false
 
   const queue = [...readyTasks]
@@ -234,7 +362,12 @@ export async function executeTasksWithConcurrencyLimit(
   let completedCount = 0
 
   async function runNext(): Promise<void> {
-    if (queue.length === 0 || budgetExceeded) return
+    if (queue.length === 0 || budgetExceeded || isControllerCancelled(controller)) return
+
+    // Pausa cooperativa si el controlador la solicita (US-064)
+    if (isControllerPaused(controller)) {
+      return
+    }
 
     const task = queue.shift()!
     running.add(task.id)
@@ -242,10 +375,18 @@ export async function executeTasksWithConcurrencyLimit(
 
     try {
       const result = await taskExecutor(task)
+      const cost = result.costUsd || 0
       results.push({ taskId: task.id, ...result })
       totalTokens += result.tokensUsed
+      totalCostUsd += cost
 
-      if (totalTokens >= tokenBudget) {
+      // US-052: Verificación de tope de presupuesto en servidor durante ejecución concurrente
+      const currentTotalCost = accumulatedCost + totalCostUsd
+      if (
+        totalTokens >= tokenBudget ||
+        (costBudgetUsd !== undefined && totalCostUsd >= costBudgetUsd) ||
+        (effectiveBudgetCap !== undefined && currentTotalCost >= effectiveBudgetCap)
+      ) {
         budgetExceeded = true
       }
     } catch (err) {
@@ -261,7 +402,7 @@ export async function executeTasksWithConcurrencyLimit(
       onProgress?.(completedCount, readyTasks.length, Array.from(running))
     }
 
-    if (queue.length > 0 && !budgetExceeded) {
+    if (queue.length > 0 && !budgetExceeded && !isControllerPaused(controller) && !isControllerCancelled(controller)) {
       await runNext()
     }
   }
@@ -270,5 +411,11 @@ export async function executeTasksWithConcurrencyLimit(
   const workers = Array.from({ length: initialWorkers }, () => runNext())
   await Promise.all(workers)
 
-  return { results, totalTokens, budgetExceeded }
+  return {
+    results,
+    totalTokens,
+    totalCostUsd,
+    budgetExceeded,
+    isPaused: isControllerPaused(controller)
+  }
 }

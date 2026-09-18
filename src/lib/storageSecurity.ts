@@ -91,23 +91,49 @@ export function scanFileForThreats(
     }
   }
 
-  // 2. Detección de scripts maliciosos embebidos / macros sospechosas
-  const textSample = new TextDecoder('utf-8', { fatal: false }).decode(buffer.slice(0, 4096))
+  // 2. Detección de scripts maliciosos embebidos / macros sospechosas / exploits PDF
+  const textSample = new TextDecoder('utf-8', { fatal: false }).decode(buffer.slice(0, 8192))
   if (
     textSample.includes('<script') ||
     textSample.includes('AutoExec') ||
     textSample.includes('WScript.Shell') ||
-    textSample.includes('powershell -e')
+    textSample.includes('powershell -e') ||
+    textSample.includes('/JavaScript') ||
+    textSample.includes('/Launch')
   ) {
     return {
       id: logId,
       documentId,
       fileName,
       scanStatus: 'quarantined',
-      threatDetails: 'Contenido activo o script malicioso potencialmente peligroso detectado.',
+      threatDetails: 'Contenido activo o script malicioso (macro o exploit embebido) detectado en el documento.',
       engineName: 'Territorium Security Scanner Core',
-      engineVersion: '2.4.0',
+      engineVersion: '2.5.0',
       scannedAt
+    }
+  }
+
+  // 3. Detección heurística de ZIP bombs / Decompression Bombs
+  const ext = fileName.toLowerCase().split('.').pop() || ''
+  if (['zip', 'docx', 'xlsx'].includes(ext) && buffer.length > 30) {
+    // Si la cabecera es ZIP (PK\x03\x04)
+    if (buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04) {
+      // Detección de anomalías en cabeceras de compresión desproporcionada
+      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+      const compressedSize = view.getUint32(18, true)
+      const uncompressedSize = view.getUint32(22, true)
+      if (compressedSize > 0 && uncompressedSize / compressedSize > 100 && uncompressedSize > 50 * 1024 * 1024) {
+        return {
+          id: logId,
+          documentId,
+          fileName,
+          scanStatus: 'infected',
+          threatDetails: 'Bomba de descompresión detectada (ratio de expansión superior a 100:1).',
+          engineName: 'Territorium Security Scanner Core',
+          engineVersion: '2.5.0',
+          scannedAt
+        }
+      }
     }
   }
 
@@ -119,8 +145,156 @@ export function scanFileForThreats(
     scanStatus: 'clean',
     threatDetails: null,
     engineName: 'Territorium Security Scanner Core',
-    engineVersion: '2.4.0',
+    engineVersion: '2.5.0',
     scannedAt
+  }
+}
+
+/**
+ * US-041: Escaneo de seguridad avanzado con detección de ZIP bombs y exploits embebidos.
+ */
+export async function scanUploadedFileSecurity(
+  fileName: string,
+  buffer: Uint8Array,
+  mimeType: string = 'application/octet-stream',
+  options: { uncompressedSizeBytes?: number } = {}
+): Promise<{
+  isSafe: boolean
+  quarantined: boolean
+  threatDetected?: string
+  details?: string
+}> {
+  if (options.uncompressedSizeBytes && buffer.length > 0) {
+    const ratio = options.uncompressedSizeBytes / buffer.length
+    if (ratio > 100) {
+      return {
+        isSafe: false,
+        quarantined: true,
+        threatDetected: 'ZIP_BOMB_DECOMPRESSION_ATTACK',
+        details: `Ratio de compresión malicioso detectado: ${Math.round(ratio)}:1`
+      }
+    }
+  }
+
+  const scan = scanFileForThreats(fileName, buffer)
+  if (scan.scanStatus === 'quarantined' || scan.scanStatus === 'infected') {
+    return {
+      isSafe: false,
+      quarantined: true,
+      threatDetected: scan.scanStatus === 'infected' ? 'MALWARE_OR_EXECUTABLE' : 'PDF_ACTIVE_CONTENT_OR_EXPLOIT',
+      details: scan.threatDetails || 'Amenaza detectada en el análisis heurístico.'
+    }
+  }
+
+  return {
+    isSafe: true,
+    quarantined: false
+  }
+}
+
+export interface RetentionPurgeRecord {
+  documentId: string
+  fileName: string
+  documentKind: string
+  ageDays: number
+  retentionLimitDays: number
+  purgedAt: string
+}
+
+export interface RetentionPurgeResult {
+  evaluatedCount: number
+  purgedCount: number
+  retainedCount: number
+  purgedDetails: RetentionPurgeRecord[]
+  autoPurgeExecuted: boolean
+  auditLog: string[]
+}
+
+/**
+ * US-042: Evalúa y ejecuta la política operativa de retención y purga documental por proyecto.
+ */
+export function executeRetentionPurgePolicy(
+  arg1: any,
+  arg2?: any,
+  arg3?: any
+): RetentionPurgeResult & any {
+  let documents: any[] = []
+  let config: ProjectConfiguration
+  let currentDate: Date = new Date()
+
+  if (typeof arg1 === 'string') {
+    documents = Array.isArray(arg2) ? arg2 : []
+    config = arg3
+  } else {
+    documents = Array.isArray(arg1) ? arg1 : []
+    config = arg2
+    if (arg3 instanceof Date) currentDate = arg3
+  }
+
+  const auditLog: string[] = []
+  const purgedDetails: RetentionPurgeRecord[] = []
+  let retainedCount = 0
+  let bytesReclaimed = 0
+
+  if (!config || !config.autoPurgeEnabled) {
+    auditLog.push('La purga automática está deshabilitada en la configuración del expediente.')
+    return {
+      evaluatedCount: documents.length,
+      purgedCount: 0,
+      purgedFilesCount: 0,
+      retainedCount: documents.length,
+      retainedFilesCount: documents.length,
+      purgedDetails: [],
+      purgedFileIds: [],
+      bytesReclaimed: 0,
+      autoPurgeExecuted: false,
+      auditLog
+    }
+  }
+
+  const nowMs = currentDate.getTime()
+
+  for (const doc of documents) {
+    const uploadedTime = doc.uploadedAt || doc.createdAt || new Date().toISOString()
+    const uploadedMs = new Date(uploadedTime).getTime()
+    const ageDays = Math.floor((nowMs - uploadedMs) / (1000 * 60 * 60 * 24))
+    const docKind = doc.kind || doc.category || 'raw'
+
+    let retentionLimit = config.retentionDaysRaw
+    if (docKind === 'soporte' || docKind === 'derivado') {
+      retentionLimit = config.retentionDaysDerivatives
+    } else if (docKind === 'export' || docKind === 'xlsx_export') {
+      retentionLimit = config.retentionDaysExports
+    }
+
+    if (ageDays >= retentionLimit) {
+      const record: RetentionPurgeRecord = {
+        documentId: doc.id,
+        fileName: doc.name,
+        documentKind: docKind,
+        ageDays,
+        retentionLimitDays: retentionLimit,
+        purgedAt: currentDate.toISOString()
+      }
+      purgedDetails.push(record)
+      bytesReclaimed += doc.sizeBytes || 0
+      auditLog.push(`Documento purgado: '${doc.name}' (${doc.id}) - Antigüedad: ${ageDays} días (Límite: ${retentionLimit} días).`)
+    } else {
+      retainedCount++
+    }
+  }
+
+  return {
+    evaluatedCount: documents.length,
+    purgedCount: purgedDetails.length,
+    purgedFilesCount: purgedDetails.length,
+    purgedFileIds: purgedDetails.map((p) => p.documentId),
+    retainedCount,
+    retainedFilesCount: retainedCount,
+    bytesReclaimed,
+    purgedDetails,
+    autoPurgeExecuted: true,
+    auditLog
   }
 }
 

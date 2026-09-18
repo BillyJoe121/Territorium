@@ -36,6 +36,7 @@ export interface ExportOptions {
   projectName?: string
   userEmail?: string
   inclusionCriteria?: 'all' | 'only_approved' | 'exceptions_only'
+  allowBlockedExport?: boolean
   filename?: string
 }
 
@@ -87,6 +88,26 @@ export async function downloadMasterRecordsXlsx(
     filteredRecords = records.filter((r) => r.criticalConflictCount > 0 || r.reviewState === 'devuelto' || r.isBlockedForExport)
   }
 
+  // US-099 & US-118: Bloqueo estricto de exportación si hay predios con discrepancias o bloqueos activos
+  if (!options.allowBlockedExport && criteria !== 'exceptions_only') {
+    const blocked = filteredRecords.filter((r) => r.isBlockedForExport)
+    if (blocked.length > 0) {
+      const details = blocked.map((b) => `${b.propertyCode} (${b.exportBlockReasons.join('; ') || 'Discrepancias críticas'})`).join(', ')
+      throw new Error(
+        `Exportación bloqueada: Existen ${blocked.length} predio(s) con discrepancias críticas o bloqueos activos: ${details}. Corrija en la mesa de revisión o use 'exceptions_only'.`
+      )
+    }
+  }
+
+  // Generación de Checksum de integridad (US-118)
+  const serialized = JSON.stringify(filteredRecords.map((r) => ({ code: r.propertyCode, state: r.reviewState, attrs: r.attributes })))
+  let hashVal = 0
+  for (let i = 0; i < serialized.length; i++) {
+    hashVal = (hashVal << 5) - hashVal + serialized.charCodeAt(i)
+    hashVal |= 0
+  }
+  const checksum = `TTM-INTEGRITY-${Math.abs(hashVal).toString(16).toUpperCase().padStart(8, '0')}-${filteredRecords.length}`
+
   // 1. Hoja CORRESPONDENCIA (Matriz consolidada)
   const headers = CORRESPONDENCIA_COLUMNS.map((c) => headerCell(c.label))
   const dataRows: Cell[][] = filteredRecords.map((rec) => {
@@ -114,6 +135,7 @@ export async function downloadMasterRecordsXlsx(
     [textCell('Total de Predios Exportados'), textCell(String(filteredRecords.length))],
     [textCell('Predios Aprobados en Lote'), textCell(String(records.filter((r) => r.reviewState === 'aprobado').length))],
     [textCell('Predios con Excepciones / Conflictos'), textCell(String(records.filter((r) => r.criticalConflictCount > 0).length))],
+    [textCell('Sello de Integridad del Libro'), textCell(checksum)],
     [textCell('Certificación de Integridad'), textCell('Exportación generada conforme al esquema maestro auditado Territorium')],
   ]
 

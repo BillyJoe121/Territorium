@@ -1,12 +1,12 @@
-# Títulos de historias de usuario no completas (38 pendientes / 62 completadas)
+# Títulos de historias de usuario no completas y reabiertas por auditoría
 
-Corte: 2026-09-17.
-* **Historias de Dominio Central y Backend (US-001 a US-173)**: 173/173 completadas (100% de E01 a E18 verificado con 161 pruebas unitarias y de resiliencia).
-* **Historias P0 Modernización UI/UX (US-201 a US-300)**: 27/27 P0 completadas y verificadas.
-* **Historias P1 Ampliación Operativa y Visualización (US-201 a US-300)**: 35/35 P1 completadas y verificadas (205 pruebas pasando, 0 errores tsc, build limpio).
-* **Historias pendientes activas (P2)**: 38 historias activas en el backlog de ejecución.
+Corte: 2026-09-17 (Actualización según auditoría de consultoría).
+* **Historias Reabiertas en Cierre y Endurecimiento Real (US-002 a US-296)**: Reabiertas por exigencia de persistencia, controles efectivos, firma no simulada, Excel/ZIP verídicos y aislamiento real.
+* **Historias de Extracción Parciales (US-066 a US-093)**: 28 historias en estado Parcial, pendientes de validación con corpus documental real anonimizado y contraste jurídico colegiado.
+* **Historias P0 y P1 UI/UX (US-201 a US-300)**: 62/62 cerradas funcionalmente en frontend.
+* **Historias P2 UI/UX pendientes**: 38 historias en cola de backlog sensorial.
 
-Este documento funciona como la lista de control activa de trabajo pendiente. A medida que se implementen y verifiquen, se irán marcando y eliminando de esta lista.
+Este documento funciona como la lista de control activa de trabajo pendiente y reabierto. A medida que se implementen y verifiquen los controles efectivos de persistencia real, se irán cerrando con evidencia.
 
 ---
 

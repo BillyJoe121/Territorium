@@ -58,6 +58,12 @@ export function SessionGuard({ children, requiredRole, currentRole, onReauthenti
         operator: 'Operador predial',
         reviewer: 'Revisor jurídico',
         viewer: 'Consulta / Auditor',
+        administrador: 'Administrador del sistema',
+        operador: 'Operador técnico',
+        analista_predial: 'Analista predial',
+        revisor_juridico: 'Revisor jurídico',
+        aprobador: 'Aprobador final',
+        auditor: 'Auditor de cumplimiento',
       }
 
       return (
