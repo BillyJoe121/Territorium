@@ -37,13 +37,17 @@ services:
         name: X-Frame-Options
         value: DENY
 
-  - type: worker
+  # Free test deployment: this runs the polling loop inside a public web
+  # service because Render does not offer free background workers. It may
+  # sleep after inactivity and must be upgraded before a production launch.
+  - type: web
     name: territorium-worker
     runtime: docker
-    plan: 0.5c-512mb
+    plan: free
     region: virginia
     dockerfilePath: ./worker/Dockerfile
     dockerContext: ./worker
+    healthCheckPath: /health
     autoDeployTrigger: checksPass
     maxShutdownDelaySeconds: 60
     envVars:
