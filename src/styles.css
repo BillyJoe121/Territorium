@@ -3524,6 +3524,191 @@ main:has(.audit-trail-view) {
   font-size: 11px;
 }
 
+/* Sidebar Context Badge */
+.sidebar-context-clear-btn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.sidebar-context-clear-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-hover);
+}
+
+.context-name.clickable {
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.context-name.clickable:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+/* Sidebar Footer */
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sidebar-footer-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-1);
+}
+
+.sidebar-sync-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  padding: var(--space-1) 0;
+  user-select: none;
+}
+
+.sidebar-footer-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sidebar-tool-icon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  padding: 0;
+}
+
+.sidebar-tool-icon-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-subtle);
+}
+
+.mode-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--color-success);
+}
+
+.mode-dot.local {
+  background-color: var(--color-warning);
+}
+
+.sidebar-user-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: var(--color-surface-subtle);
+  color: var(--color-text-primary);
+  font-weight: 600;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.user-email {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-role {
+  font-size: 10.5px;
+  color: var(--color-text-muted);
+}
+
+.sidebar-logout-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 36px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: #b42318;
+  background-color: rgba(217, 45, 32, 0.08);
+  border: 1px solid rgba(217, 45, 32, 0.2);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.sidebar-logout-btn:hover {
+  background-color: rgba(217, 45, 32, 0.16);
+  border-color: rgba(217, 45, 32, 0.35);
+  color: #912018;
+}
+
+[data-theme='dark'] .sidebar-logout-btn {
+  color: #fda29b;
+  background-color: rgba(240, 68, 56, 0.12);
+  border-color: rgba(240, 68, 56, 0.25);
+}
+
+[data-theme='dark'] .sidebar-logout-btn:hover {
+  background-color: rgba(240, 68, 56, 0.22);
+  border-color: rgba(240, 68, 56, 0.45);
+  color: #fee4e2;
+}
+
+.page-content.page-content-expedientes,
+.page-content:has(.projects-management-view) {
+  padding: 16px var(--space-6) 16px;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .audit-detail-hash {
   display: flex;
   align-items: center;

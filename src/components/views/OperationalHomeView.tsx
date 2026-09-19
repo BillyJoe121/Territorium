@@ -4,6 +4,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock,
+  FileSpreadsheet,
   FolderKanban,
   Layers,
   ShieldCheck,
@@ -134,9 +135,9 @@ export function OperationalHomeView({
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
-                  onClick={() => onNavigate('carga')}
+                  onClick={() => onNavigate('proyecto_detalle')}
                 >
-                  <UploadCloud size={14} /> Cargar Lote
+                  <FileSpreadsheet size={14} /> Ficha del Expediente
                 </button>
               </>
             ) : (
@@ -170,10 +171,10 @@ export function OperationalHomeView({
           {pendingCount > 0 ? (
             <button
               type="button"
-              onClick={() => onNavigate('revision')}
+              onClick={() => onNavigate(activeProject ? 'proyecto_detalle' : 'expedientes')}
               className="operational-priority-action"
             >
-              Ir a la estación de revisión <ArrowRight size={13} />
+              Ir a la ficha del expediente <ArrowRight size={13} />
             </button>
           ) : (
             <p className="operational-priority-note">Al día, sin pendientes</p>
@@ -195,10 +196,10 @@ export function OperationalHomeView({
           </div>
           <button
             type="button"
-            onClick={() => onNavigate('exportar')}
+            onClick={() => onNavigate(activeProject ? 'proyecto_detalle' : 'expedientes')}
             className="operational-priority-action"
           >
-            Generar matrices de entrega <ArrowRight size={13} />
+            Ver entregables y matrices <ArrowRight size={13} />
           </button>
         </article>
 
@@ -217,10 +218,10 @@ export function OperationalHomeView({
           </div>
           <button
             type="button"
-            onClick={() => onNavigate('carga')}
+            onClick={() => onNavigate(activeProject ? 'proyecto_detalle' : 'expedientes')}
             className="operational-priority-action"
           >
-            Ver monitor de pipeline <ArrowRight size={13} />
+            Ver estado de procesamiento <ArrowRight size={13} />
           </button>
         </article>
 

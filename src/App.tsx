@@ -7,7 +7,6 @@ import { ShareNotaryLinkModal } from './components/ui/ShareNotaryLinkModal'
 import { PublicNotaryPortal } from './components/ui/PublicNotaryPortal'
 import { StatusPill } from './components/ui/StatusPill'
 import { ThemeToggle } from './components/ui/ThemeToggle'
-import { AutoSaveIndicator } from './components/ui/AutoSaveIndicator'
 import { NotaryLinksAdminModal, type NotaryLinkRecord } from './components/ui/NotaryLinksAdminModal'
 import { ExcelExportConfigModal } from './components/ui/ExcelExportConfigModal'
 import { InviteUserModal } from './components/ui/InviteUserModal'
@@ -38,7 +37,6 @@ import { ProjectsManagementView } from './components/ProjectsManagementView'
 import { UsersManagementView } from './components/UsersManagementView'
 import { ConfigurationView } from './components/ConfigurationView'
 import { ReviewStationView } from './components/ReviewStationView'
-import { ProjectBreadcrumbs, type BreadcrumbItem } from './components/ProjectBreadcrumbs'
 import { CommandPalette } from './components/CommandPalette'
 import { LegalDocumentGenerator } from './components/LegalDocumentGenerator'
 import { DynamicTemplateEditor } from './components/DynamicTemplateEditor'
@@ -128,17 +126,7 @@ const navGroups: NavGroup[] = [
     items: [
       { id: 'inicio', label: 'Inicio Operativo', icon: LayoutDashboard },
       { id: 'expedientes', label: 'Expedientes Prediales', icon: FolderKanban },
-    ],
-  },
-  {
-    title: 'Operación del Expediente',
-    items: [
-      { id: 'carga', label: 'Ingesta y Manifiesto', icon: UploadCloud, requiresProject: true },
-      { id: 'monitor', label: 'Monitor de Procesamiento', icon: Activity, requiresProject: true },
-      { id: 'revision', label: 'Estación de Revisión', icon: ClipboardCheck, requiresProject: true },
-      { id: 'discrepancias', label: 'Excepciones y Conflictos', icon: AlertTriangle, requiresProject: true },
-      { id: 'negociacion', label: 'Negociación y Avalúos', icon: Landmark, requiresProject: true },
-      { id: 'exportar', label: 'Entregables y Cierre', icon: Download, requiresProject: true },
+      { id: 'proyecto_detalle', label: 'Ficha del Expediente', icon: FileSpreadsheet, requiresProject: true },
     ],
   },
   {
@@ -347,6 +335,23 @@ function App() {
       }
     }
   }, [screen, publicPortalToken])
+
+  // HU-V2-053: Redirección de pantallas obsoletas a la Ficha del Expediente unificada
+  useEffect(() => {
+    const legacyReplacedScreens: Screen[] = [
+      'monitor',
+      'revision',
+      'formatos_editor',
+      'exportar',
+      'carga',
+      'lotes_nuevo',
+      'negociacion',
+      'discrepancias',
+    ]
+    if (legacyReplacedScreens.includes(screen)) {
+      setScreen(activeProjectId ? 'proyecto_detalle' : 'expedientes')
+    }
+  }, [screen, activeProjectId])
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -1239,35 +1244,6 @@ function App() {
     viewer: 'Consulta',
   }
 
-  const breadcrumbItems: BreadcrumbItem[] = [
-    { id: 'b-home', label: 'Inicio', icon: 'home', onClick: () => setScreen('inicio') },
-    ...(activeProject
-      ? [
-          {
-            id: 'b-proj',
-            label: activeProject.name,
-            icon: 'project' as const,
-            onClick: () => setScreen('proyecto_detalle'),
-          },
-        ]
-      : []),
-    ...(screen !== 'inicio' && (screen !== 'proyecto_detalle' || !activeProject)
-      ? [
-          {
-            id: `b-${screen}`,
-            label: screenLabels[screen]?.title || screen,
-            icon:
-              screen === 'carga'
-                ? ('batch' as const)
-                : screen === 'revision'
-                ? ('property' as const)
-                : ('action' as const),
-            active: true,
-          },
-        ]
-      : []),
-  ]
-
   if (publicPortalToken) {
     return <PublicNotaryPortal token={publicPortalToken} />
   }
@@ -1283,8 +1259,28 @@ function App() {
               <div className="context-indicator">
                 <span className="context-dot" />
                 <span className="context-label">EXPEDIENTE ACTIVO</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearProjectContext()
+                    setScreen('expedientes')
+                  }}
+                  className="sidebar-context-clear-btn"
+                  title="Cerrar expediente activo y volver a la lista"
+                  aria-label="Cerrar expediente activo"
+                >
+                  <X size={12} />
+                </button>
               </div>
-              <div className="context-name" title={activeProject.name}>{activeProject.name}</div>
+              <div
+                className="context-name clickable"
+                title={`Abrir ficha de ${activeProject.name}`}
+                onClick={() => setScreen('proyecto_detalle')}
+                role="button"
+                tabIndex={0}
+              >
+                {activeProject.name}
+              </div>
               <div className="context-meta">{activeProject.municipality}, {activeProject.department}</div>
             </div>
           )}
@@ -1295,16 +1291,16 @@ function App() {
                 <div className="sidebar-nav-header">{group.title}</div>
                 {group.items.map(({ id, label, icon: Icon, requiresProject: reqProj }) => {
                   const isUnavailable = reqProj && !activeProject
-                  const isActive = screen === id || (id === 'expedientes' && screen === 'proyecto_detalle')
+                  const isActive = screen === id
                   return (
                     <button
                       key={id}
                       className={`nav-item ${isActive ? 'active' : ''} ${isUnavailable ? 'is-contextual' : ''}`}
                       aria-disabled={isUnavailable}
-                      title={isUnavailable ? 'Selecciona un expediente para habilitar esta vista' : label}
+                      title={isUnavailable ? 'Selecciona un expediente para habilitar su ficha' : label}
                       onClick={() => {
                         if (isUnavailable) {
-                          toast('Selecciona un expediente para continuar.')
+                          toast('Selecciona un expediente para habilitar su ficha.')
                           setScreen('expedientes')
                           return
                         }
@@ -1322,10 +1318,36 @@ function App() {
           </nav>
 
           <div className="sidebar-footer">
-            <div className="sidebar-sync-badge">
-              <span className={dataMode === 'local' ? 'mode-dot local' : 'mode-dot'} />
-              <span>{dataMode === 'local' ? 'Modo local seguro' : 'Supabase conectado'}</span>
+            <div className="sidebar-footer-top">
+              <div className="sidebar-sync-badge">
+                <span className={dataMode === 'local' ? 'mode-dot local' : 'mode-dot'} />
+                <span>{dataMode === 'local' ? 'Modo local' : 'Supabase conectado'}</span>
+              </div>
+              <div className="sidebar-footer-tools">
+                {remote && (
+                  <button
+                    type="button"
+                    className="sidebar-tool-icon-btn"
+                    onClick={() => void refresh()}
+                    aria-label="Sincronizar datos"
+                    title={lastSync ? `Última sincronización: ${lastSync.toLocaleTimeString('es-CO')}` : 'Sincronizar'}
+                  >
+                    <RefreshCw size={13} className={loading ? 'spin' : ''} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="sidebar-tool-icon-btn"
+                  onClick={() => setIsCommandPaletteOpen(true)}
+                  aria-label="Buscar o comandos (Ctrl+K)"
+                  title="Comandos rápidos (Ctrl+K)"
+                >
+                  <Search size={13} />
+                </button>
+                <ThemeToggle />
+              </div>
             </div>
+
             {user && (
               <div className="sidebar-user-pill">
                 <div className="user-avatar">{user.email?.charAt(0).toUpperCase() ?? 'U'}</div>
@@ -1335,43 +1357,19 @@ function App() {
                 </div>
               </div>
             )}
+
+            <button
+              type="button"
+              className="sidebar-logout-btn"
+              onClick={() => void signOut()}
+              title="Cerrar sesión en Territorium"
+            >
+              <LogOut size={15} />
+              <span>Cerrar sesión</span>
+            </button>
           </div>
         </aside>
         <main>
-          <header className="topbar">
-            <div>
-              <p className="eyebrow">{screenLabels[screen]?.eyebrow || 'PLATAFORMA DE GESTIÓN PREDIAL'}</p>
-              <h1>{screenLabels[screen]?.title || screen}</h1>
-            </div>
-            <div className="topbar-actions flex items-center gap-2">
-              <AutoSaveIndicator status="saved" />
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setIsNotaryModalOpen(true)}
-                title="Generar enlace temporal para notaría o tercero"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', padding: '4px 8px' }}
-              >
-                <Share2 size={14} /> Enlace Notaría
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setIsNotaryAdminModalOpen(true)}
-                title="Administrar y revocar enlaces notariales"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', padding: '4px 8px' }}
-              >
-                <Settings2 size={14} /> Admin Enlaces
-              </button>
-              <ThemeToggle />
-              <button className="icon-button" onClick={() => setIsCommandPaletteOpen(true)} title="Búsqueda rápida o comandos (Ctrl+K)" aria-label="Búsqueda y Comandos"><Search size={17} /></button>
-              <button className="icon-button" onClick={() => setDensity(prev => prev === 'comfortable' ? 'compact' : 'comfortable')} title={density === 'comfortable' ? 'Activar densidad compacta' : 'Activar densidad cómoda'} aria-label="Densidad visual"><SlidersHorizontal size={17} /></button>
-              {activeProject && <div className="project-picker-group"><label className="project-picker">Expediente<select value={activeProjectId} onChange={(event) => event.target.value ? setActiveProjectId(event.target.value) : clearProjectContext()}><option value="">Vista general</option>{state.projects.filter((project) => !project.isArchived).map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>{activeProject.role && <span className={`status ${activeProject.role}`} title="Tu rol de mínimo privilegio en este expediente"><Shield size={12} />{roleBadgeLabels[activeProject.role] ?? activeProject.role}</span>}</div>}
-              {remote && <button className="icon-button" onClick={() => void refresh()} aria-label="Sincronizar" title={lastSync ? `Última sincronización ${lastSync.toLocaleTimeString('es-CO')}` : 'Sincronizar'}><RefreshCw size={17} className={loading ? 'spin' : ''} /></button>}
-              {remote && <button className="icon-button" onClick={() => void signOut()} aria-label="Cerrar sesión"><LogOut size={17} /></button>}
-            </div>
-          </header>
-          <ProjectBreadcrumbs items={breadcrumbItems} />
           {!online && <div className="offline-banner"><WifiOff size={16} />Sin conexión. Los cambios remotos están pausados.</div>}
           {error && <div className="error-banner" role="alert"><AlertTriangle size={17} /><span>{error}</span><button onClick={() => setError(null)} aria-label="Cerrar error"><X size={15} /></button></div>}
           <section className="page-content">{loading && !state.projects.length ? <div className="loading-card"><LoaderCircle className="spin" />Cargando información protegida…</div> : content}</section>
