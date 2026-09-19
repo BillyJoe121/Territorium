@@ -26,6 +26,18 @@ export interface DiscrepancyCategoryData {
   severity: 'alta' | 'media' | 'baja'
 }
 
+export interface BatchStatusData {
+  name: string
+  value: number
+  color: string
+}
+
+export interface ProjectWorkloadData {
+  name: string
+  records: number
+  pending: number
+}
+
 interface DashboardChartsProps {
   statusData: PropertyStatusData[]
   discrepancyData: DiscrepancyCategoryData[]
@@ -113,13 +125,63 @@ export function DiscrepancyBarChart({ data = DEFAULT_DISCREPANCIES }: { data?: D
   )
 }
 
+export function BatchStatusBarChart({ data }: { data: BatchStatusData[] }) {
+  const total = data.reduce((acc, curr) => acc + curr.value, 0)
+
+  return (
+    <ChartPanel title="Lotes por estado" summary={`${total} lotes registrados`}>
+      <div style={{ width: '100%', height: 260 }}>
+        <ResponsiveContainer>
+          <BarChart data={data} margin={{ top: 10, right: 18, left: 0, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--ui-line)" vertical={false} />
+            <XAxis dataKey="name" stroke="var(--ui-ink-faint)" tick={{ fontSize: 11 }} />
+            <YAxis allowDecimals={false} stroke="var(--ui-ink-faint)" />
+            <Tooltip content={<ModernTooltip />} />
+            <Bar dataKey="value" name="Lotes" radius={[4, 4, 0, 0]}>
+              {data.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </ChartPanel>
+  )
+}
+
+export function ProjectWorkloadBarChart({ data }: { data: ProjectWorkloadData[] }) {
+  return (
+    <ChartPanel title="Carga por expediente" summary="Predios y pendientes">
+      <div style={{ width: '100%', height: 260 }}>
+        <ResponsiveContainer>
+          <BarChart
+            layout="vertical"
+            data={data}
+            margin={{ top: 10, right: 18, left: 8, bottom: 5 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--ui-line)" horizontal={false} />
+            <XAxis type="number" allowDecimals={false} stroke="var(--ui-ink-faint)" />
+            <YAxis dataKey="name" type="category" width={115} stroke="var(--ui-ink-faint)" tick={{ fontSize: 11 }} />
+            <Tooltip content={<ModernTooltip />} />
+            <Legend />
+            <Bar dataKey="records" name="Predios" fill="#2459D3" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="pending" name="Pendientes" fill="#9A6700" radius={[0, 4, 4, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </ChartPanel>
+  )
+}
+
 export function DashboardCharts({
   statusData = DEFAULT_STATUS_DATA,
   discrepancyData = DEFAULT_DISCREPANCIES,
-}: DashboardChartsProps) {
+  batchData = [],
+  projectData = [],
+}: DashboardChartsProps & { batchData?: BatchStatusData[]; projectData?: ProjectWorkloadData[] }) {
   return (
     <div className="dashboard-charts-grid">
       <PropertyStatusDonut data={statusData} />
+      <BatchStatusBarChart data={batchData} />
+      <ProjectWorkloadBarChart data={projectData} />
       <DiscrepancyBarChart data={discrepancyData} />
     </div>
   )

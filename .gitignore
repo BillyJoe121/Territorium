@@ -5,6 +5,7 @@ dist/
 .DS_Store
 *.tsbuildinfo
 supabase/.temp/
+supabase/.branches/
 worker/.venv/
 __pycache__/
 .forge/

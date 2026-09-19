@@ -1,46 +1,23 @@
 import { useState } from 'react'
 import {
-  AlertCircle,
-  AlertTriangle,
-  ArrowRight,
-  Bot,
   CheckCircle2,
-  ChevronDown,
   Clock,
-  Cpu,
-  Database,
-  DollarSign,
-  FileCode2,
-  FileText,
   History,
-  Layers,
-  Play,
   Plus,
   RefreshCw,
-  RotateCcw,
   Save,
   ShieldAlert,
-  ShieldCheck,
-  Sliders,
-  Sparkles,
   Zap,
 } from 'lucide-react'
 import type {
   AiExecutionLog,
   ExtractorConfig,
-  PromptTestRequest,
-  PromptTestResult,
   PromptVersion,
 } from '../types'
 import {
-  activatePromptVersion,
-  createAiExecutionLog,
-  createNextPromptVersion,
   DEFAULT_EXTRACTOR_CONFIGS,
   DEFAULT_PROMPT_VERSIONS,
-  testPromptInSandbox,
 } from '../lib/extractorConfig'
-import { GuideSidebar } from './pmo/AdminComponents'
 
 interface ConfigurationViewProps {
   configs: ExtractorConfig[]
@@ -61,7 +38,7 @@ interface ConfigurationViewProps {
   isLocalMode?: boolean
 }
 
-type TabKey = 'extractores' | 'prompts' | 'playground' | 'telemetria'
+type TabKey = 'extractores' | 'prompts' | 'telemetria'
 
 const extractorLabels: Record<'title_study' | 'plan' | 'negotiation', { label: string; desc: string }> = {
   title_study: {
@@ -78,30 +55,6 @@ const extractorLabels: Record<'title_study' | 'plan' | 'negotiation', { label: s
   },
 }
 
-const sampleInputs: Record<'title_study' | 'plan' | 'negotiation', string> = {
-  title_study: `OFICINA DE REGISTRO DE INSTRUMENTOS PÚBLICOS DE BOGOTÁ D.C.
-MATRÍCULA INMOBILIARIA: 50N-2045587 | CÉDULA CATASTRAL: 01-02-0045-0012-000
-PREDIO: LOTE LA ESPERANZA, SECTOR RURAL NORTE
-PROPIETARIOS ACTUALES: CARLOS ALBERTO RESTREPO GÓMEZ (C.C. 19.450.880, 100% DE DERECHOS).
-CABIDA Y LINDEROS: Por el Norte en 145 metros con predio El Bosque; por el Sur en 120 metros con Quebrada Honda; por el Oriente en 80 metros con Carretera Central; por el Occidente con Predio San José.
-ÁREA TOTAL: 12 ha + 4.500 m².
-MODO DE ADQUISICIÓN: Escritura Pública No. 1240 del 15 de marzo de 2018, Notaría 25 de Bogotá. Compraventa.
-GRAVÁMENES Y MEDIDAS CAUTELARES: Sin condiciones jurídicas vigentes ni hipotecas.`,
-  plan: `PLANO TOPOGRÁFICO DE AFECTACIÓN PREDIAL
-PROYECTO: LÍNEA DE TRANSMISIÓN ELÉCTRICA 230 KV
-PREDIO: LA ESPERANZA | PROPIETARIO: CARLOS ALBERTO RESTREPO GÓMEZ
-ÁREA TOTAL DEL PREDIO: 124.500 m² (12 ha + 4.500 m²)
-ÁREA DE SERVIDUMBRE REQUERIDA: 14.250 m²
-ANCHO DE FRANJA: 32 metros | LONGITUD DEL TRAMO: 445 metros
-INFRAESTRUCTURA: Torre T-14 y Torre T-15 proyectadas
-ESCALA: 1:1.000 | FECHA DE LEVANTAMIENTO: FEBRERO 2026`,
-  negotiation: `ACTA DE CONCERTACIÓN Y OFERTA FORMAL DE INDEMNIZACIÓN
-EXPEDIENTE: EXP-PREDIO-001 | PREDIO: LA ESPERANZA
-OFERTA COMERCIAL No. 1: Valor determinado según avalúo corporativo: $ 1.245.000.000 COP (MIL DOSCIENTOS CUARENTA Y CINCO MILLONES DE PESOS M/CTE).
-OFERTA DE REAJUSTE No. 2: $ 1.260.000.000 COP.
-ESTADO DE NEGOCIACIÓN: En proceso de concertación voluntaria directa. Sin oposición prejudicial.`,
-}
-
 export function ConfigurationView({
   configs,
   promptVersions,
@@ -110,9 +63,6 @@ export function ConfigurationView({
   onUpdateConfig,
   onCreatePromptVersion,
   onActivatePromptVersion,
-  onRecordAiLog,
-  onResetDemo,
-  isLocalMode = false,
 }: ConfigurationViewProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('extractores')
   const [selectedExtractor, setSelectedExtractor] = useState<'title_study' | 'plan' | 'negotiation'>('title_study')
@@ -135,13 +85,6 @@ export function ConfigurationView({
   const [newPromptText, setNewPromptText] = useState('')
   const [newPromptSchema, setNewPromptSchema] = useState('{\n  "type": "object",\n  "required": ["records"]\n}')
   const [newPromptSetActive, setNewPromptSetActive] = useState(true)
-
-  // Estado del Playground / Sandbox (US-062)
-  const [playgroundExtractor, setPlaygroundExtractor] = useState<'title_study' | 'plan' | 'negotiation'>('title_study')
-  const [playgroundInput, setPlaygroundInput] = useState(sampleInputs.title_study)
-  const [playgroundModel, setPlaygroundModel] = useState('gpt-4o')
-  const [playgroundRunning, setPlaygroundRunning] = useState(false)
-  const [playgroundResult, setPlaygroundResult] = useState<PromptTestResult | null>(null)
 
   function handleConfigChange<K extends keyof ExtractorConfig>(
     key: 'title_study' | 'plan' | 'negotiation',
@@ -195,43 +138,6 @@ export function ConfigurationView({
     }
   }
 
-  function handleRunSandboxTest() {
-    setPlaygroundRunning(true)
-    const activePrompt =
-      promptVersions.find((p) => p.extractorKey === playgroundExtractor && p.active)?.prompt ||
-      DEFAULT_PROMPT_VERSIONS.find((p) => p.extractorKey === playgroundExtractor)?.prompt ||
-      'Instrucción de prueba'
-
-    setTimeout(() => {
-      const res = testPromptInSandbox({
-        extractorKey: playgroundExtractor,
-        promptText: activePrompt,
-        schema: { required: ['records'] },
-        sampleInput: playgroundInput,
-        modelOverride: playgroundModel,
-      })
-      setPlaygroundResult(res)
-      setPlaygroundRunning(false)
-
-      // Registrar telemetría de prueba
-      if (onRecordAiLog) {
-        const log = createAiExecutionLog({
-          extractorKey: playgroundExtractor,
-          requestedModel: playgroundModel,
-          usedModel: playgroundModel,
-          fallbackTriggered: false,
-          status: res.success ? 'success' : 'failed',
-          latencyMs: res.latencyMs,
-          promptTokens: res.tokens.prompt,
-          completionTokens: res.tokens.completion,
-          isTestRun: true,
-          errorMessage: res.validationErrors.length > 0 ? res.validationErrors.join(', ') : null,
-        })
-        void onRecordAiLog(log)
-      }
-    }, 400)
-  }
-
   const currentConfig = editedConfigs[selectedExtractor] || DEFAULT_EXTRACTOR_CONFIGS[0]
   const versionsForSelected = promptVersions.filter((v) => v.extractorKey === selectedExtractor)
 
@@ -253,17 +159,23 @@ export function ConfigurationView({
         </div>
       )}
 
-      <GuideSidebar
-        title="Secciones de configuración"
-        activeId={activeTab}
-        onSelect={(id) => setActiveTab(id as TabKey)}
-        items={[
+      <nav className="config-tabs-nav" aria-label="Secciones de configuración">
+        <strong>Secciones de configuración:</strong>
+        {[
           { id: 'extractores', label: 'Extractores y modelos' },
           { id: 'prompts', label: 'Versiones de prompts' },
-          { id: 'playground', label: 'Banco de pruebas' },
           { id: 'telemetria', label: 'Telemetría de IA' },
-        ]}
-      />
+        ].map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`config-tab-btn ${item.id === activeTab ? 'active' : ''}`}
+            onClick={() => setActiveTab(item.id as TabKey)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
 
       {/* PESTAÑA 1: EXTRACTORES Y MODELOS (US-056, US-060) */}
       {activeTab === 'extractores' && (
@@ -610,138 +522,14 @@ export function ConfigurationView({
         </div>
       )}
 
-      {/* PESTAÑA 3: BANCO DE PRUEBAS / PLAYGROUND SANDBOX (US-062) */}
-      {activeTab === 'playground' && (
-        <div className="config-tab-content">
-          <div className="sandbox-disclaimer-banner">
-            <Cpu size={20} />
-            <div>
-              <strong>Entorno Sandbox Aislado (US-062)</strong>
-              <p>
-                Este banco de pruebas valida la capacidad de extracción y la conformidad del contrato JSON
-                <strong> sin escribir en bases de datos productivas</strong> (no genera predios ni revisiones en expedientes reales).
-              </p>
-            </div>
-          </div>
-
-          <div className="playground-layout">
-            <div className="playground-pane input-pane card">
-              <div className="pane-header">
-                <h3>Insumo de Prueba</h3>
-                <div className="extractor-pill-select">
-                  {(['title_study', 'plan', 'negotiation'] as const).map((k) => (
-                    <button
-                      key={k}
-                      className={`pill-btn small ${playgroundExtractor === k ? 'active' : ''}`}
-                      onClick={() => {
-                        setPlaygroundExtractor(k)
-                        setPlaygroundInput(sampleInputs[k])
-                        setPlaygroundResult(null)
-                      }}
-                    >
-                      {extractorLabels[k].label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="form-group" style={{ marginTop: '0.75rem' }}>
-                <div className="label-with-action">
-                  <label>Texto del Documento Fuente (Muestra)</label>
-                  <button
-                    className="link-button"
-                    onClick={() => setPlaygroundInput(sampleInputs[playgroundExtractor])}
-                  >
-                    Restablecer ejemplo
-                  </button>
-                </div>
-                <textarea
-                  rows={11}
-                  value={playgroundInput}
-                  onChange={(e) => setPlaygroundInput(e.target.value)}
-                  placeholder="Pega aquí el extracto de texto a evaluar..."
-                />
-              </div>
-
-              <div className="playground-controls-bar">
-                <div className="model-selector-inline">
-                  <label>Modelo a probar:</label>
-                  <select
-                    value={playgroundModel}
-                    onChange={(e) => setPlaygroundModel(e.target.value)}
-                  >
-                    <option value="gpt-4o">gpt-4o (Recomendado)</option>
-                    <option value="gpt-4o-mini">gpt-4o-mini (Rápido / Económico)</option>
-                    <option value="claude-3-5-sonnet">claude-3-5-sonnet</option>
-                  </select>
-                </div>
-                <button
-                  className="button primary"
-                  disabled={playgroundRunning || !playgroundInput.trim()}
-                  onClick={handleRunSandboxTest}
-                >
-                  <Play size={16} />
-                  {playgroundRunning ? 'Extrayendo en Sandbox...' : 'Probar Extracción'}
-                </button>
-              </div>
-            </div>
-
-            <div className="playground-pane output-pane card">
-              <div className="pane-header">
-                <h3>Resultado de la Extracción Sandbox</h3>
-                {playgroundResult && (
-                  <div className="metrics-pill-group">
-                    <span className="metric-pill">
-                      <Clock size={13} /> {playgroundResult.latencyMs} ms
-                    </span>
-                    <span className="metric-pill">
-                      <Zap size={13} /> {playgroundResult.tokens.total} tokens
-                    </span>
-                    <span className={`status-pill ${playgroundResult.success ? 'success' : 'error'}`}>
-                      {playgroundResult.success ? 'Contrato Válido' : 'Error en Contrato'}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {!playgroundResult ? (
-                <div className="empty-playground-state">
-                  <Bot size={36} />
-                  <p>Ejecuta una prueba para ver la estructura extraída, tokens y validación de contrato.</p>
-                </div>
-              ) : (
-                <div className="json-viewer-box">
-                  {playgroundResult.validationErrors.length > 0 && (
-                    <div className="alert-banner warning" style={{ marginBottom: '0.75rem' }}>
-                      <AlertTriangle size={16} />
-                      <div>
-                        <strong>Observaciones de validación:</strong>
-                        <ul>
-                          {playgroundResult.validationErrors.map((err, i) => (
-                            <li key={i}>{err}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  )}
-                  <pre className="json-code">
-                    {JSON.stringify(playgroundResult.output, null, 2)}
-                  </pre>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* PESTAÑA 4: TELEMETRÍA Y TRAZABILIDAD IA (US-059) */}
+      {/* PESTAÑA 3: TELEMETRÍA Y TRAZABILIDAD IA (US-059) */}
       {activeTab === 'telemetria' && (
         <div className="config-tab-content">
           <div className="telemetry-summary-cards">
             <div className="card summary-metric-card">
               <span className="metric-label">Total Ejecuciones Registradas</span>
               <span className="metric-value">{aiLogs.length}</span>
-              <span className="metric-sub">En lotes y entorno sandbox</span>
+              <span className="metric-sub">En lotes procesados</span>
             </div>
             <div className="card summary-metric-card">
               <span className="metric-label">Tokens Consumidos</span>
@@ -799,7 +587,7 @@ export function ConfigurationView({
                             minute: '2-digit',
                             second: '2-digit',
                           })}
-                          {log.isTestRun && <span className="sandbox-badge">Sandbox</span>}
+                          {log.isTestRun && <span className="test-run-badge">Prueba histórica</span>}
                         </td>
                         <td>
                           <strong>{extractorLabels[log.extractorKey]?.label ?? log.extractorKey}</strong>
@@ -843,19 +631,6 @@ export function ConfigurationView({
         </div>
       )}
 
-      {/* Zona de Peligro / Reset Demo en modo local */}
-      {isLocalMode && onResetDemo && (
-        <section className="card danger-zone" style={{ marginTop: '2rem' }}>
-          <div>
-            <h3>Datos de Demostración Local</h3>
-            <p>Restaura los expedientes, tareas y configuraciones demostrativas predeterminadas.</p>
-          </div>
-          <button className="button secondary" onClick={onResetDemo}>
-            <RotateCcw size={16} />
-            Restablecer Demo
-          </button>
-        </section>
-      )}
     </div>
   )
 }

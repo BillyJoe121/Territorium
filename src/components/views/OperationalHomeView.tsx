@@ -1,21 +1,23 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
   Clock,
-  FileSpreadsheet,
-  FileText,
   FolderKanban,
   Layers,
-  Play,
   ShieldCheck,
   UploadCloud,
-  XCircle,
 } from 'lucide-react'
 import type { Batch, Project, PropertyRecord, ReviewTask } from '../../types'
 import { PageHeader } from '../common/PageHeader'
-import { StatusBadge } from '../common/StatusBadge'
+import {
+  DashboardCharts,
+  type BatchStatusData,
+  type DiscrepancyCategoryData,
+  type ProjectWorkloadData,
+  type PropertyStatusData,
+} from '../ui/DashboardCharts'
 
 export interface OperationalHomeViewProps {
   projects: Project[]
@@ -38,24 +40,75 @@ export function OperationalHomeView({
   onSelectProject,
   onClearContext,
 }: OperationalHomeViewProps) {
-  const activeProjects = projects.filter((p) => !p.isArchived)
+  const activeProjects = useMemo(() => projects.filter((p) => !p.isArchived), [projects])
 
   // Métricas reales y operativas derivadas del estado actual
-  const currentRecords = activeProject
-    ? records.filter((r) => r.projectId === activeProject.id)
-    : records
-  const currentBatches = activeProject
-    ? batches.filter((b) => b.projectId === activeProject.id)
-    : batches
-  const currentReviews = activeProject
-    ? reviews.filter((rev) => currentRecords.some((rec) => rec.id === rev.recordId))
-    : reviews
+  const currentRecords = useMemo(
+    () => activeProject ? records.filter((r) => r.projectId === activeProject.id) : records,
+    [activeProject?.id, records],
+  )
+  const currentBatches = useMemo(
+    () => activeProject ? batches.filter((b) => b.projectId === activeProject.id) : batches,
+    [activeProject?.id, batches],
+  )
+  const currentReviews = useMemo(
+    () => activeProject ? reviews.filter((rev) => currentRecords.some((rec) => rec.id === rev.recordId)) : reviews,
+    [activeProject?.id, currentRecords, reviews],
+  )
 
   const pendingCount = currentReviews.filter((r) => r.state === 'pendiente').length
   const approvedCount = currentRecords.filter((r) => r.reviewState === 'aprobado').length
   const returnedCount = currentRecords.filter((r) => r.reviewState === 'devuelto').length
   const inProgressBatches = currentBatches.filter((b) => b.jobState === 'en_proceso')
   const failedBatches = currentBatches.filter((b) => b.jobState === 'fallido')
+
+  const propertyStatusData = useMemo<PropertyStatusData[]>(() => [
+    { name: 'Aprobados', value: currentRecords.filter((record) => record.reviewState === 'aprobado').length, color: '#18794E' },
+    { name: 'Por revisar', value: currentRecords.filter((record) => record.reviewState === 'pendiente').length, color: '#9A6700' },
+    { name: 'Devueltos', value: currentRecords.filter((record) => record.reviewState === 'devuelto').length, color: '#B42318' },
+  ], [currentRecords])
+
+  const batchStatusData = useMemo<BatchStatusData[]>(() => {
+    const states = [
+      { key: 'completado', name: 'Completados', color: '#18794E' },
+      { key: 'en_proceso', name: 'En proceso', color: '#2459D3' },
+      { key: 'pendiente', name: 'Pendientes', color: '#9A6700' },
+      { key: 'fallido', name: 'Fallidos', color: '#B42318' },
+    ] as const
+    return states.map((state) => ({
+      name: state.name,
+      value: currentBatches.filter((batch) => batch.jobState === state.key).length,
+      color: state.color,
+    }))
+  }, [currentBatches])
+
+  const projectWorkloadData = useMemo<ProjectWorkloadData[]>(() => activeProjects.slice(0, 6).map((project) => {
+    const projectRecords = records.filter((record) => record.projectId === project.id)
+    const projectRecordIds = new Set(projectRecords.map((record) => record.id))
+    return {
+      name: project.name.length > 18 ? `${project.name.slice(0, 18)}…` : project.name,
+      records: projectRecords.length,
+      pending: reviews.filter((review) => projectRecordIds.has(review.recordId) && review.state === 'pendiente').length,
+    }
+  }), [activeProjects, records, reviews])
+
+  const discrepancyData = useMemo<DiscrepancyCategoryData[]>(() => {
+    const grouped = new Map<string, { count: number; severity: 'alta' | 'media' | 'baja' }>()
+    const severityRank = { baja: 1, media: 2, alta: 3 }
+    for (const review of currentReviews) {
+      const category = review.title?.split(':')[0]?.trim() || 'Revisión jurídica'
+      const current = grouped.get(category)
+      if (!current) {
+        grouped.set(category, { count: 1, severity: review.severity })
+      } else {
+        current.count += 1
+        if (severityRank[review.severity] > severityRank[current.severity]) current.severity = review.severity
+      }
+    }
+    return Array.from(grouped, ([category, value]) => ({ category, ...value }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6)
+  }, [currentReviews])
 
   return (
     <div className="space-y-6">
@@ -100,15 +153,15 @@ export function OperationalHomeView({
       />
 
       {/* Fila 1: Bandeja de Atención Prioritaria */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="card p-5 border-l-4 border-l-[#9A6700]">
-          <div className="flex items-center justify-between">
+      <div className="operational-priority-row">
+        <article className="operational-priority-card">
+          <div className="operational-priority-header">
             <span className="text-xs font-semibold text-[#667085] uppercase tracking-wider">
               Revisiones Pendientes
             </span>
-            <Clock size={16} className="text-[#9A6700]" />
+            <Clock size={15} />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
+          <div className="operational-priority-value">
             <span className="text-3xl font-semibold tabular-nums text-[#182230]">
               {pendingCount}
             </span>
@@ -118,23 +171,23 @@ export function OperationalHomeView({
             <button
               type="button"
               onClick={() => onNavigate('revision')}
-              className="mt-3 text-xs font-medium text-[#2459D3] hover:underline flex items-center gap-1"
+              className="operational-priority-action"
             >
               Ir a la estación de revisión <ArrowRight size={13} />
             </button>
           ) : (
-            <p className="mt-3 text-xs text-[#18794E]">Al día, sin pendientes</p>
+            <p className="operational-priority-note">Al día, sin pendientes</p>
           )}
-        </div>
+        </article>
 
-        <div className="card p-5 border-l-4 border-l-[#18794E]">
-          <div className="flex items-center justify-between">
+        <article className="operational-priority-card">
+          <div className="operational-priority-header">
             <span className="text-xs font-semibold text-[#667085] uppercase tracking-wider">
               Predios Aprobados
             </span>
-            <CheckCircle2 size={16} className="text-[#18794E]" />
+            <CheckCircle2 size={15} />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
+          <div className="operational-priority-value">
             <span className="text-3xl font-semibold tabular-nums text-[#182230]">
               {approvedCount}
             </span>
@@ -143,20 +196,20 @@ export function OperationalHomeView({
           <button
             type="button"
             onClick={() => onNavigate('exportar')}
-            className="mt-3 text-xs font-medium text-[#2459D3] hover:underline flex items-center gap-1"
+            className="operational-priority-action"
           >
             Generar matrices de entrega <ArrowRight size={13} />
           </button>
-        </div>
+        </article>
 
-        <div className="card p-5 border-l-4 border-l-[#026AA2]">
-          <div className="flex items-center justify-between">
+        <article className="operational-priority-card">
+          <div className="operational-priority-header">
             <span className="text-xs font-semibold text-[#667085] uppercase tracking-wider">
               Lotes en Proceso
             </span>
-            <Layers size={16} className="text-[#026AA2]" />
+            <Layers size={15} />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
+          <div className="operational-priority-value">
             <span className="text-3xl font-semibold tabular-nums text-[#182230]">
               {inProgressBatches.length}
             </span>
@@ -165,30 +218,37 @@ export function OperationalHomeView({
           <button
             type="button"
             onClick={() => onNavigate('carga')}
-            className="mt-3 text-xs font-medium text-[#2459D3] hover:underline flex items-center gap-1"
+            className="operational-priority-action"
           >
             Ver monitor de pipeline <ArrowRight size={13} />
           </button>
-        </div>
+        </article>
 
-        <div className="card p-5 border-l-4 border-l-[#B42318]">
-          <div className="flex items-center justify-between">
+        <article className="operational-priority-card">
+          <div className="operational-priority-header">
             <span className="text-xs font-semibold text-[#667085] uppercase tracking-wider">
               Devueltos o Fallos
             </span>
-            <AlertTriangle size={16} className="text-[#B42318]" />
+            <AlertTriangle size={15} />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
+          <div className="operational-priority-value">
             <span className="text-3xl font-semibold tabular-nums text-[#182230]">
               {returnedCount + failedBatches.length}
             </span>
             <span className="text-xs text-[#667085]">excepciones</span>
           </div>
-          <p className="mt-3 text-xs text-[#526071]">
+          <p className="operational-priority-note">
             {returnedCount > 0 ? `${returnedCount} predios con observaciones` : 'Sin errores críticos'}
           </p>
-        </div>
+        </article>
       </div>
+
+      <DashboardCharts
+        statusData={propertyStatusData}
+        batchData={batchStatusData}
+        projectData={projectWorkloadData}
+        discrepancyData={discrepancyData}
+      />
 
       {/* Fila 2: Expedientes Recientes y Acceso Rápido */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

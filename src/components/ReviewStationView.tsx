@@ -4,8 +4,10 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   CornerDownLeft,
+  Edit3,
   FileCheck,
   FileSearch,
   FileSpreadsheet,
@@ -93,14 +95,6 @@ export function ReviewStationView({
     }
     return true
   })
-
-  // Atributos visibles según pestaña
-  const visibleAttributes = selected
-    ? Object.values(selected.attributes).filter((attr) => {
-        if (activeTab === 'todos') return true
-        return attr.category === activeTab
-      })
-    : []
 
   // Documento asociado al predio
   const relatedDoc = documents.find((d) => d.propertyCode === selected?.propertyCode) || documents[0]
@@ -197,6 +191,8 @@ export function ReviewStationView({
     onNotice?.('Comentario registrado en el contexto del atributo.')
   }
 
+  const [attrSearchQuery, setAttrSearchQuery] = useState('')
+
   if (!selected) {
     return (
       <div className="card empty-state" style={{ padding: '3rem', textAlign: 'center' }}>
@@ -207,40 +203,77 @@ export function ReviewStationView({
     )
   }
 
-  if (viewMode === 'split' && selected) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--color-surface)', padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>VISTA DE REVISIÓN:</span>
-            <button
-              type="button"
-              className="btn btn-primary btn-xs"
-              onClick={() => setViewMode('split')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-            >
-              <Columns size={13} /> Visor Split-View (US-246)
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-xs"
-              onClick={() => setViewMode('standard')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-            >
-              <LayoutGrid size={13} /> Ficha Tradicional
-            </button>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-              Predio activo: <strong>{selected.propertyCode}</strong> ({selected.folio})
-            </span>
-          </div>
+  // Filtrado y conteo de atributos para la ficha tradicional
+  const categoryCounts = {
+    todos: Object.values(selected.attributes).length,
+    identificacion: Object.values(selected.attributes).filter((a) => a.category === 'identificacion').length,
+    juridico: Object.values(selected.attributes).filter((a) => a.category === 'juridico').length,
+    tecnico: Object.values(selected.attributes).filter((a) => a.category === 'tecnico').length,
+    manual: Object.values(selected.attributes).filter((a) => a.category === 'manual').length,
+  }
+
+  const visibleAttributes = Object.values(selected.attributes).filter((attr) => {
+    if (activeTab !== 'todos' && attr.category !== activeTab) return false
+    if (attrSearchQuery.trim()) {
+      const q = attrSearchQuery.toLowerCase()
+      const matchLabel = attr.label.toLowerCase().includes(q)
+      const matchKey = attr.fieldKey.toLowerCase().includes(q)
+      const matchVal = String(attr.activeValue || '').toLowerCase().includes(q)
+      return matchLabel || matchKey || matchVal
+    }
+    return true
+  })
+
+  const currentIndex = filteredRecords.findIndex((r) => r.id === selected.id)
+
+  return (
+    <div className="review-station-wrapper">
+      {/* NAVBAR FLOTANTE PERMANENTE: VISTA DE REVISIÓN */}
+      <div className="review-mode-toolbar">
+        <div className="mode-toggle-group">
+          <span className="mode-label">VISTA DE REVISIÓN:</span>
+          <button
+            type="button"
+            className={`button small ${viewMode === 'split' ? 'primary active' : 'secondary'}`}
+            onClick={() => setViewMode('split')}
+            id="btn-mode-split"
+          >
+            <Columns size={13} /> Visor Split-View (US-246)
+          </button>
+          <button
+            type="button"
+            className={`button small ${viewMode === 'standard' ? 'primary active' : 'secondary'}`}
+            onClick={() => setViewMode('standard')}
+            id="btn-mode-standard"
+          >
+            <LayoutGrid size={13} /> Ficha Tradicional
+          </button>
         </div>
 
+        <div className="active-property-meta">
+          <span className="property-meta-pill">
+            Predio activo: <strong>{selected.propertyCode}</strong> — {selected.canonicalName} ({selected.folio})
+          </span>
+          <span className={`status ${selected.reviewState}`}>
+            {selected.reviewState.toUpperCase()}
+          </span>
+        </div>
+      </div>
+
+      {/* CONTENIDO PRINCIPAL SEGÚN EL MODO SELECCIONADO */}
+      {viewMode === 'split' ? (
         <SplitReviewStation
           propertyFolio={selected.folio}
           propertyName={selected.canonicalName}
           documentName={relatedDoc?.name || 'Estudio_Titulos_Consolidado.pdf'}
+          propertiesList={records.map((r) => ({
+            id: r.id,
+            folio: r.folio,
+            code: r.propertyCode,
+            name: r.canonicalName,
+            status: r.reviewState === 'aprobado' ? 'aprobado' : r.criticalConflictCount > 0 ? 'discrepancia' : 'en_revision',
+          }))}
+          onSelectPropertyFromList={(id) => setSelectedId(id)}
           attributes={Object.values(selected.attributes).map((attr) => ({
             id: attr.fieldKey,
             key: attr.fieldKey,
@@ -264,359 +297,279 @@ export function ReviewStationView({
           onApproveProperty={handleApproveRecord}
           onFlagDiscrepancy={handleDevolveRecord}
           onNextProperty={() => {
-            const currentIndex = filteredRecords.findIndex((r) => r.id === selected.id)
             if (currentIndex >= 0 && currentIndex < filteredRecords.length - 1) {
               setSelectedId(filteredRecords[currentIndex + 1].id)
             }
           }}
           onPrevProperty={() => {
-            const currentIndex = filteredRecords.findIndex((r) => r.id === selected.id)
             if (currentIndex > 0) {
               setSelectedId(filteredRecords[currentIndex - 1].id)
             }
           }}
         />
-      </div>
-    )
-  }
-
-  return (
-    <div className="review-station-container" style={{ display: 'grid', gridTemplateColumns: '320px 1fr 380px', gap: '1rem', height: 'calc(100vh - 130px)' }}>
-      {/* PANEL 1: BANDEJA PRIORIZADA DE PREDIOS (US-105, US-174) */}
-      <section className="card panel-tray" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
-        <div style={{ padding: '1rem', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface-subtle)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-            <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <FileCheck size={18} color="var(--color-primary)" />
-              Bandeja de Predios
-            </h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <button
-                type="button"
-                className="btn btn-secondary btn-xs"
-                onClick={() => setViewMode('split')}
-                title="Cambiar a Split-View (US-246)"
-              >
-                <Columns size={12} />
-              </button>
-              <span className="badge" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', fontSize: '0.75rem' }}>
-                {filteredRecords.length} / {records.length}
-              </span>
-            </div>
-          </div>
-
-          <div style={{ position: 'relative', marginBottom: '0.5rem' }}>
-            <Search size={15} style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
-            <input
-              type="text"
-              placeholder="Buscar predio, folio, municipio..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ width: '100%', paddingLeft: '2rem', height: '32px', fontSize: '0.8rem', borderRadius: '6px', border: '1px solid var(--color-border)' }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', gap: '0.25rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
-            <button
-              className={`pill-button ${filterState === 'all' ? 'active' : ''}`}
-              onClick={() => setFilterState('all')}
-              style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '12px' }}
-            >
-              Todos
-            </button>
-            <button
-              className={`pill-button ${filterState === 'pendientes' ? 'active' : ''}`}
-              onClick={() => setFilterState('pendientes')}
-              style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '12px' }}
-            >
-              Pendientes
-            </button>
-            <button
-              className={`pill-button ${filterState === 'conflictos' ? 'active' : ''}`}
-              onClick={() => setFilterState('conflictos')}
-              style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '12px', color: '#b91c1c' }}
-            >
-              Conflictos
-            </button>
-            <button
-              className={`pill-button ${filterState === 'aprobados' ? 'active' : ''}`}
-              onClick={() => setFilterState('aprobados')}
-              style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '12px', color: '#15803d' }}
-            >
-              Aprobados
-            </button>
-          </div>
-        </div>
-
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem' }}>
-          {filteredRecords.map((rec) => {
-            const isSelected = rec.id === selected.id
-            const hasConflict = rec.criticalConflictCount > 0
-            return (
-              <div
-                key={rec.id}
-                onClick={() => setSelectedId(rec.id)}
-                style={{
-                  padding: '0.75rem',
-                  marginBottom: '0.5rem',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  border: isSelected ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
-                  backgroundColor: isSelected ? 'var(--color-primary-subtle)' : 'var(--color-surface)',
-                  transition: 'background 0.15s ease',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                  <strong style={{ fontSize: '0.85rem' }}>{rec.propertyCode}</strong>
-                  <span className={`status ${rec.reviewState}`} style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem' }}>
-                    {rec.reviewState}
+      ) : (
+        /* VISTA FICHA TRADICIONAL: 100% ANCHO DE PANTALLA (SIN BANDEJA LATERAL NI CARD EVIDENCIA) */
+        <div className="traditional-property-fullwidth">
+          <section className="card traditional-property-card">
+            {/* Cabecera del Predio Activo (US-158 a US-162) */}
+            <div className="traditional-card-header">
+              <div className="traditional-header-left">
+                <div className="traditional-title-row">
+                  <h2 className="traditional-property-title">
+                    {selected.propertyCode} • {selected.canonicalName}
+                  </h2>
+                  <span className="badge version-badge">Versión {selected.batchVersion}</span>
+                  <span className={`status ${selected.reviewState}`}>{selected.reviewState}</span>
+                </div>
+                <div className="traditional-property-sub">
+                  <span><strong>Matrícula (FMI):</strong> {selected.folio}</span>
+                  <span className="bullet-sep">•</span>
+                  <span><strong>Cédula Catastral:</strong> {selected.attributes['cedula_catastral']?.activeValue || '05-615-01-00-00-0001-0001-0-00-00-0000'}</span>
+                  <span className="bullet-sep">•</span>
+                  <span><strong>Municipio:</strong> {selected.municipality}, {selected.department}</span>
+                  <span className="bullet-sep">•</span>
+                  <span className="quality-text">
+                    <strong>Calidad Semántica:</strong> {Math.round(selected.semanticQualityScore * 100)}%
                   </span>
                 </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.25rem' }}>
-                  {rec.canonicalName} · {rec.municipality}
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem' }}>
-                  <span>FMI: {rec.folio}</span>
-                  {hasConflict ? (
-                    <span style={{ color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '0.2rem', fontWeight: 600 }}>
-                      <AlertTriangle size={12} /> {rec.criticalConflictCount} conflicto(s)
+              </div>
+
+              <div className="traditional-header-right">
+                {/* Stepper para cambiar de predio en Ficha Tradicional */}
+                {filteredRecords.length > 1 && (
+                  <div className="traditional-stepper">
+                    <button
+                      type="button"
+                      className="button secondary small"
+                      disabled={currentIndex <= 0}
+                      onClick={() => setSelectedId(filteredRecords[currentIndex - 1].id)}
+                      title="Predio anterior"
+                    >
+                      <ChevronLeft size={14} /> Anterior
+                    </button>
+                    <span className="stepper-indicator">
+                      {currentIndex + 1} de {filteredRecords.length}
                     </span>
-                  ) : (
-                    <span style={{ color: 'var(--color-text-muted)' }}>Calidad {Math.round(rec.semanticQualityScore * 100)}%</span>
-                  )}
+                    <button
+                      type="button"
+                      className="button secondary small"
+                      disabled={currentIndex >= filteredRecords.length - 1}
+                      onClick={() => setSelectedId(filteredRecords[currentIndex + 1].id)}
+                      title="Predio siguiente"
+                    >
+                      Siguiente <ChevronRight size={14} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Acciones de aprobación / devolución */}
+                {canReview && (
+                  <div className="traditional-actions-group">
+                    <button
+                      type="button"
+                      className="button secondary small"
+                      onClick={handleDevolveRecord}
+                      title="Devolver para reproceso selectivo"
+                    >
+                      <RotateCcw size={14} /> Devolver
+                    </button>
+                    <button
+                      type="button"
+                      className="button primary small"
+                      onClick={handleApproveRecord}
+                      disabled={selected.isBlockedForExport}
+                      title={selected.isBlockedForExport ? 'Resuelva conflictos antes de aprobar' : 'Certificar revisión jurídica'}
+                    >
+                      <CheckCircle2 size={14} /> Aprobar Predio
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Banner de conflictos críticos si existen (US-097, US-099) */}
+            {selected.criticalConflictCount > 0 && (
+              <div className="traditional-conflict-banner">
+                <AlertCircle size={18} className="conflict-banner-icon" />
+                <div className="conflict-banner-text">
+                  <strong>Conflicto material entre fuentes documentales:</strong>{' '}
+                  {selected.exportBlockReasons.join(' ')}
                 </div>
               </div>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* PANEL 2: MATRIZ DE ATRIBUTOS MAESTRA (US-158 a US-162, US-174) */}
-      <section className="card panel-master" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
-        {/* Cabecera del predio activo */}
-        <div style={{ padding: '1rem', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface-subtle)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>{selected.propertyCode}</h2>
-                <span className="badge" style={{ backgroundColor: 'var(--color-surface)', fontSize: '0.75rem' }}>
-                  Versión {selected.batchVersion}
-                </span>
-                <span className={`status ${selected.reviewState}`}>{selected.reviewState}</span>
-              </div>
-              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-                {selected.canonicalName} · Matrícula: {selected.folio} · {selected.municipality}, {selected.department}
-              </p>
-            </div>
-
-            {/* Acciones de aprobación / devolución del predio (US-108) */}
-            {canReview && (
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button className="button secondary small" onClick={handleDevolveRecord} title="Devolver para reproceso selectivo">
-                  <RotateCcw size={14} /> Devolver
-                </button>
-                <button
-                  className="button primary small"
-                  onClick={handleApproveRecord}
-                  disabled={selected.isBlockedForExport}
-                  title={selected.isBlockedForExport ? 'Resuelva conflictos antes de aprobar' : 'Certificar revisión jurídica'}
-                >
-                  <CheckCircle2 size={14} /> Aprobar Predio
-                </button>
-              </div>
             )}
-          </div>
 
-          {/* Banner de conflictos críticos si existen (US-097, US-099) */}
-          {selected.criticalConflictCount > 0 && (
-            <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', fontSize: '0.8rem', color: '#991b1b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <AlertCircle size={16} />
-              <div>
-                <strong>Conflicto material entre fuentes:</strong> {selected.exportBlockReasons.join(' ')}
-              </div>
-            </div>
-          )}
-
-          {/* Pestañas de categorías del esquema maestro CORRESPONDENCIA.xlsx (US-158) */}
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', borderBottom: '1px solid var(--color-border)' }}>
-            {(['todos', 'identificacion', 'juridico', 'tecnico', 'manual'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                style={{
-                  padding: '0.4rem 0.8rem',
-                  fontSize: '0.8rem',
-                  border: 'none',
-                  borderBottom: activeTab === tab ? '2px solid var(--color-primary)' : '2px solid transparent',
-                  background: 'transparent',
-                  fontWeight: activeTab === tab ? 600 : 400,
-                  color: activeTab === tab ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                  cursor: 'pointer',
-                  textTransform: 'capitalize',
-                }}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Tabla de atributos con 3 estados y trazabilidad (US-101, US-158, US-160) */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
-            <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}>
-                <th style={{ padding: '0.5rem' }}>Atributo Maestro</th>
-                <th style={{ padding: '0.5rem' }}>Valor Activo</th>
-                <th style={{ padding: '0.5rem' }}>Origen</th>
-                <th style={{ padding: '0.5rem' }}>Evidencia / Confianza</th>
-                <th style={{ padding: '0.5rem', textAlign: 'right' }}>Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleAttributes.map((attr) => {
-                const isSelectedAttr = activeAttributeKey === attr.fieldKey
-                return (
-                  <tr
-                    key={attr.fieldKey}
-                    onClick={() => setActiveAttributeKey(attr.fieldKey)}
-                    style={{
-                      borderBottom: '1px solid var(--color-border-subtle)',
-                      backgroundColor: isSelectedAttr ? 'var(--color-primary-subtle)' : attr.hasConflict ? '#fff1f2' : 'transparent',
-                      cursor: 'pointer',
-                    }}
+            {/* Barra de Filtros por Categoría y Búsqueda */}
+            <div className="traditional-toolbar-row">
+              <div className="traditional-category-tabs">
+                {(['todos', 'identificacion', 'juridico', 'tecnico', 'manual'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    className={`traditional-tab-btn ${activeTab === tab ? 'active' : ''}`}
+                    onClick={() => setActiveTab(tab)}
                   >
-                    <td style={{ padding: '0.6rem 0.5rem', fontWeight: 600 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                        {attr.hasConflict && <AlertTriangle size={14} color="#b91c1c" />}
-                        {attr.requiresLegalReview && (
-                          <span title="Revisión jurídica obligatoria">
-                            <ShieldAlert size={14} color="#d97706" />
-                          </span>
-                        )}
-                        {attr.label}
-                      </div>
-                    </td>
-                    <td style={{ padding: '0.6rem 0.5rem', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {attr.activeValue}
-                    </td>
-                    <td style={{ padding: '0.6rem 0.5rem' }}>
-                      <span
-                        className="badge"
-                        style={{
-                          fontSize: '0.7rem',
-                          backgroundColor:
-                            attr.sourceState === 'approved' ? '#dcfce7' : attr.sourceState === 'manual' ? '#e0e7ff' : '#f3f4f6',
-                          color:
-                            attr.sourceState === 'approved' ? '#15803d' : attr.sourceState === 'manual' ? '#4338ca' : '#374151',
-                        }}
-                      >
-                        {attr.sourceState.toUpperCase()}
-                      </span>
-                    </td>
-                    <td style={{ padding: '0.6rem 0.5rem', color: 'var(--color-text-muted)' }}>
-                      {attr.evidence ? `${attr.evidence.documentName} (pág. ${attr.evidence.pageOrSection})` : 'Regla de negocio'}
-                    </td>
-                    <td style={{ padding: '0.6rem 0.5rem', textAlign: 'right' }}>
-                      {canReview && (
-                        <button
-                          className="button secondary small"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleOpenEditor(attr)
-                          }}
-                          style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
-                        >
-                          Corregir
-                        </button>
-                      )}
-                    </td>
+                    <span>{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
+                    <span className="tab-count-pill">{categoryCounts[tab]}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="traditional-search-container">
+                <Search size={14} className="search-icon-inside" />
+                <input
+                  type="text"
+                  placeholder="Buscar en atributos de este predio..."
+                  value={attrSearchQuery}
+                  onChange={(e) => setAttrSearchQuery(e.target.value)}
+                  className="traditional-search-input"
+                />
+                {attrSearchQuery && (
+                  <button
+                    type="button"
+                    className="clear-search-btn"
+                    onClick={() => setAttrSearchQuery('')}
+                    title="Limpiar búsqueda"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Tabla Maestra de Atributos al 100% de Ancho */}
+            <div className="traditional-table-container">
+              <table className="traditional-attributes-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '22%' }}>Atributo Maestro</th>
+                    <th style={{ width: '28%' }}>Valor Activo Conciliado</th>
+                    <th style={{ width: '12%' }}>Origen del Dato</th>
+                    <th style={{ width: '26%' }}>Evidencia Documental y Soporte</th>
+                    <th style={{ width: '12%', textAlign: 'right' }}>Acción</th>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                </thead>
+                <tbody>
+                  {visibleAttributes.length > 0 ? (
+                    visibleAttributes.map((attr) => {
+                      const isSelectedAttr = activeAttributeKey === attr.fieldKey
+                      return (
+                        <tr
+                          key={attr.fieldKey}
+                          onClick={() => setActiveAttributeKey(attr.fieldKey)}
+                          className={`traditional-table-row ${isSelectedAttr ? 'row-active' : ''} ${attr.hasConflict ? 'row-conflict' : ''}`}
+                        >
+                          <td className="col-attr-name">
+                            <div className="attr-name-cell">
+                              <div className="attr-name-title">
+                                {attr.hasConflict && (
+                                  <span title="Conflicto detectado">
+                                    <AlertTriangle size={15} className="text-danger" />
+                                  </span>
+                                )}
+                                {attr.requiresLegalReview && (
+                                  <span title="Revisión jurídica obligatoria">
+                                    <ShieldAlert size={15} className="text-warning" />
+                                  </span>
+                                )}
+                                <strong>{attr.label}</strong>
+                              </div>
+                              <span className="attr-key-sub">{attr.fieldKey}</span>
+                            </div>
+                          </td>
 
-      {/* PANEL 3: EVIDENCIA DOCUMENTAL Y VISOR DE TRABAJO (US-165, US-166, US-174) */}
-      <section className="card panel-evidence" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
-        <div style={{ padding: '1rem', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface-subtle)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <FileSearch size={18} color="var(--color-primary)" />
-              Evidencia Fuente
-            </h3>
-            {relatedDoc && (
-              <button
-                className="text-button"
-                onClick={() => onOpenSignedUrl(relatedDoc.id)}
-                style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
-              >
-                <Maximize2 size={13} /> Original
-              </button>
+                          <td className="col-active-value">
+                            <div className="attr-value-cell">
+                              <span className="active-value-text">
+                                {attr.activeValue || <em className="text-muted">Sin valor</em>}
+                              </span>
+                              {attr.previousValue && (
+                                <div className="attr-diff-history">
+                                  <History size={12} /> Anterior: <del>{attr.previousValue}</del>
+                                </div>
+                              )}
+                              {attr.changeMotive && (
+                                <div className="attr-motive-pill">
+                                  <strong>Motivo:</strong> {attr.changeMotive} ({attr.lastModifiedBy})
+                                </div>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="col-source">
+                            <span className={`source-badge badge-${attr.sourceState}`}>
+                              {attr.sourceState === 'approved' ? 'APROBADO' : attr.sourceState === 'manual' ? 'MANUAL' : 'ORIGINAL IA'}
+                            </span>
+                          </td>
+
+                          <td className="col-evidence">
+                            {attr.evidence ? (
+                              <div className="evidence-cell-box">
+                                <div className="evidence-header-mini">
+                                  <FileText size={13} className="text-muted" />
+                                  <span className="evidence-doc-name">{attr.evidence.documentName}</span>
+                                  <span className="evidence-page-tag">Pág. {attr.evidence.pageOrSection}</span>
+                                </div>
+                                {attr.evidence.quote && (
+                                  <div className="evidence-quote-mini" title={attr.evidence.quote}>
+                                    "{attr.evidence.quote}"
+                                  </div>
+                                )}
+                                {attr.confidence !== undefined && (
+                                  <div className="evidence-confidence-tag">
+                                    <span className="conf-dot" />
+                                    <span>{Math.round(attr.confidence * 100)}% confianza</span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted text-xs">Regla de negocio / Catastral</span>
+                            )}
+                          </td>
+
+                          <td className="col-actions" style={{ textAlign: 'right' }}>
+                            {canReview && (
+                              <button
+                                type="button"
+                                className="button secondary small"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleOpenEditor(attr)
+                                }}
+                                title="Corregir valor con trazabilidad jurídica"
+                              >
+                                <Edit3 size={13} /> Corregir
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="empty-table-cell">
+                        No se encontraron atributos con los criterios seleccionados.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Inspección de Linderos Literales (US-070, US-071) si está seleccionado */}
+            {activeAttributeKey === 'linderos_literales' && selected.attributes['linderos_literales'] && (
+              <div className="traditional-linderos-box">
+                <div className="linderos-header">
+                  <Shield size={16} className="text-accent" />
+                  <h4>Inspección Detallada de Linderos Literales (US-070, US-071)</h4>
+                </div>
+                <div className="linderos-body">
+                  {selected.attributes['linderos_literales'].activeValue}
+                </div>
+              </div>
             )}
-          </div>
-
-          <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-            Documento: <strong>{relatedDoc?.name ?? 'Sin documento cargado'}</strong>
-          </div>
+          </section>
         </div>
-
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
-          {activeAttributeKey ? (
-            <div>
-              <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem' }}>
-                Evidencia de: {selected.attributes[activeAttributeKey]?.label}
-              </h4>
-
-              {selected.attributes[activeAttributeKey]?.evidence ? (
-                <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', marginBottom: '1rem' }}>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.3rem' }}>
-                    Ubicación: Página/Sección {selected.attributes[activeAttributeKey].evidence?.pageOrSection}
-                  </div>
-                  <blockquote style={{ margin: 0, fontSize: '0.85rem', fontStyle: 'italic', borderLeft: '3px solid var(--color-primary)', paddingLeft: '0.5rem' }}>
-                    "{selected.attributes[activeAttributeKey].evidence?.quote}"
-                  </blockquote>
-                </div>
-              ) : (
-                <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-                  Este atributo proviene de consolidación tabular directa o del encabezado de la ficha predial.
-                </p>
-              )}
-
-              {/* Detalle especial para Linderos Literales (US-070, US-071) */}
-              {activeAttributeKey === 'linderos_literales' && (
-                <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: 'var(--color-surface-subtle)', borderRadius: '6px', border: '1px solid var(--color-border)' }}>
-                  <h5 style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <Shield size={14} /> Inspección Literal de Linderos
-                  </h5>
-                  <div style={{ fontSize: '0.78rem', whiteSpace: 'pre-wrap', maxHeight: '180px', overflowY: 'auto', backgroundColor: '#fff', padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '4px' }}>
-                    {selected.attributes['linderos_literales'].activeValue}
-                  </div>
-                </div>
-              )}
-
-              {/* Historial de cambios del atributo (US-107, US-160) */}
-              {selected.attributes[activeAttributeKey]?.changeMotive && (
-                <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', fontSize: '0.78rem' }}>
-                  <strong style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#166534', marginBottom: '0.25rem' }}>
-                    <History size={13} /> Historial de Modificación
-                  </strong>
-                  <div><strong>Modificado por:</strong> {selected.attributes[activeAttributeKey].lastModifiedBy}</div>
-                  <div><strong>Motivo:</strong> {selected.attributes[activeAttributeKey].changeMotive}</div>
-                  <div><strong>Valor anterior:</strong> {selected.attributes[activeAttributeKey].previousValue}</div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', color: 'var(--color-text-muted)', paddingTop: '2rem' }}>
-              <FileText size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
-              <p style={{ fontSize: '0.85rem' }}>Selecciona un atributo en la matriz central para inspeccionar su evidencia, página y cita textual de soporte.</p>
-            </div>
-          )}
-        </div>
-      </section>
+      )}
 
       {/* MODAL DE CORRECCIÓN DE ATRIBUTO CON MOTIVO OBLIGATORIO (US-107, US-159, US-160) */}
       {editingAttr && (

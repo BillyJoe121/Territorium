@@ -185,3 +185,296 @@ class SupabaseGateway:
             await self._request("POST", "/rest/v1/ai_execution_logs", json=payload, headers={**self.headers, "Prefer": "return=minimal"})
         except Exception:
             pass
+
+    async def get_v2_group_files(self, group_id: str) -> list[dict[str, Any]]:
+        """Retrieves current active files for a document group in Territorium 2.0."""
+        response = await self._request(
+            "GET",
+            "/rest/v1/expediente_document_files",
+            params={"group_id": f"eq.{group_id}", "is_current": "eq.true", "is_active": "eq.true", "select": "*", "order": "created_at.asc"},
+        )
+        return response.json()
+
+    async def save_v2_phase4_output(
+        self,
+        *,
+        execution_id: str,
+        project_id: str,
+        group_id: str,
+        input_version: int,
+        canonical_payload: dict[str, Any],
+        validation_report: dict[str, Any],
+        discrepancies: list[dict[str, Any]],
+        provenance: list[dict[str, Any]],
+        documents_summary: list[dict[str, Any]],
+    ) -> str:
+        """
+        Saves immutable execution output to expediente_execution_outputs and
+        creates or updates a draft result in expediente_result_versions ready for human review.
+        """
+        import hashlib
+        import json
+
+        full_output_payload = {
+            "canonical_data": canonical_payload,
+            "validation_report": validation_report,
+            "discrepancies": discrepancies,
+            "provenance": provenance,
+            "documents_summary": documents_summary,
+        }
+        serialized = json.dumps(full_output_payload, sort_keys=True)
+        payload_sha256 = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+        # 1. Insert into expediente_execution_outputs
+        output_record = {
+            "execution_id": execution_id,
+            "project_id": project_id,
+            "group_id": group_id,
+            "payload": full_output_payload,
+            "payload_sha256": payload_sha256,
+        }
+        out_res = await self._request(
+            "POST",
+            "/rest/v1/expediente_execution_outputs",
+            json=output_record,
+            headers={**self.headers, "Prefer": "return=representation"},
+        )
+        output_id = out_res.json()[0]["id"]
+
+        # 2. Get latest version_number for this group to increment
+        existing_versions = await self._request(
+            "GET",
+            "/rest/v1/expediente_result_versions",
+            params={"group_id": f"eq.{group_id}", "select": "version_number", "order": "version_number.desc", "limit": "1"},
+        )
+        existing_rows = existing_versions.json()
+        next_version = (existing_rows[0]["version_number"] + 1) if existing_rows else 1
+
+        # 3. Create draft in expediente_result_versions
+        result_version_record = {
+            "project_id": project_id,
+            "scope": "group",
+            "group_id": group_id,
+            "source_execution_id": execution_id,
+            "source_output_id": output_id,
+            "version_number": next_version,
+            "source_input_version": input_version,
+            "status": "draft",
+            "payload": canonical_payload,
+            "change_summary": f"Extracción automática Fase 4 (versión {next_version})",
+        }
+        await self._request(
+            "POST",
+            "/rest/v1/expediente_result_versions",
+            json=result_version_record,
+            headers={**self.headers, "Prefer": "return=minimal"},
+        )
+
+        # 4. Mark execution as review_ready
+        await self._request(
+            "PATCH",
+            "/rest/v1/expediente_executions",
+            params={"id": f"eq.{execution_id}"},
+            json={"status": "review_ready", "completed_at": datetime.now(UTC).isoformat()},
+            headers={**self.headers, "Prefer": "return=minimal"},
+        )
+
+        # 5. Mark document group as review_ready
+        await self._request(
+            "PATCH",
+            "/rest/v1/expediente_document_groups",
+            params={"id": f"eq.{group_id}"},
+            json={"status": "review_ready", "updated_at": datetime.now(UTC).isoformat()},
+            headers={**self.headers, "Prefer": "return=minimal"},
+        )
+
+        return output_id
+
+    # Fase 3 / expediente v2. These methods deliberately exchange metadata and
+    # validation payloads only; source content is fetched only by the worker.
+    async def claim_expediente_v2_task(self) -> Any | None:
+        from .expediente_v2 import V2Task
+
+        response = await self._request(
+            "POST",
+            "/rest/v1/rpc/claim_next_expediente_execution_task",
+            json={"p_worker_name": self.settings.worker_name},
+        )
+        rows = response.json()
+        if not rows:
+            return None
+        row = rows[0]
+        return V2Task(
+            id=row["id"],
+            execution_id=row["execution_id"],
+            document_file_id=row["document_file_id"],
+            lease_token=row["lease_token"],
+            attempt_count=row["attempt_count"],
+            max_attempts=row["max_attempts"],
+        )
+
+    async def is_execution_ready_for_extraction(self, execution_id: str) -> bool:
+        response = await self._request(
+            "GET",
+            "/rest/v1/expediente_executions",
+            params={"id": f"eq.{execution_id}", "select": "stage,status", "limit": "1"},
+        )
+        rows = response.json()
+        if not rows:
+            return False
+        return rows[0].get("stage") == "ready_for_extraction"
+
+    async def get_v2_group_info(self, group_id: str) -> dict[str, Any]:
+        response = await self._request(
+            "GET",
+            "/rest/v1/expediente_document_groups",
+            params={"id": f"eq.{group_id}", "select": "id,project_id,group_key,status,input_version", "limit": "1"},
+        )
+        rows = response.json()
+        if not rows:
+            raise RuntimeError("GROUP_NOT_FOUND")
+        return rows[0]
+
+    async def update_execution_stage(self, execution_id: str, stage: str, stage_message: str) -> None:
+        await self._request(
+            "PATCH",
+            "/rest/v1/expediente_executions",
+            params={"id": f"eq.{execution_id}"},
+            json={"stage": stage, "stage_message": stage_message, "updated_at": datetime.now(UTC).isoformat()},
+            headers={**self.headers, "Prefer": "return=minimal"},
+        )
+
+    async def fail_v2_execution(self, execution_id: str, group_id: str, error_code: str, error_message: str) -> None:
+        await self._request(
+            "PATCH",
+            "/rest/v1/expediente_executions",
+            params={"id": f"eq.{execution_id}"},
+            json={
+                "status": "failed",
+                "stage": "failed",
+                "stage_message": error_message[:200],
+                "error_code": error_code,
+                "error_message": error_message[:2000],
+                "completed_at": datetime.now(UTC).isoformat(),
+            },
+            headers={**self.headers, "Prefer": "return=minimal"},
+        )
+        await self._request(
+            "PATCH",
+            "/rest/v1/expediente_document_groups",
+            params={"id": f"eq.{group_id}"},
+            json={
+                "status": "error",
+                "last_error_code": error_code,
+                "last_error_message": error_message[:2000],
+                "updated_at": datetime.now(UTC).isoformat(),
+            },
+            headers={**self.headers, "Prefer": "return=minimal"},
+        )
+
+    async def v2_execution(self, execution_id: str) -> Any:
+        from .expediente_v2 import V2Execution
+
+        response = await self._request(
+            "GET",
+            "/rest/v1/expediente_executions",
+            params={"id": f"eq.{execution_id}", "select": "id,project_id,group_id,input_version,extractor_key,extractor_snapshot,prompt_snapshot,model_snapshot", "limit": "1"},
+        )
+        rows = response.json()
+        if not rows:
+            raise RuntimeError("EXECUTION_NOT_FOUND")
+        row = rows[0]
+        return V2Execution(
+            id=row["id"], project_id=row["project_id"], group_id=row["group_id"],
+            extractor_key=row["extractor_key"],
+            extractor_snapshot=row.get("extractor_snapshot") or {}, prompt_snapshot=row.get("prompt_snapshot") or {},
+            model_snapshot=row.get("model_snapshot") or {},
+            input_version=int(row.get("input_version") or 1),
+        )
+
+    async def v2_document(self, document_id: str) -> Any:
+        from .expediente_v2 import V2Document
+
+        response = await self._request(
+            "GET",
+            "/rest/v1/expediente_document_files",
+            params={"id": f"eq.{document_id}", "select": "id,storage_path,original_name,mime_type,sha256", "limit": "1"},
+        )
+        rows = response.json()
+        if not rows:
+            raise RuntimeError("DOCUMENT_NOT_FOUND")
+        row = rows[0]
+        return V2Document(id=row["id"], storage_path=row["storage_path"], original_name=row["original_name"], mime_type=row["mime_type"], sha256=row["sha256"])
+
+    async def v2_cache_hit(self, key: str) -> dict[str, Any] | None:
+        response = await self._request(
+            "GET",
+            "/rest/v1/expediente_extraction_cache",
+            params={"cache_key": f"eq.{key}", "select": "payload", "limit": "1"},
+        )
+        rows = response.json()
+        if not rows:
+            return None
+        await self._request("POST", "/rest/v1/rpc/record_expediente_cache_hit", json={"p_cache_key": key})
+        return rows[0]["payload"]
+
+    async def v2_store_cache(self, key: str, document_sha256: str, execution: Any, payload: dict[str, Any], payload_hash: str) -> None:
+        import hashlib
+        import json
+
+        fingerprint = lambda value: hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        await self._request(
+            "POST",
+            "/rest/v1/expediente_extraction_cache",
+            json={
+                "cache_key": key,
+                "document_sha256": document_sha256,
+                "extractor_key": execution.extractor_key,
+                "extractor_fingerprint": fingerprint(execution.extractor_snapshot),
+                "prompt_fingerprint": fingerprint(execution.prompt_snapshot),
+                "schema_fingerprint": fingerprint(execution.prompt_snapshot.get("schema", {})),
+                "model_fingerprint": fingerprint(execution.model_snapshot),
+                "payload": payload,
+                "payload_sha256": payload_hash,
+            },
+            headers={**self.headers, "Prefer": "resolution=ignore-duplicates,return=minimal"},
+        )
+
+    async def v2_mark_document_validated(self, document_id: str, detected_mime: str) -> None:
+        await self._request(
+            "PATCH", "/rest/v1/expediente_document_files", params={"id": f"eq.{document_id}"},
+            json={"validation_status": "validated", "detected_mime_type": detected_mime, "validation_error_code": None},
+            headers={**self.headers, "Prefer": "return=minimal"},
+        )
+
+    async def v2_mark_document_rejected(self, document_id: str, error_code: str) -> None:
+        await self._request(
+            "PATCH", "/rest/v1/expediente_document_files", params={"id": f"eq.{document_id}"},
+            json={"validation_status": "rejected", "validation_error_code": error_code},
+            headers={**self.headers, "Prefer": "return=minimal"},
+        )
+
+    async def v2_complete(self, task: Any, payload: dict[str, Any] | None, payload_hash: str | None, error_code: str | None = None, error_message: str | None = None) -> None:
+        await self._request(
+            "POST", "/rest/v1/rpc/complete_expediente_execution_task",
+            json={
+                "p_task_id": task.id, "p_lease_token": task.lease_token, "p_payload": payload,
+                "p_payload_sha256": payload_hash, "p_error_code": error_code, "p_error_message": error_message,
+            },
+        )
+
+    async def v2_audit(self, project_id: str, action: str, entity_type: str, entity_id: str, metadata: dict[str, Any]) -> None:
+        await self._request(
+            "POST", "/rest/v1/expediente_audit_events",
+            json={"project_id": project_id, "action": action, "entity_type": entity_type, "entity_id": entity_id, "metadata": metadata},
+            headers={**self.headers, "Prefer": "return=minimal"},
+        )
+
+    async def cleanup_expired_expediente_uploads(self) -> None:
+        response = await self._request("POST", "/rest/v1/rpc/expire_expediente_upload_reservations", json={"p_limit": 100})
+        for row in response.json():
+            try:
+                await self._request("DELETE", f"/storage/v1/object/source-documents/{quote(row['storage_path'], safe='/')}")
+            except Exception:
+                # The reservation remains expired; a later cleanup can retry deletion.
+                pass

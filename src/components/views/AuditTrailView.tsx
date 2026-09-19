@@ -1,21 +1,14 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
   Download,
-  Filter,
-  History,
-  Key,
-  Lock,
   Search,
-  Shield,
   ShieldCheck,
-  SlidersHorizontal,
   User,
 } from 'lucide-react'
 import type { AuditEvent, Project } from '../../types'
 import { PageHeader } from '../common/PageHeader'
-import { StatusBadge } from '../common/StatusBadge'
 
 export interface AuditTrailViewProps {
   events: AuditEvent[]
@@ -28,6 +21,8 @@ export function AuditTrailView({ events, activeProjectId, projects, projectName 
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('todos')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const [pageSize, setPageSize] = useState<number>(10)
+  const [currentPage, setCurrentPage] = useState<number>(1)
 
   const activeProject = projects?.find((p) => p.id === activeProjectId)
   const resolvedProjectName = projectName || activeProject?.name
@@ -53,8 +48,20 @@ export function AuditTrailView({ events, activeProjectId, projects, projectName 
     )
   })
 
+  // Reset pagination when filter or page size changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search, typeFilter, pageSize])
+
+  const totalEvents = filteredEvents.length
+  const totalPages = Math.max(1, Math.ceil(totalEvents / pageSize))
+  const paginatedEvents = filteredEvents.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  )
+
   return (
-    <div className="space-y-6">
+    <div className="audit-trail-view">
       <PageHeader
         eyebrow="Trazabilidad Criptográfica Inmutable"
         title={resolvedProjectName ? `Bitácora Forense: ${resolvedProjectName}` : 'Trazabilidad de la Plataforma'}
@@ -78,24 +85,26 @@ export function AuditTrailView({ events, activeProjectId, projects, projectName 
         }
       />
 
-      {/* Barra de Búsqueda y Filtros */}
-      <div className="card p-4 flex flex-col md:flex-row items-center justify-between gap-3">
-        <div className="relative flex-1 w-full">
-          <Search size={16} className="absolute left-3 top-2.5 text-[#98A2B3]" />
+      {/* Buscador y filtro en una sola fila */}
+      <div className="card audit-toolbar">
+        <div className="audit-search">
+          <Search size={15} aria-hidden="true" />
           <input
             type="search"
-            className="w-full pl-9 pr-3 py-1.5 text-xs rounded-md border border-[#E4E7EC] focus:outline-none focus:ring-1 focus:ring-[#2459D3] bg-[#FFFFFF]"
+            className="audit-search-input"
             placeholder="Buscar por acción, usuario, predio o motivo..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            aria-label="Buscar en la auditoría"
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full md:w-auto">
+        <div className="audit-filter-group">
           <select
-            className="text-xs p-2 rounded-md border border-[#E4E7EC] bg-[#FFFFFF] text-[#526071]"
+            className="audit-filter"
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
+            aria-label="Filtrar por tipo de evento"
           >
             <option value="todos">Todos los eventos</option>
             <option value="atributo">Modificación de Atributo</option>
@@ -103,67 +112,67 @@ export function AuditTrailView({ events, activeProjectId, projects, projectName 
             <option value="lote">Carga de Lotes</option>
             <option value="exportacion">Exportaciones</option>
           </select>
-          <span className="text-xs text-[#667085] tabular-nums whitespace-nowrap">
-            {filteredEvents.length} eventos
+          <span className="audit-event-count">
+            {totalEvents} eventos
           </span>
         </div>
       </div>
 
-      {/* Lista de Eventos Estilo Timeline */}
-      <div className="card p-0 overflow-hidden">
-        <div className="divide-y divide-[#E4E7EC]">
-          {filteredEvents.length > 0 ? (
-            filteredEvents.map((evt) => {
+      {/* Card de Eventos con scroll interno y paginación */}
+      <div className="card audit-events-card">
+        <div className="audit-events-list">
+          {paginatedEvents.length > 0 ? (
+            paginatedEvents.map((evt) => {
               const isExpanded = expandedIds.has(evt.id)
               return (
-                <div key={evt.id} className="p-4 hover:bg-[#F7F8FA] transition-colors">
-                  <div
-                    className="flex items-start justify-between cursor-pointer select-none"
+                <div key={evt.id} className="audit-event-row">
+                  <button
+                    type="button"
+                    className="audit-event-toggle"
                     onClick={() => toggleExpand(evt.id)}
+                    aria-expanded={isExpanded}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 text-[#667085]">
-                        {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <div className="audit-event-main">
+                      <div className="audit-event-title">
+                        <strong>
+                          {evt.action}
+                        </strong>
+                        <span className="code-badge">
+                          {evt.projectId?.slice(0, 10) || 'Global'}
+                        </span>
+                        <span className="audit-event-expand" aria-hidden="true">
+                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </span>
                       </div>
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <strong className="text-xs font-semibold text-[#182230]">
-                            {evt.action}
-                          </strong>
-                          <span className="code-badge text-[10px]">
-                            {evt.projectId?.slice(0, 10) || 'Global'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-[#526071]">{evt.detail}</p>
-                      </div>
+                      <p>{evt.detail}</p>
                     </div>
 
-                    <div className="text-right flex flex-col items-end gap-1 flex-shrink-0">
-                      <span className="text-[11px] text-[#667085] tabular-nums font-mono">
+                    <div className="audit-event-meta">
+                      <span>
                         {new Date(evt.at).toLocaleString('es-CO')}
                       </span>
-                      <span className="text-[11px] text-[#2459D3] flex items-center gap-1">
+                      <span className="audit-event-actor">
                         <User size={11} /> {evt.actorId || 'sistema@territorium.com'}
                       </span>
                     </div>
-                  </div>
+                  </button>
 
                   {/* Detalle Expandible con Diff y Hash */}
                   {isExpanded && (
-                    <div className="mt-3 ml-7 p-3 bg-[#FFFFFF] border border-[#E4E7EC] rounded-lg text-xs space-y-2">
-                      <div className="flex items-center justify-between text-[11px] text-[#667085] border-b border-[#E4E7EC] pb-1.5">
+                    <div className="audit-event-detail">
+                      <div className="audit-detail-hash">
                         <span>Firma de Integridad (SHA-256):</span>
                         <span className="font-mono text-[#182230]">
                           sha256:{evt.id.replace(/-/g, '').padEnd(64, '0').slice(0, 32)}...
                         </span>
                       </div>
-                      <div className="space-y-1">
-                        <span className="text-[#667085] block font-medium">Contenido del Evento:</span>
-                        <p className="text-[#182230] bg-[#F7F8FA] p-2 rounded border border-[#E4E7EC] font-mono text-[11px]">
+                      <div className="audit-detail-content">
+                        <span>Contenido del Evento:</span>
+                        <p>
                           {evt.detail}
                         </p>
                       </div>
-                      <div className="text-[11px] text-[#18794E] flex items-center gap-1 pt-1">
+                      <div className="audit-detail-certified">
                         <ShieldCheck size={13} />
                         <span>Evento certificado e inmutable conforme a la política de auditoría US-107 / US-114</span>
                       </div>
@@ -173,10 +182,56 @@ export function AuditTrailView({ events, activeProjectId, projects, projectName 
               )
             })
           ) : (
-            <div className="p-8 text-center text-xs text-[#667085]">
+            <div className="audit-empty-state">
               No se encontraron eventos que coincidan con los filtros aplicados.
             </div>
           )}
+        </div>
+
+        {/* Barra de Paginación */}
+        <div className="audit-pagination">
+          <div className="audit-pagination-summary">
+            <span>Mostrar</span>
+            <select
+              className="audit-page-size"
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              aria-label="Cantidad de eventos por página"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+            <span>por página</span>
+            <span className="audit-pagination-divider">|</span>
+            <span>
+              Mostrando {totalEvents > 0 ? (currentPage - 1) * pageSize + 1 : 0} - {Math.min(currentPage * pageSize, totalEvents)} de {totalEvents} eventos
+            </span>
+          </div>
+
+          <div className="audit-pagination-controls">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm audit-page-button"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              style={{ padding: '3px 8px', fontSize: '11.5px', height: '28px' }}
+            >
+              Anterior
+            </button>
+            <span className="audit-page-indicator">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm audit-page-button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              style={{ padding: '3px 8px', fontSize: '11.5px', height: '28px' }}
+            >
+              Siguiente
+            </button>
+          </div>
         </div>
       </div>
     </div>

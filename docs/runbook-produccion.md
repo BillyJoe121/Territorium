@@ -1,50 +1,79 @@
-# Runbook de producción
+# Runbook de producción — Territorium 2.0
 
-## Servicios y señales
+Este documento describe la operación en producción, monitorización, respuesta a incidentes y procedimientos de recuperación para **Territorium 2.0 (Flujo de Expediente Único por Predio)**.
 
-| Componente | Señal saludable | Acción inicial ante falla |
-|---|---|---|
-| Web | carga `/` y puede iniciar sesión | revisar build y variables `VITE_*` |
-| Supabase | proyecto Healthy y consultas sin errores RLS | revisar Advisors, Logs y migraciones |
-| Edge Function | `create-batch-job` responde 202 | revisar logs, JWT y `APP_ORIGINS` |
-| Worker | proceso activo; `/ready` responde 200 localmente | revisar secretos y conexión saliente |
-| Cola | trabajos avanzan de `queued` a `running` | revisar lease, `next_attempt_at` y worker |
+---
 
-## Incidentes
+## 1. Servicios, Salud y Telemetría
 
-### Trabajo atascado
+| Componente | Señal saludable | Umbral de Alerta | Acción inicial ante falla |
+|---|---|---|---|
+| **Web Frontend (Vite/React)** | Carga `/`, sesión activa | HTTP 5xx > 1% en 5 min | Verificar build en hosting, variables `VITE_*` y certificados SSL. |
+| **Supabase (PostgreSQL + RLS)** | Status `Healthy`, RLS activa | Consultas lentas > 500ms | Revisar Advisors, Pool de conexiones PgBouncer y políticas RLS. |
+| **Edge Functions** | Respuesta HTTP 200/202 | Errores 5xx > 0 | Revisar logs en Supabase dashboard, JWT y cabeceras CORS. |
+| **Worker (FastAPI + Python)** | `/ready` responde 200 | Latencia de cola > 600s (10 min) | Verificar proceso en background, memoria y credenciales. |
+| **Pipeline de Procesamiento** | Cola avanza de `queued` a `ready` | Reintentos > 3 consecutivos | Consultar `job_attempts`, inspeccionar código acotado de error. |
+| **Consumo de IA** | Tokens por ejecución < 50k | Tokens > 50k por expediente | Auditar tamaño del lote y respuestas generativas; verificar caché. |
 
-1. Consultar el trabajo y su último `last_heartbeat_at`.
-2. Si expiró el lease, la siguiente llamada a `claim_next_job` lo devuelve a cola automáticamente.
-3. Revisar `job_attempts` antes de reintentar manualmente.
-4. No borrar el lote: conserva archivos y trazabilidad.
+---
 
-### Proveedor de IA indisponible
+## 2. Protocolos de Respuesta ante Incidentes
 
-Los errores transitorios usan espera exponencial y hasta tres intentos. Al agotar intentos, el lote queda `failed` con un código acotado. El contenido documental nunca se incluye en logs.
+### 2.1 Trabajo de Extracción Atascado (>10 Minutos)
+1. Consultar el estado de la tarea en `expediente_tasks` o `job_attempts` mediante el ID de la tarea.
+2. Si el lease expiró, el worker devolverá la tarea a la cola automáticamente en la siguiente iteración de reclamo.
+3. Si el worker falló por timeout o memoria (archivo de gran tamaño escaneado), el motor de preprocesamiento activará el extractor OCR por fragmentos.
+4. **Regla de oro**: Nunca eliminar el expediente ni sus archivos; conservar el historial inmutable para auditoría.
 
-### Revocar acceso
+### 2.2 Fallo Transitorio o Indisponibilidad del Proveedor de IA
+- El sistema implementa reintentos con retroceso exponencial (máximo 3 intentos).
+- Al agotarse los intentos, la etapa pasa a estado `failed` registrando un código de error normalizado (ej. `AI_PROVIDER_UNAVAILABLE`, `RATE_LIMIT_EXCEEDED`).
+- Los datos estructurados aprobados no se ven afectados: el usuario puede reintentar la etapa individualmente desde el botón "Repetir análisis".
+- **Privacidad**: Ni el texto jurídico sensible ni los datos personales de propietarios se registran en los logs de error.
 
-Cambiar o eliminar la fila correspondiente en `project_members`. RLS aplica el cambio a base de datos, Storage y Realtime. Rotar la clave secreta si se sospecha exposición y actualizarla en Render.
+### 2.3 Alerta de Consumo Anómalo de Tokens o Costo
+- Umbral de alerta: ejecuciones que superen los 50.000 tokens en una sola etapa narrativa.
+- Procedimiento:
+  1. Revisar si el documento contenía anexos irrelevantes que no debieron enviarse al prompt narrativo.
+  2. Ajustar la configuración del extractor en `extractorConfig.ts` para restringir el contexto al apartado de consideraciones.
 
-### Recuperación
+---
 
-- La migración es la fuente de verdad del esquema.
-- Los documentos fuente permanecen en el bucket privado `source-documents`.
-- Una nueva ejecución crea un nuevo `run_id`; no sobreescribe el historial de intentos.
-- Antes de una migración destructiva, generar respaldo y ensayar restauración.
+## 3. Privacidad de Datos y Sanitización de Logs (HU-V2-056)
 
-## Privacidad y retención
+En cumplimiento de las normas de protección de datos personales y secreto profesional:
+- **Redacción obligatoria**: Todo registro de telemetría, métricas o logs en consola pasa por `sanitizeTelemetryPayload`.
+- **Campos protegidos redactados**: Cédulas, folios de matrícula inmobiliaria, nombres de propietarios, linderos exactos, valores de avalúos y textos narrativos se reemplazan por tokens enmascarados `[REDACTED_SECURE_TOKEN]`.
+- **Retención**: Los documentos fuente se almacenan en el bucket privado `source-documents` con URLs firmadas de expiración temporal (máximo 60 minutos).
 
-Definir con el área jurídica el tiempo de conservación de documentos, resultados y auditoría antes del lanzamiento. La integración de IA usa respuestas no almacenadas y elimina el archivo temporal, pero deben validarse contractualmente residencia, tratamiento y retención del proveedor elegido.
+---
 
-## Checklist de lanzamiento
+## 4. Migración de Expedientes y Reversibilidad (HU-V2-052)
 
-- Dominio final agregado a Auth Redirect URLs y `APP_ORIGINS`.
-- Confirmación de correo y SMTP corporativo habilitados.
-- RLS y pruebas de aislamiento aprobadas.
-- `SUPABASE_SECRET_KEY` únicamente en el worker.
-- `OPENAI_API_KEY` únicamente en el worker.
-- Alertas de errores y presupuesto activas en Supabase, Render y proveedor de IA.
-- Política de retención aprobada.
-- Prueba de carga y restauración realizada con documentos no sensibles.
+### Diagnóstico previo
+Antes de reclasificar un proyecto existente:
+```typescript
+import { diagnoseLegacyProject, buildMigrationPlan, executeMigrationPlan } from './lib/expedienteMigration'
+const diagnostic = diagnoseLegacyProject(project, documents, records)
+```
+- **Proyectos de un solo predio**: Se crea el plan y se migran automáticamente a los subconjuntos de Títulos, Planos y Negociación.
+- **Proyectos multipredio heredados**: Se marcan con `archiveAsReadOnly: true` (modo consulta histórica) para evitar mezclar gestiones prediales.
+
+### Procedimiento de Reversión (Rollback)
+Si una migración requiere deshacerse:
+```typescript
+import { rollbackMigrationPlan } from './lib/expedienteMigration'
+const result = rollbackMigrationPlan(plan, operatorId)
+```
+El evento de reversión se registra en la auditoría inmutable sin pérdida de documentos.
+
+---
+
+## 5. Checklist de Lanzamiento a Producción
+
+- [ ] Todas las pruebas automatizadas en verde (`npm run verify` con código 0).
+- [ ] RLS y autenticación estricta configuradas en Supabase.
+- [ ] Variables de entorno seguras (`SUPABASE_SECRET_KEY` y claves de IA solo en el worker).
+- [ ] Enlaces antiguos de navegación redirigiendo a la Ficha del Expediente.
+- [ ] Matriz de autorizaciones RBAC probada (operadores y auditores no pueden aprobar).
+- [ ] Formatos de exportación verificados: PDF oficial (`#1E3A2B`) y Excel `CORRESPONDENCIA.xlsx` sincronizados con código hash SHA-256.

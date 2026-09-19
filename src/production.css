@@ -36,46 +36,10 @@
 .modal-buttons{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
-/* US-011, US-012, US-013, US-014, US-015: Gestión de Expedientes y Ciclo de Vida */
-.projects-management-view{display:grid;gap:18px}
-.filter-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
-.search-box{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #cfdbcf;border-radius:8px;padding:7px 12px;flex:1;max-width:440px}
-.search-box input{border:0;outline:none;width:100%;font-size:13px;background:transparent;color:#353535}
-.search-box svg{color:#768478;flex-shrink:0}
-.status-pills{display:flex;gap:6px;background:#eaf2eb;padding:3px;border-radius:8px}
-.pill{border:0;background:transparent;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:700;color:#5a685d}
-.pill:hover{color:#1b4a29}
-.pill.active{background:#fff;color:#168b40;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.project-card{position:relative;display:flex;flex-direction:column;justify-content:space-between}
-.project-card.archived{opacity:.75;background:#f9faf9;border-style:dashed}
-.card-top{display:flex;align-items:center;justify-content:space-between;width:100%;margin-bottom:4px}
-.project-badge{display:flex;align-items:center;gap:6px}
-.archive-tag{background:#e2e6e2;color:#637165;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px}
-.card-actions{display:flex;gap:4px}
-.card-actions .icon-button.small{height:28px;width:28px}
-.project-meta-details{display:grid;gap:5px;margin:8px 0}
-.meta-line{display:flex;align-items:center;gap:6px;font-size:12px;color:#616f63}
-.meta-line svg{color:#829285;flex-shrink:0}
-.line-highlight{color:#1f5e31;font-weight:600}
-.line-highlight svg{color:#ef893a}
-.date-line{font-size:11px;color:#859487}
-.card-bottom{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid #eef3ee;margin-top:auto}
-.open-hint{font-size:11px;color:#168b40;font-weight:700}
-.form-sub{font-size:12px;color:#6b7b6d;line-height:1.45;margin-bottom:12px}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* US-011 a US-015: Expedientes styling migrated to styles.css */
 
 /* US-019 a US-029: Ingesta, Manifiesto y Deduplicación */
 .ingestion-container{display:grid;gap:18px}
-.expected-properties-card{border-left:4px solid #168b40}
-.expected-properties-body{margin-top:14px;display:grid;gap:10px}
-.description-text{font-size:12px;color:#5a6b5c;line-height:1.5}
-.expected-textarea{width:100%;border:1px solid #cedacf;border-radius:6px;padding:9px 12px;font-size:13px;font-family:monospace;resize:vertical}
-.expected-textarea:focus{outline:none;border-color:#168b40;box-shadow:0 0 0 2px rgba(22,139,64,.15)}
-.expected-chips-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
-.expected-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:4px 9px;border-radius:12px}
-.chip-covered{background:#e7f7ec;color:#187337;border:1px solid #c2ebd0}
-.chip-missing{background:#fdf2e9;color:#b45309;border:1px solid #fed7aa}
-
 .upload-card.dropzone{position:relative;border:2px dashed #b9ccba;border-radius:12px;background:#f9fbf9;padding:26px;text-align:center;transition:all .2s ease;display:flex;flex-direction:column;align-items:center;gap:12px}
 .upload-card.dropzone.drag-over{border-color:#168b40;background:#ebf7ee;box-shadow:0 0 0 4px rgba(22,139,64,.12)}
 .validating-indicator{display:flex;align-items:center;justify-content:center;gap:8px;color:#168b40;font-size:12px;font-weight:600;margin-top:6px}
@@ -174,7 +138,7 @@
 .status-pill.blocked{background:#fef3c7;color:#b45309}
 
 /* ==========================================================================
-   E06: CONFIGURACIÓN DE EXTRACTORES, PROMPTS, PLAYGROUND Y TELEMETRÍA (US-056 a US-062)
+   E06: CONFIGURACIÓN DE EXTRACTORES, PROMPTS Y TELEMETRÍA (US-056 a US-060)
    ========================================================================== */
 .config-container {
   display: flex;
@@ -184,10 +148,18 @@
 
 .config-tabs-nav {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem;
   border-bottom: 2px solid #e2e8f0;
   padding-bottom: 0.5rem;
+}
+
+.config-tabs-nav > strong {
+  margin-right: 0.25rem;
+  color: #0f172a;
+  font-size: 0.875rem;
+  white-space: nowrap;
 }
 
 .config-tab-btn {
@@ -530,145 +502,6 @@
   margin-top: 0.5rem;
 }
 
-/* Playground / Sandbox */
-.sandbox-disclaimer-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  border-left: 4px solid #0284c7;
-  border-radius: 8px;
-  padding: 0.75rem 1rem;
-  font-size: 0.825rem;
-  color: #0369a1;
-}
-
-.sandbox-disclaimer-banner p {
-  margin: 2px 0 0 0;
-  font-size: 0.78rem;
-  color: #0284c7;
-}
-
-.playground-layout {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
-@media (max-width: 900px) {
-  .playground-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-.playground-pane {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.pane-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-}
-
-.pane-header h3 {
-  margin: 0;
-  font-size: 0.95rem;
-}
-
-.label-with-action {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.link-button {
-  background: none;
-  border: none;
-  color: #0f766e;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: underline;
-  padding: 0;
-}
-
-.playground-controls-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: auto;
-  padding-top: 0.75rem;
-  border-top: 1px solid #f1f5f9;
-}
-
-.model-selector-inline {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #475569;
-}
-
-.metrics-pill-group {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.metric-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  background: #f1f5f9;
-  color: #334155;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.empty-playground-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 300px;
-  color: #94a3b8;
-  gap: 0.75rem;
-  text-align: center;
-  padding: 1rem;
-}
-
-.empty-playground-state p {
-  font-size: 0.85rem;
-  max-width: 260px;
-  margin: 0;
-}
-
-.json-viewer-box {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
-
-.json-code {
-  background: #0f172a;
-  color: #38bdf8;
-  padding: 1rem;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  overflow: auto;
-  max-height: 380px;
-  line-height: 1.4;
-  margin: 0;
-}
-
 /* Telemetría */
 .telemetry-summary-cards {
   display: grid;
@@ -728,7 +561,7 @@
   background: #f8fafc;
 }
 
-.sandbox-badge {
+.test-run-badge {
   display: inline-block;
   font-size: 0.65rem;
   font-weight: 700;

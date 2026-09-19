@@ -11,55 +11,53 @@ export interface BreadcrumbItem {
 
 export interface ProjectBreadcrumbsProps {
   items: BreadcrumbItem[]
+  /** Slot for trailing content on the far right (e.g. ThemeToggle) */
+  trailingSlot?: React.ReactNode
 }
 
-export const ProjectBreadcrumbs: React.FC<ProjectBreadcrumbsProps> = ({ items }) => {
+export const ProjectBreadcrumbs: React.FC<ProjectBreadcrumbsProps> = ({ items, trailingSlot }) => {
   if (!items || items.length === 0) return null
 
   const renderIcon = (icon?: BreadcrumbItem['icon']) => {
     switch (icon) {
       case 'home':
-        return <Home size={14} className="text-slate-400" />
+        return <Home size={13} className="breadcrumb-icon home" />
       case 'project':
-        return <Folder size={14} className="text-emerald-500" />
+        return <Folder size={13} className="breadcrumb-icon project" />
       case 'batch':
-        return <Layers size={14} className="text-blue-500" />
+        return <Layers size={13} className="breadcrumb-icon batch" />
       case 'property':
-        return <FileText size={14} className="text-amber-500" />
+        return <FileText size={13} className="breadcrumb-icon property" />
       case 'action':
-        return <CheckCircle2 size={14} className="text-purple-500" />
+        return <CheckCircle2 size={13} className="breadcrumb-icon action" />
       default:
         return null
     }
   }
 
   return (
-    <nav
-      aria-label="Migas de pan"
-      className="flex items-center space-x-1.5 text-xs text-slate-500 py-2 px-3 bg-slate-50 border-b border-slate-200"
-    >
-      {items.map((item, idx) => {
-        const isLast = idx === items.length - 1
-        return (
-          <React.Fragment key={item.id}>
-            {idx > 0 && <ChevronRight size={12} className="text-slate-400 shrink-0" />}
-            <button
-              type="button"
-              onClick={item.onClick}
-              disabled={isLast || !item.onClick}
-              className={`flex items-center space-x-1 py-0.5 px-1.5 rounded transition-colors ${
-                isLast
-                  ? 'font-semibold text-slate-900 cursor-default bg-white shadow-xs border border-slate-200'
-                  : 'text-slate-600 hover:text-emerald-700 hover:bg-slate-200/60 cursor-pointer'
-              }`}
-              aria-current={isLast ? 'page' : undefined}
-            >
-              {renderIcon(item.icon)}
-              <span className="truncate max-w-[160px]">{item.label}</span>
-            </button>
-          </React.Fragment>
-        )
-      })}
+    <nav aria-label="Migas de pan" className="project-breadcrumbs-nav">
+      <div className="breadcrumbs-list">
+        {items.map((item, idx) => {
+          const isLast = idx === items.length - 1
+          return (
+            <React.Fragment key={item.id}>
+              {idx > 0 && <ChevronRight size={12} className="breadcrumb-sep" />}
+              <button
+                type="button"
+                onClick={item.onClick}
+                disabled={isLast || !item.onClick}
+                className={`breadcrumb-item ${isLast ? 'active' : ''}`}
+                aria-current={isLast ? 'page' : undefined}
+              >
+                {renderIcon(item.icon)}
+                <span className="breadcrumb-label">{item.label}</span>
+              </button>
+            </React.Fragment>
+          )
+        })}
+      </div>
+      {trailingSlot && <div className="breadcrumbs-trailing">{trailingSlot}</div>}
     </nav>
   )
 }

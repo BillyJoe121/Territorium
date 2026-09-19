@@ -206,46 +206,42 @@ export function SplitReviewStation({
     <div className={`split-review-container ${approvedFlash ? 'ring-4 ring-emerald-500/80 bg-emerald-950/20' : ''} transition-all duration-300`}>
       {/* Cabecera de la estación */}
       <div className="split-review-header">
-        <div className="split-header-info flex items-center gap-3">
+        <div className="split-header-info">
           <button
             type="button"
             onClick={() => setShowPropertyDrawer(true)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+            className="drawer-open-btn"
             title="Abrir listado rápido de predios (US-253)"
           >
-            <ListFilter className="w-3.5 h-3.5 text-emerald-400" />
+            <ListFilter size={14} className="text-accent" />
             <span>Predios ({propertiesList.length || 'Lote'})</span>
           </button>
-          <div>
-            <h3 className="text-sm font-semibold text-slate-100">
+          <div className="split-title-group">
+            <h3>
               Predio: {propertyFolio} — {propertyName}
             </h3>
-            <span className="text-[10px] text-emerald-400">Estación Split-View • Superior a PMO</span>
+            <span className="split-badge-sub">Estación Split-View • Superior a PMO</span>
           </div>
         </div>
 
-        <div className="split-header-nav flex items-center gap-2">
+        <div className="split-header-nav">
           {/* Alternar comparativa tripartita (US-252) */}
           <button
             type="button"
             onClick={() => setShowTripartiteView(!showTripartiteView)}
-            className={`px-2.5 py-1 text-xs rounded-lg border flex items-center gap-1.5 transition-colors ${
-              showTripartiteView
-                ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200'
-                : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'
-            }`}
+            className={`tripartite-toggle-btn ${showTripartiteView ? 'active' : ''}`}
           >
-            <Columns3 className="w-3.5 h-3.5 text-indigo-400" />
+            <Columns3 size={14} />
             <span>{showTripartiteView ? 'Ocultar Comparativa' : 'Comparativa 3 Fuentes (US-252)'}</span>
           </button>
 
           {onPrevProperty && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={onPrevProperty} title="Alt + ←">
+            <button type="button" className="button secondary small" onClick={onPrevProperty} title="Alt + ←">
               <ArrowLeft size={14} /> Anterior
             </button>
           )}
           {onNextProperty && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={onNextProperty} title="Alt + →">
+            <button type="button" className="button secondary small" onClick={onNextProperty} title="Alt + →">
               Siguiente <ArrowRight size={14} />
             </button>
           )}
@@ -307,61 +303,49 @@ export function SplitReviewStation({
         {/* Panel Izquierdo: Visor de PDF con controles de zoom, rotación y selector de documentos (US-247, US-251, US-254) */}
         <div className="split-pane-left" style={{ width: `${splitRatio}%` }}>
           {/* Pestañas de documentos fuente (US-254) */}
-          <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2 bg-slate-900/90">
-            <div className="flex items-center gap-1">
+          <div className="split-doc-toolbar">
+            <div className="doc-source-tabs">
               <button
                 type="button"
                 onClick={() => setActiveDocTab('estudio')}
-                className={`px-2.5 py-1 text-xs rounded-t font-medium transition-colors ${
-                  activeDocTab === 'estudio'
-                    ? 'bg-slate-800 text-emerald-400 border-b-2 border-emerald-500'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                className={`doc-source-tab ${activeDocTab === 'estudio' ? 'active' : ''}`}
               >
                 Estudio de Títulos
               </button>
               <button
                 type="button"
                 onClick={() => setActiveDocTab('plano')}
-                className={`px-2.5 py-1 text-xs rounded-t font-medium transition-colors ${
-                  activeDocTab === 'plano'
-                    ? 'bg-slate-800 text-indigo-400 border-b-2 border-indigo-500'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                className={`doc-source-tab ${activeDocTab === 'plano' ? 'active' : ''}`}
               >
                 Plano Topográfico
               </button>
               <button
                 type="button"
                 onClick={() => setActiveDocTab('negociacion')}
-                className={`px-2.5 py-1 text-xs rounded-t font-medium transition-colors ${
-                  activeDocTab === 'negociacion'
-                    ? 'bg-slate-800 text-amber-400 border-b-2 border-amber-500'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                className={`doc-source-tab ${activeDocTab === 'negociacion' ? 'active' : ''}`}
               >
                 Acta Negociación
               </button>
             </div>
 
             {/* Controles de Zoom y Rotación (US-251) */}
-            <div className="flex items-center gap-1">
+            <div className="doc-zoom-controls">
               <button
                 type="button"
                 onClick={() => setZoomLevel((z) => Math.max(50, z - 25))}
                 title="Alejar (Zoom -)"
-                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                className="zoom-btn"
               >
                 <ZoomOut size={13} />
               </button>
-              <span className="text-[10px] font-mono text-slate-400 px-1 w-10 text-center">
+              <span className="zoom-value">
                 {zoomLevel}%
               </span>
               <button
                 type="button"
                 onClick={() => setZoomLevel((z) => Math.min(300, z + 25))}
                 title="Acercar (Zoom +)"
-                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                className="zoom-btn"
               >
                 <ZoomIn size={13} />
               </button>
@@ -369,7 +353,7 @@ export function SplitReviewStation({
                 type="button"
                 onClick={() => setRotation((r) => (r + 90) % 360)}
                 title="Girar 90° (Rotación)"
-                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 ml-1"
+                className="zoom-btn"
               >
                 <RotateCw size={13} />
               </button>
@@ -380,7 +364,7 @@ export function SplitReviewStation({
                   setRotation(0)
                 }}
                 title="Restablecer vista"
-                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                className="zoom-btn"
               >
                 <Maximize size={13} />
               </button>
@@ -401,15 +385,26 @@ export function SplitReviewStation({
             {activeAttribute?.evidenceText ? (
               <div className="pdf-evidence-highlight-card">
                 <div className="highlight-tag">
-                  <Sparkles size={14} />
-                  <span>Evidencia Extraída por IA ({activeAttribute.label})</span>
+                  <div className="highlight-tag-header">
+                    <Sparkles size={15} className="highlight-tag-icon" />
+                    <span className="highlight-tag-title">Evidencia Extraída por IA</span>
+                    <span className="highlight-attr-pill">{activeAttribute.label}</span>
+                  </div>
+                  <span className="confidence-pill">{activeAttribute.confidence}% confianza</span>
                 </div>
+
                 <blockquote className="highlight-quote">
                   "{activeAttribute.evidenceText}"
                 </blockquote>
+
                 <div className="highlight-meta">
-                  <span>Coincidencia textual en documento</span>
-                  <span className="confidence-pill">{activeAttribute.confidence}% confianza</span>
+                  <div className="meta-source-info">
+                    <FileText size={13} className="text-muted" />
+                    <span>Coincidencia textual en documento</span>
+                  </div>
+                  <span className="meta-doc-tag">
+                    Página {activeAttribute.evidencePage || 1} • {getDocNameByTab()}
+                  </span>
                 </div>
               </div>
             ) : (
@@ -427,17 +422,45 @@ export function SplitReviewStation({
                 transformOrigin: 'top center',
               }}
             >
-              <div className="pdf-line-placeholder short" />
-              <div className="pdf-line-placeholder medium" />
-              <div className="pdf-line-placeholder long" />
-              {activeAttribute?.evidenceText && (
-                <div className="pdf-highlight-box">
-                  <span>{activeAttribute.evidenceText}</span>
+              <div className="pdf-sheet-header">
+                <div className="pdf-sheet-sub">REPÚBLICA DE COLOMBIA</div>
+                <div className="pdf-sheet-title">SUPERINTENDENCIA DE NOTARIADO Y REGISTRO</div>
+                <div className="pdf-sheet-cert">OFICINA DE REGISTRO DE INSTRUMENTOS PÚBLICOS</div>
+                <div className="pdf-sheet-meta-row">
+                  <span>MATRÍCULA: <strong>{propertyFolio}</strong></span>
+                  <span>ESTADO: <strong>ACTIVO REGISTRAL</strong></span>
                 </div>
-              )}
-              <div className="pdf-line-placeholder long" />
-              <div className="pdf-line-placeholder medium" />
-              <div className="pdf-line-placeholder long" />
+                <hr className="pdf-sheet-divider" />
+              </div>
+
+              <div className="pdf-sheet-body">
+                <p className="pdf-sheet-paragraph">
+                  En cumplimiento de las disposiciones registrales y notariales vigentes, se certifica que la información extraída y cotejada corresponde fielmente a los expedientes y títulos archivados:
+                </p>
+
+                {activeAttribute?.evidenceText && (
+                  <div className="pdf-highlight-box">
+                    <div className="pdf-highlight-badge">
+                      <Sparkles size={11} /> Cita de Soporte Registral Identificada por IA
+                    </div>
+                    <div className="pdf-highlight-text">
+                      "{activeAttribute.evidenceText}"
+                    </div>
+                  </div>
+                )}
+
+                <p className="pdf-sheet-paragraph">
+                  Las inscripciones de dominio, cabida superficiaria, linderos y gravámenes constan en los respectivos folios y planos anexos que integran la tradición jurídica de este predio rural/urbano.
+                </p>
+                <p className="pdf-sheet-paragraph">
+                  Se expide la presente certificación documental con fines de conciliación predial y estructuración del expediente técnico-jurídico.
+                </p>
+              </div>
+
+              <div className="pdf-sheet-footer">
+                <div className="pdf-footer-stamp">OFICINA REGISTRAL • FIRMA DIGITAL VALIDADA</div>
+                <div className="pdf-footer-page">Página {activeAttribute?.evidencePage || 1} de 4</div>
+              </div>
             </div>
           </div>
         </div>

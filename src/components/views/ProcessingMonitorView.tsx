@@ -69,18 +69,18 @@ export function ProcessingMonitorView({
     : 2
 
   return (
-    <div className="space-y-6">
+    <div className="monitor-view">
       <PageHeader
         eyebrow="Orquestador en Tiempo Real"
         title="Monitor de Procesamiento"
         description={`Supervisión del pipeline de extracción y conciliación para el expediente "${project.name}".`}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="monitor-top-actions">
             {activeBatch && activeBatch.jobState === 'en_proceso' && (
               <>
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  className="button secondary small"
                   onClick={() => setIsPaused((prev) => !prev)}
                 >
                   {isPaused ? <Play size={14} /> : <Pause size={14} />}
@@ -88,7 +88,7 @@ export function ProcessingMonitorView({
                 </button>
                 <button
                   type="button"
-                  className="btn btn-danger btn-sm"
+                  className="button danger small"
                   onClick={() => onCancelBatch && onCancelBatch(activeBatch.id)}
                   disabled={busyAction === `cancel:${activeBatch.id}`}
                 >
@@ -99,7 +99,7 @@ export function ProcessingMonitorView({
             {activeBatch && activeBatch.jobState === 'pendiente' && (
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
+                className="button primary small"
                 onClick={() => onRunBatch && onRunBatch(activeBatch.id)}
                 disabled={busyAction === `run:${activeBatch.id}`}
               >
@@ -112,17 +112,13 @@ export function ProcessingMonitorView({
 
       {/* Selector de Lotes */}
       {batches.length > 1 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          <span className="text-xs font-semibold text-[#667085]">Lote:</span>
+        <div className="monitor-batch-bar">
+          <span className="batch-label">Lote:</span>
           {batches.map((b) => (
             <button
               key={b.id}
               type="button"
-              className={`px-3 py-1 text-xs font-medium rounded-md border transition-colors ${
-                (activeBatch?.id === b.id)
-                  ? 'bg-[#2459D3] text-white border-[#2459D3]'
-                  : 'bg-white text-[#526071] border-[#E4E7EC] hover:bg-[#F1F3F6]'
-              }`}
+              className={`monitor-batch-btn ${activeBatch?.id === b.id ? 'active' : ''}`}
               onClick={() => setSelectedBatchId(b.id)}
             >
               {b.id}
@@ -132,55 +128,43 @@ export function ProcessingMonitorView({
       )}
 
       {/* Visualización del Pipeline en 5 Etapas */}
-      <div className="card p-6 space-y-5">
-        <div className="flex items-center justify-between border-b border-[#E4E7EC] pb-3">
+      <div className="card pipeline-card">
+        <div className="pipeline-card-header">
           <div>
-            <h3 className="text-sm font-semibold text-[#182230]">
-              Estado del Pipeline Operativo
-            </h3>
-            <p className="text-xs text-[#526071]">
+            <h3>Estado del Pipeline Operativo</h3>
+            <p className="pipeline-subtitle">
               Flujo secuencial de procesamiento documental e integración jurídica
             </p>
           </div>
           {activeBatch && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-[#667085]">Estado del lote:</span>
+            <div className="pipeline-status-badge">
+              <span>Estado del lote:</span>
               <StatusBadge status={activeBatch.jobState} />
             </div>
           )}
         </div>
 
         {/* Diagrama de etapas */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <div className="pipeline-stages-grid">
           {stages.map((st, idx) => {
             const isCompleted = idx < activeStageIndex
             const isCurrent = idx === activeStageIndex
             return (
               <div
                 key={st.id}
-                className={`p-4 rounded-lg border transition-all ${
-                  isCurrent
-                    ? 'bg-[#EDF3FF] border-[#2459D3] shadow-sm'
-                    : isCompleted
-                    ? 'bg-[#EDFDF5] border-[#A3E6C5]'
-                    : 'bg-[#F7F8FA] border-[#E4E7EC] opacity-80'
+                className={`pipeline-stage-card ${
+                  isCurrent ? 'is-current' : isCompleted ? 'is-completed' : 'is-pending'
                 }`}
               >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#667085]">
-                    Paso {idx + 1}
-                  </span>
-                  {isCompleted && <CheckCircle2 size={14} className="text-[#18794E]" />}
+                <div className="stage-top">
+                  <span className="stage-step-tag">Paso {idx + 1}</span>
+                  {isCompleted && <CheckCircle2 size={14} className="text-success" />}
                   {isCurrent && activeBatch?.jobState === 'en_proceso' && (
-                    <LoaderCircle size={14} className="text-[#2459D3] spin" />
+                    <LoaderCircle size={14} className="spin text-accent" />
                   )}
                 </div>
-                <strong className="text-xs font-semibold text-[#182230] block">
-                  {st.label}
-                </strong>
-                <p className="text-[11px] text-[#526071] mt-1 leading-snug">
-                  {st.desc}
-                </p>
+                <strong>{st.label}</strong>
+                <p>{st.desc}</p>
               </div>
             )
           })}
@@ -188,18 +172,18 @@ export function ProcessingMonitorView({
 
         {/* Progreso del Lote Activo */}
         {activeBatch && (
-          <div className="space-y-2 pt-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-[#526071]">
+          <div className="monitor-progress-wrapper">
+            <div className="monitor-progress-header">
+              <span>
                 Progreso del lote ({activeBatch.documentCount || 0} documentos registrados)
               </span>
-              <span className="font-semibold tabular-nums text-[#182230]">
+              <strong>
                 {Math.round(activeBatch.progress || 0)}%
-              </span>
+              </strong>
             </div>
-            <div className="w-full bg-[#F1F3F6] h-2 rounded-full overflow-hidden">
+            <div className="monitor-progress-track">
               <div
-                className="bg-[#2459D3] h-full transition-all duration-300"
+                className="monitor-progress-fill"
                 style={{
                   width: `${Math.min(100, Math.max(0, Math.round(activeBatch.progress || 0)))}%`,
                 }}
@@ -210,13 +194,11 @@ export function ProcessingMonitorView({
       </div>
 
       {/* Tabla de Tareas del Lote */}
-      <div className="card p-0 overflow-hidden">
-        <div className="p-4 border-b border-[#E4E7EC] flex items-center justify-between">
+      <div className="card monitor-tasks-card">
+        <div className="monitor-tasks-header">
           <div>
-            <h3 className="text-sm font-semibold text-[#182230]">
-              Tareas del Lote
-            </h3>
-            <p className="text-xs text-[#526071]">
+            <h3>Tareas del Lote</h3>
+            <p className="pipeline-subtitle">
               Registro detallado de tareas por extractor y leases asignados
             </p>
           </div>

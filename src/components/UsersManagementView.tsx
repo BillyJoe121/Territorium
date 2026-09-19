@@ -63,11 +63,51 @@ const roleDescriptions: Record<ProjectRole, { label: string; desc: string; color
   },
 }
 
+const canonicalRoles = [
+  {
+    id: 'administrador',
+    label: 'Administrador / Propietario',
+    desc: 'Control total del expediente, gestión de participantes y configuración de prompts y políticas.',
+    color: '#168b40',
+  },
+  {
+    id: 'operador',
+    label: 'Operador predial',
+    desc: 'Carga lotes documentales, inicia ejecuciones del worker y reintenta procesos técnicos.',
+    color: '#2871a9',
+  },
+  {
+    id: 'analista_predial',
+    label: 'Analista Predial',
+    desc: 'Análisis de títulos, folio de matrícula inmobiliaria y concordancia física catastral.',
+    color: '#0284c7',
+  },
+  {
+    id: 'revisor_juridico',
+    label: 'Revisor Jurídico',
+    desc: 'Revisión y validación de reglas jurídicas de tradición, gravámenes y minutas.',
+    color: '#a45d12',
+  },
+  {
+    id: 'aprobador',
+    label: 'Aprobador',
+    desc: 'Autoridad final de aprobación o rechazo de estudios de títulos y actas de entrega.',
+    color: '#7c3aed',
+  },
+  {
+    id: 'auditor',
+    label: 'Auditor / Consulta',
+    desc: 'Fiscalización forense, trazabilidad de decisiones y descarga de exportaciones aprobadas.',
+    color: '#5e655e',
+  },
+]
+
 export function UsersManagementView({ project, onNotice, onError }: UsersManagementViewProps) {
   const [members, setMembers] = useState<ProjectMember[]>([])
   const [loading, setLoading] = useState(true)
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [showInviteModal, setShowInviteModal] = useState(false)
+  const [showRolesModal, setShowRolesModal] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<ProjectRole>('reviewer')
 
@@ -225,23 +265,36 @@ export function UsersManagementView({ project, onNotice, onError }: UsersManagem
         </p>
       </div>
 
-      <div className="two-column">
-        <section className="card">
+      <div className="users-content-wrap">
+        <section className="card members-card">
           <div className="section-title">
             <div>
               <p className="eyebrow">EQUIPO DEL EXPEDIENTE</p>
               <h3>Miembros autorizados ({members.length})</h3>
             </div>
-            {isOwner && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <button
-                className="button primary small"
-                onClick={() => setShowInviteModal(true)}
-                disabled={busyAction !== null}
+                type="button"
+                className="button secondary small"
+                onClick={() => setShowRolesModal(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
               >
-                <UserPlus size={16} />
-                Invitar usuario
+                <Shield size={15} />
+                Matriz de roles y permisos
               </button>
-            )}
+              {isOwner && (
+                <button
+                  type="button"
+                  className="button primary small"
+                  onClick={() => setShowInviteModal(true)}
+                  disabled={busyAction !== null}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <UserPlus size={15} />
+                  Invitar usuario
+                </button>
+              )}
+            </div>
           </div>
 
           {loading ? (
@@ -320,37 +373,42 @@ export function UsersManagementView({ project, onNotice, onError }: UsersManagem
             </div>
           )}
         </section>
+      </div>
 
-        <section className="card emphasis">
-          <div className="section-title">
-            <div>
-              <p className="eyebrow">POLÍTICA DE PRIVILEGIOS</p>
-              <h3>Matriz de roles y permisos</h3>
+      {showRolesModal && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="roles-modal-title" onClick={() => setShowRolesModal(false)}>
+          <div className="card modal-card roles-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="section-title" style={{ marginBottom: '8px' }}>
+              <div>
+                <p className="eyebrow">POLÍTICA DE PRIVILEGIOS RBAC</p>
+                <h3 id="roles-modal-title" style={{ margin: 0, fontSize: '16px' }}>Matriz de roles y permisos (6 perfiles canónicos)</h3>
+              </div>
+              <button className="text-button" onClick={() => setShowRolesModal(false)} aria-label="Cerrar modal">
+                ✕
+              </button>
+            </div>
+
+            <div className="roles-modal-grid">
+              {canonicalRoles.map((role) => (
+                <div className="role-card-modal" key={role.id}>
+                  <div className="role-header">
+                    <span className="mode-dot" style={{ background: role.color }} />
+                    <strong>{role.label}</strong>
+                  </div>
+                  <p>{role.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="security-guarantee" style={{ marginTop: '10px', padding: '8px 12px' }}>
+              <ShieldCheck size={16} />
+              <small>
+                Territorium hace cumplir estos permisos a nivel de base de datos mediante políticas Row-Level Security (RLS). Las credenciales nunca se transmiten por canales no cifrados ni se comparten entre usuarios.
+              </small>
             </div>
           </div>
-
-          <div className="roles-matrix">
-            {(Object.entries(roleDescriptions) as [ProjectRole, typeof roleDescriptions[ProjectRole]][]).map(
-              ([key, info]) => (
-                <div className="role-card" key={key}>
-                  <div className="role-header">
-                    <span className="mode-dot" style={{ background: info.color }} />
-                    <strong>{info.label}</strong>
-                  </div>
-                  <p>{info.desc}</p>
-                </div>
-              )
-            )}
-          </div>
-
-          <div className="security-guarantee">
-            <ShieldCheck size={18} />
-            <small>
-              Territorium hace cumplir estos permisos a nivel de base de datos mediante 30+ políticas Row-Level Security (RLS). Las credenciales nunca se transmiten por canales no cifrados ni se comparten entre usuarios.
-            </small>
-          </div>
-        </section>
-      </div>
+        </div>
+      )}
 
       {showInviteModal && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="invite-modal-title">

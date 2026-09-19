@@ -313,6 +313,22 @@ function App() {
             'papelera',
             'lotes_nuevo',
           ]
+          const legacyReplacedScreens: Screen[] = [
+            'monitor',
+            'revision',
+            'formatos_editor',
+            'exportar',
+            'carga',
+            'lotes_nuevo',
+            'negociacion',
+            'discrepancias',
+          ]
+          if (legacyReplacedScreens.includes(targetScreen)) {
+            setScreen('proyecto_detalle')
+            window.location.hash = '#/app/proyecto_detalle'
+            toast('La navegación se unificó en la Ficha del Expediente (un predio, una gestión).')
+            return
+          }
           if (validScreens.includes(targetScreen)) {
             setScreen(targetScreen)
           }
@@ -392,8 +408,8 @@ function App() {
         const id = await createRemoteProject(input)
         await refresh(true)
         setActiveProjectId(id)
-        setScreen('carga')
-        toast('Expediente creado con metadatos completos. Ya puedes cargar el lote documental.')
+        setScreen('proyecto_detalle')
+        toast('Expediente creado con éxito. Abriendo la Ficha del Predio.')
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : 'No fue posible crear el expediente.')
       } finally {
@@ -417,8 +433,8 @@ function App() {
       audit: [...state.audit, audit(project.id, 'Expediente creado', `Se creó el expediente ${input.name} con metadatos completos.`)]
     })
     setActiveProjectId(project.id)
-    setScreen('carga')
-    toast('Expediente creado. Ya puedes cargar el lote documental.')
+    setScreen('proyecto_detalle')
+    toast('Expediente creado con éxito. Abriendo la Ficha del Predio.')
   }
 
   async function handleUpdateProjectMetadata(projectId: string, input: {

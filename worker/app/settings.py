@@ -13,6 +13,8 @@ class Settings:
     lease_seconds: int
     worker_name: str
     enabled: bool
+    expediente_v2_enabled: bool
+    expediente_v2_poll_seconds: float
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -25,9 +27,15 @@ class Settings:
             lease_seconds=max(60, int(os.getenv("LEASE_SECONDS", "300"))),
             worker_name=os.getenv("WORKER_NAME", socket.gethostname()),
             enabled=os.getenv("WORKER_ENABLED", "true").lower() in {"1", "true", "yes"},
+            expediente_v2_enabled=os.getenv("EXPEDIENTE_V2_WORKER_ENABLED", "true").lower() in {"1", "true", "yes"},
+            expediente_v2_poll_seconds=max(1.0, float(os.getenv("EXPEDIENTE_V2_POLL_SECONDS", "2"))),
         )
 
     @property
     def ready(self) -> bool:
         return bool(self.supabase_url and self.supabase_secret_key and self.openai_api_key and self.ai_model)
 
+    @property
+    def expediente_v2_ready(self) -> bool:
+        """Fase 3 valida y prepara archivos sin requerir un proveedor de IA."""
+        return bool(self.supabase_url and self.supabase_secret_key)

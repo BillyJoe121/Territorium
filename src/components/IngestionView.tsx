@@ -6,7 +6,6 @@ import {
   ArrowRight,
   Bot,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   FileCheck2,
   FilePlus2,
@@ -49,7 +48,6 @@ import {
   computeManifestSummary,
   extractPropertyCode,
   extractZipArchive,
-  parseExpectedProperties,
   validateFileEntry,
 } from '../lib/batchValidation'
 import { dataMode } from '../lib/supabase'
@@ -126,10 +124,9 @@ export function IngestionView({
   const [isDraggingOver, setIsDraggingOver] = useState(false)
   const [isValidating, setIsValidating] = useState(false)
 
-  // Expected properties (US-021)
-  const [expectedInput, setExpectedInput] = useState('')
-  const [showExpectedSection, setShowExpectedSection] = useState(false)
-  const expectedProperties = useMemo(() => parseExpectedProperties(expectedInput), [expectedInput])
+  // The expected-properties card was removed from the preparation UI. Keep the
+  // empty collection so manifest/upload callbacks retain their existing shape.
+  const expectedProperties: string[] = []
 
   // Bulk kind setter
   const [bulkKind, setBulkKind] = useState<DocumentKind>('sin_clasificar')
@@ -305,73 +302,7 @@ export function IngestionView({
         </div>
       )}
 
-      {/* Seccion 1: Lista esperada de predios (US-021) */}
-      <section className="card expected-properties-card">
-        <div
-          className="section-title cursor-pointer"
-          onClick={() => setShowExpectedSection(!showExpectedSection)}
-          style={{ cursor: 'pointer' }}
-        >
-          <div className="flex-row items-center gap-2">
-            <Layers size={18} />
-            <div>
-              <p className="eyebrow">CONTROL DE COBERTURA (US-021)</p>
-              <h3>Lista esperada de predios ({expectedProperties.length} definidos)</h3>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Alternar lista esperada"
-          >
-            <ChevronDown
-              size={18}
-              style={{
-                transform: showExpectedSection ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.2s',
-              }}
-            />
-          </button>
-        </div>
-
-        {showExpectedSection && (
-          <div className="expected-properties-body">
-            <p className="description-text">
-              Ingresa o pega los códigos de predios esperados para este lote (separados por coma,
-              espacio o salto de línea). El sistema verificará qué predios tienen insumos recibidos y cuáles
-              están pendientes.
-            </p>
-            <textarea
-              className="expected-textarea"
-              placeholder="Ej: SAN-CIM-001, SAN-CIM-002, SAN-CIM-036A, SAN-CIM-036B"
-              value={expectedInput}
-              onChange={(e) => setExpectedInput(e.target.value)}
-              rows={3}
-              disabled={!canOperate}
-            />
-            {expectedProperties.length > 0 && (
-              <div className="expected-chips-list">
-                {expectedProperties.map((code) => {
-                  const hasFiles = items.some(
-                    (it) => it.propertyCode === code && it.duplicateDecision !== 'omit'
-                  )
-                  return (
-                    <span
-                      key={code}
-                      className={`expected-chip ${hasFiles ? 'chip-covered' : 'chip-missing'}`}
-                    >
-                      {hasFiles ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
-                      {code}
-                    </span>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* Seccion 2: Zona de Carga Drag & Drop y Selección (US-019) */}
+      {/* Zona de Carga Drag & Drop y Selección (US-019) */}
       <section
         className={`upload-card dropzone ${isDraggingOver ? 'drag-over' : ''}`}
         onDragOver={handleDragOver}

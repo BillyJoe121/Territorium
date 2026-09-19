@@ -108,12 +108,16 @@ export function ProjectsManagementView({
 
   return (
     <div className="projects-management-view">
-      <div className="intro">
-        <p className="eyebrow">ADMINISTRACIÓN TERRITORIAL</p>
-        <h2>Expedientes y ciclo de vida</h2>
-        <p>
-          Gestiona los proyectos territoriales, asocia infraestructura eléctrica, actualiza metadatos con trazabilidad y archiva expedientes de forma recuperable.
-        </p>
+      <div className="projects-header-bar">
+        <div className="projects-header-info">
+          <p className="eyebrow">ADMINISTRACIÓN TERRITORIAL</p>
+          <div className="projects-header-title-wrap">
+            <h2>Expedientes y ciclo de vida</h2>
+            <span className="projects-header-desc">
+              Gestión de expedientes prediales, infraestructura eléctrica y metadatos con trazabilidad.
+            </span>
+          </div>
+        </div>
       </div>
 
       <div className="projects-layout">
@@ -156,179 +160,195 @@ export function ProjectsManagementView({
             </div>
           </div>
 
-          {filteredProjects.length === 0 ? (
-            <div className="empty-state">
-              <FolderKanban size={24} />
-              <span>
-                {search
-                  ? `No se encontraron expedientes que coincidan con "${search}".`
-                  : statusFilter === 'archivados'
-                  ? 'No hay expedientes archivados en este momento.'
-                  : 'Aún no hay expedientes creados.'}
-              </span>
-            </div>
-          ) : (
-            <div className="project-grid">
-              {filteredProjects.map((project) => {
-                const isSelected = project.id === activeId
-                const canManage = project.role === 'owner' || !project.role
+          <div className="project-grid-scroll-wrap">
+            {filteredProjects.length === 0 ? (
+              <div className="empty-state">
+                <FolderKanban size={24} />
+                <span>
+                  {search
+                    ? `No se encontraron expedientes que coincidan con "${search}".`
+                    : statusFilter === 'archivados'
+                    ? 'No hay expedientes archivados en este momento.'
+                    : 'Aún no hay expedientes creados.'}
+                </span>
+              </div>
+            ) : (
+              <div className="project-grid">
+                {filteredProjects.map((project) => {
+                  const isSelected = project.id === activeId
+                  const canManage = project.role === 'owner' || !project.role
 
-                return (
-                  <article
-                    className={`project-card ${isSelected ? 'selected' : ''} ${project.isArchived ? 'archived' : ''}`}
-                    key={project.id}
-                    onClick={() => onSelect(project.id)}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    <div className="card-top">
-                      <div className="project-badge">
-                        <FolderKanban size={18} />
-                        {project.isArchived && <span className="archive-tag">Archivado</span>}
-                      </div>
+                  return (
+                    <article
+                      className={`project-card ${isSelected ? 'selected' : ''} ${project.isArchived ? 'archived' : ''}`}
+                      key={project.id}
+                      onClick={() => onSelect(project.id)}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <div className="card-top">
+                        <div className="project-badge">
+                          <FolderKanban size={18} />
+                          {project.isArchived && <span className="archive-tag">Archivado</span>}
+                        </div>
 
-                      <div className="card-actions" onClick={(e) => e.stopPropagation()}>
-                        {canManage && (
+                        <div className="card-actions" onClick={(e) => e.stopPropagation()}>
+                          {canManage && (
+                            <button
+                              type="button"
+                              className="icon-button small"
+                              title="Editar metadatos del expediente (US-012)"
+                              onClick={(e) => openEditModal(project, e)}
+                            >
+                              <Edit3 size={15} />
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="icon-button small"
-                            title="Editar metadatos del expediente (US-012)"
-                            onClick={(e) => openEditModal(project, e)}
+                            title="Gestionar participantes y roles (US-014)"
+                            onClick={() => {
+                              onSelect(project.id)
+                              onNavigateToUsers(project.id)
+                            }}
                           >
-                            <Edit3 size={15} />
+                            <Users size={15} />
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          className="icon-button small"
-                          title="Gestionar participantes y roles (US-014)"
-                          onClick={() => {
-                            onSelect(project.id)
-                            onNavigateToUsers(project.id)
-                          }}
-                        >
-                          <Users size={15} />
-                        </button>
-                        {canManage && (
-                          <button
-                            type="button"
-                            className="icon-button small"
-                            title={project.isArchived ? 'Restaurar expediente (US-015)' : 'Archivar expediente (US-015)'}
-                            onClick={() => void onToggleArchive(project.id, !project.isArchived)}
-                            disabled={busyAction === `archive:${project.id}`}
-                          >
-                            {project.isArchived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
-                          </button>
-                        )}
+                          {canManage && (
+                            <button
+                              type="button"
+                              className="icon-button small"
+                              title={project.isArchived ? 'Restaurar expediente (US-015)' : 'Archivar expediente (US-015)'}
+                              onClick={() => void onToggleArchive(project.id, !project.isArchived)}
+                              disabled={busyAction === `archive:${project.id}`}
+                            >
+                              {project.isArchived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    <strong>{project.name}</strong>
+                      <strong className="project-title">{project.name}</strong>
 
-                    <div className="project-meta-details">
-                      {project.clientName && (
+                      <div className="project-meta-details">
+                        {project.clientName && (
+                          <div className="meta-line">
+                            <Building2 size={13} />
+                            <span>{project.clientName}</span>
+                          </div>
+                        )}
                         <div className="meta-line">
-                          <Building2 size={13} />
-                          <span>{project.clientName}</span>
+                          <MapPin size={13} />
+                          <span>{project.municipality}, {project.department}</span>
                         </div>
-                      )}
-                      <div className="meta-line">
-                        <MapPin size={13} />
-                        <span>{project.municipality}, {project.department}</span>
-                      </div>
-                      {project.powerLine && (
-                        <div className="meta-line line-highlight">
-                          <Zap size={13} />
-                          <span>{project.powerLine}</span>
+                        {project.powerLine && (
+                          <div className="meta-line line-highlight">
+                            <Zap size={13} />
+                            <span>{project.powerLine}</span>
+                          </div>
+                        )}
+                        <div className="meta-line date-line">
+                          <Calendar size={13} />
+                          <span>Creado {new Date(project.createdAt).toLocaleDateString('es-CO')}</span>
                         </div>
-                      )}
-                      <div className="meta-line date-line">
-                        <Calendar size={13} />
-                        <span>Creado {new Date(project.createdAt).toLocaleDateString('es-CO')}</span>
                       </div>
-                    </div>
 
-                    <div className="card-bottom">
-                      {project.role && (
-                        <span className={`status ${project.role}`} title="Tu rol en este expediente">
-                          <Shield size={11} /> {project.role}
-                        </span>
-                      )}
-                      <span className="open-hint">Abrir expediente →</span>
-                    </div>
-                  </article>
-                )
-              })}
-            </div>
-          )}
+                      <div className="card-bottom">
+                        {project.role && (
+                          <span className={`status ${project.role}`} title="Tu rol en este expediente">
+                            <Shield size={11} /> {project.role}
+                          </span>
+                        )}
+                        <span className="open-hint">Abrir expediente →</span>
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </section>
 
         {/* US-011: Formulario de Creación Completa */}
         <form className="card form-card" onSubmit={handleCreateSubmit}>
-          <p className="eyebrow">NUEVO EXPEDIENTE TERRITORIAL (US-011)</p>
-          <h3>Crear proyecto completo</h3>
-          <p className="form-sub">
-            Registra los datos maestros del proyecto antes de cargar estudios de títulos o planos.
-          </p>
+          <div className="form-card-header">
+            <p className="eyebrow">NUEVO EXPEDIENTE TERRITORIAL (US-011)</p>
+            <h3>Crear proyecto completo</h3>
+            <p className="form-sub">
+              Registra los datos maestros del proyecto antes de cargar estudios de títulos o planos.
+            </p>
+          </div>
 
-          <label>
-            <span>Nombre del proyecto / expediente *</span>
-            <input
-              required
-              name="name"
-              placeholder="Ej. Línea 230 kV La Virginia - Nueva Palmira"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-            />
-          </label>
-
-          <label>
-            <span>Cliente o Titular del proyecto</span>
-            <input
-              name="clientName"
-              placeholder="Ej. ISA Intercolombia / Enel / EPM"
-              value={newClient}
-              onChange={(e) => setNewClient(e.target.value)}
-            />
-          </label>
-
-          <div className="form-row">
+          <div className="form-field">
             <label>
-              <span>Municipio *</span>
+              <span>Nombre del proyecto / expediente *</span>
               <input
                 required
-                name="municipality"
-                placeholder="Ej. Pereira"
-                value={newMunicipality}
-                onChange={(e) => setNewMunicipality(e.target.value)}
-              />
-            </label>
-            <label>
-              <span>Departamento *</span>
-              <input
-                required
-                name="department"
-                placeholder="Ej. Risaralda"
-                value={newDepartment}
-                onChange={(e) => setNewDepartment(e.target.value)}
+                name="name"
+                placeholder="Ej. Línea 230 kV La Virginia - Nueva Palmira"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
               />
             </label>
           </div>
 
-          <label>
-            <span>Línea de transmisión / Infraestructura</span>
-            <input
-              name="powerLine"
-              placeholder="Ej. Tramo torre 45 a subestación"
-              value={newPowerLine}
-              onChange={(e) => setNewPowerLine(e.target.value)}
-            />
-          </label>
+          <div className="form-field">
+            <label>
+              <span>Cliente o Titular del proyecto</span>
+              <input
+                name="clientName"
+                placeholder="Ej. ISA Intercolombia / Enel / EPM"
+                value={newClient}
+                onChange={(e) => setNewClient(e.target.value)}
+              />
+            </label>
+          </div>
 
-          <button className="button primary" type="submit" disabled={busyAction === 'create-project' || !newName.trim()}>
-            <Plus size={17} />
-            {busyAction === 'create-project' ? 'Creando expediente…' : 'Crear y abrir expediente'}
-          </button>
+          <div className="form-row">
+            <div className="form-field">
+              <label>
+                <span>Municipio *</span>
+                <input
+                  required
+                  name="municipality"
+                  placeholder="Ej. Pereira"
+                  value={newMunicipality}
+                  onChange={(e) => setNewMunicipality(e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="form-field">
+              <label>
+                <span>Departamento *</span>
+                <input
+                  required
+                  name="department"
+                  placeholder="Ej. Risaralda"
+                  value={newDepartment}
+                  onChange={(e) => setNewDepartment(e.target.value)}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="form-field">
+            <label>
+              <span>Línea de transmisión / Infraestructura</span>
+              <input
+                name="powerLine"
+                placeholder="Ej. Tramo torre 45 a subestación"
+                value={newPowerLine}
+                onChange={(e) => setNewPowerLine(e.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="form-actions">
+            <button className="button primary full-width" type="submit" disabled={busyAction === 'create-project' || !newName.trim()}>
+              <Plus size={17} />
+              {busyAction === 'create-project' ? 'Creando expediente…' : 'Crear y abrir expediente'}
+            </button>
+          </div>
         </form>
       </div>
 
