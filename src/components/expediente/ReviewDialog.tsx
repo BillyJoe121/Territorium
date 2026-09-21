@@ -87,30 +87,37 @@ export function ReviewDialog({
     }
   }, [onSave])
 
-  const updateCell = (rowId: string, key: string, value: string) => {
-    if (isApproved) return
+  const isApprovedRef = useRef(isApproved)
+  isApprovedRef.current = isApproved
+  const columnsRef = useRef(columns)
+  columnsRef.current = columns
+
+  const updateCell = useCallback((rowId: string, key: string, value: string) => {
+    if (isApprovedRef.current) return
     const negotiationFields = ['firstOfferNumbers', 'firstOfferLetters', 'secondOfferNumbers', 'secondOfferLetters']
-    const hasNegotiationComparison = columns.some((column) => column.key === 'valuesMatch')
+    const hasNegotiationComparison = columnsRef.current.some((column) => column.key === 'valuesMatch')
 
-    const nextDraft = draft.map((row) => {
-      if (row.id !== rowId) return row
-      const nextRow = { ...row, [key]: value }
-      return hasNegotiationComparison && negotiationFields.includes(key)
-        ? { ...nextRow, valuesMatch: 'Requiere revisión' }
-        : nextRow
+    setDraft((currentDraft) => {
+      const nextDraft = currentDraft.map((row) => {
+        if (row.id !== rowId) return row
+        const nextRow = { ...row, [key]: value }
+        return hasNegotiationComparison && negotiationFields.includes(key)
+          ? { ...nextRow, valuesMatch: 'Requiere revisión' }
+          : nextRow
+      })
+
+      // Debounced autosave (HU-V2-043)
+      if (saveTimeoutRef.current) {
+        window.clearTimeout(saveTimeoutRef.current)
+      }
+      saveTimeoutRef.current = window.setTimeout(() => {
+        void triggerSave(nextDraft)
+      }, 1200)
+
+      return nextDraft
     })
-
-    setDraft(nextDraft)
     setDirty(true)
-
-    // Debounced autosave (HU-V2-043)
-    if (saveTimeoutRef.current) {
-      window.clearTimeout(saveTimeoutRef.current)
-    }
-    saveTimeoutRef.current = window.setTimeout(() => {
-      void triggerSave(nextDraft)
-    }, 1200)
-  }
+  }, [triggerSave])
 
   const saveManual = async () => {
     if (saveTimeoutRef.current) {
@@ -206,7 +213,10 @@ export function ReviewDialog({
                   Descargar Excel
                 </button>
               )}
-              <button type="button" className="expediente-secondary-action" onClick={onReprocess}><RefreshCcw size={16} />Repetir análisis</button>
+              <button type="button" className="expediente-secondary-action" onClick={onReprocess}>
+                <RefreshCcw size={16} />
+                Repetir análisis
+              </button>
               {!isApproved && (
                 <button
                   type="button"

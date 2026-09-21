@@ -2,7 +2,7 @@ import { EditorContent, useEditor, type JSONContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 import { Bold, Heading2, Italic, List, ListOrdered, Table2 } from 'lucide-react'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 interface DocumentPrototypeEditorProps {
   content: JSONContent
@@ -24,6 +24,9 @@ const ToolButton = ({ label, active, onClick, children }: { label: string; activ
 )
 
 export function DocumentPrototypeEditor({ content, onChange, disabled = false }: DocumentPrototypeEditorProps) {
+  const isInternalUpdateRef = useRef(false)
+  const lastEmittedJSONRef = useRef<string>('')
+
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -40,14 +43,37 @@ export function DocumentPrototypeEditor({ content, onChange, disabled = false }:
         'aria-label': 'Documento final editable',
       },
     },
-    onUpdate: ({ editor: activeEditor }) => onChange(activeEditor.getJSON()),
+    onUpdate: ({ editor: activeEditor }) => {
+      const json = activeEditor.getJSON()
+      lastEmittedJSONRef.current = JSON.stringify(json)
+      isInternalUpdateRef.current = true
+      onChange(json)
+    },
   })
 
   useEffect(() => {
     if (!editor) return
-    const current = JSON.stringify(editor.getJSON())
-    const next = JSON.stringify(content)
-    if (current !== next) editor.commands.setContent(content, { emitUpdate: false })
+
+    // If the update was triggered internally by user typing, skip calling setContent
+    if (isInternalUpdateRef.current) {
+      isInternalUpdateRef.current = false
+      return
+    }
+
+    // If the editor is focused, the user is actively typing; do not disrupt cursor/selection
+    if (editor.isFocused) {
+      return
+    }
+
+    const nextStr = JSON.stringify(content)
+    if (nextStr === lastEmittedJSONRef.current) {
+      return
+    }
+
+    const currentStr = JSON.stringify(editor.getJSON())
+    if (currentStr !== nextStr) {
+      editor.commands.setContent(content, { emitUpdate: false })
+    }
   }, [content, editor])
 
   if (!editor) return <div className="document-editor-loading">Preparando el editor…</div>
