@@ -263,8 +263,9 @@ export async function createRemoteProject(input: {
   powerLine?: string
 }) {
   const client = requireSupabase(); const { data: { user }, error: authError } = await client.auth.getUser()
-  if (authError || !user) throw new Error('La sesión expiró.')
+  const projectId = crypto.randomUUID()
   const payload: Record<string, any> = {
+    id: projectId,
     name: input.name.trim(),
     municipality: input.municipality.trim(),
     department: input.department.trim(),
@@ -273,15 +274,22 @@ export async function createRemoteProject(input: {
   if (input.clientName?.trim()) payload.client_name = input.clientName.trim()
   if (input.powerLine?.trim()) payload.power_line = input.powerLine.trim()
 
-  const { data, error } = await client.from('projects').insert(payload).select('id').single()
-  if (error) throw new Error(error.message)
+  const { error } = await client.from('projects').insert(payload)
+  if (error) {
+    if (error.message.includes('row-level security') || error.code === '42501') {
+      throw new Error(
+        'Error de seguridad RLS en la tabla "projects". Asegúrate de ejecutar el script de actualización de políticas RLS en el editor SQL de Supabase.'
+      )
+    }
+    throw new Error(error.message)
+  }
 
   await client.from('audit_events').insert({
-    project_id: data.id,
+    project_id: projectId,
     actor_id: user.id,
     action: 'project.created',
     entity_type: 'project',
-    entity_id: data.id,
+    entity_id: projectId,
     metadata: {
       name: input.name,
       clientName: input.clientName,
@@ -292,7 +300,7 @@ export async function createRemoteProject(input: {
     }
   })
 
-  return data.id as string
+  return projectId
 }
 
 export async function updateRemoteProject(projectId: string, input: {

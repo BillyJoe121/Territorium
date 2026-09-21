@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 import { ArrowRight, KeyRound, LoaderCircle, Mail, ShieldCheck } from 'lucide-react'
 import { useAuth } from './AuthContext'
 
@@ -10,6 +10,23 @@ export function AuthScreen() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const hash = window.location.hash
+    if (hash.includes('error=')) {
+      const params = new URLSearchParams(hash.replace(/^#/, ''))
+      const errorCode = params.get('error_code')
+      const errorDescription = params.get('error_description')
+
+      if (errorCode === 'otp_expired' || errorDescription?.includes('expired') || errorDescription?.includes('invalid')) {
+        setError('El enlace de confirmación ha expirado o ya fue utilizado. Puedes solicitar un nuevo enlace o iniciar sesión.')
+      } else if (errorDescription) {
+        setError(decodeURIComponent(errorDescription.replace(/\+/g, ' ')))
+      }
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
+  }, [])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(null); setMessage(null)
