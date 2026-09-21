@@ -1,13 +1,10 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useState } from 'react'
-import { Activity, AlertTriangle, Archive, ArrowRight, CheckCircle, CheckCircle2, ClipboardCheck, Cloud, Download, FilePlus2, FileSpreadsheet, FileText, FolderKanban, Landmark, LayoutDashboard, LoaderCircle, LogOut, Plus, RefreshCw, RotateCcw, Search, Settings2, Share2, Shield, ShieldCheck, SlidersHorizontal, Trash2, UploadCloud, Users, WifiOff, X, XCircle } from 'lucide-react'
+import { Activity, AlertTriangle, Archive, ArrowRight, CheckCircle, CheckCircle2, ClipboardCheck, Cloud, Download, FilePlus2, FileSpreadsheet, FileText, FolderKanban, Landmark, LayoutDashboard, LoaderCircle, LogOut, Plus, RefreshCw, RotateCcw, Settings2, Shield, ShieldCheck, SlidersHorizontal, Trash2, UploadCloud, Users, WifiOff, X, XCircle } from 'lucide-react'
 import { Toaster, toast as sonnerToast } from 'sonner'
 import { BentoGridKpis, type KpiMetric } from './components/ui/BentoGridKpis'
 import { DashboardCharts, type PropertyStatusData, type DiscrepancyCategoryData } from './components/ui/DashboardCharts'
-import { ShareNotaryLinkModal } from './components/ui/ShareNotaryLinkModal'
-import { PublicNotaryPortal } from './components/ui/PublicNotaryPortal'
 import { StatusPill } from './components/ui/StatusPill'
 import { ThemeToggle } from './components/ui/ThemeToggle'
-import { NotaryLinksAdminModal, type NotaryLinkRecord } from './components/ui/NotaryLinksAdminModal'
 import { ExcelExportConfigModal } from './components/ui/ExcelExportConfigModal'
 import { InviteUserModal } from './components/ui/InviteUserModal'
 import { TemplateEditorWithVariables } from './components/TemplateEditorWithVariables'
@@ -17,7 +14,6 @@ import { ProcessingMonitorView } from './components/views/ProcessingMonitorView'
 import { DiscrepanciesView } from './components/views/DiscrepanciesView'
 import { NegotiationView } from './components/views/NegotiationView'
 import { DeliverablesView } from './components/views/DeliverablesView'
-import { NotaryPortalAdminView } from './components/views/NotaryPortalAdminView'
 import { AuditTrailView } from './components/views/AuditTrailView'
 import { PageHeader } from './components/common/PageHeader'
 import { EmptyState as NewEmptyState } from './components/common/EmptyState'
@@ -37,10 +33,8 @@ import { ProjectsManagementView } from './components/ProjectsManagementView'
 import { UsersManagementView } from './components/UsersManagementView'
 import { ConfigurationView } from './components/ConfigurationView'
 import { ReviewStationView } from './components/ReviewStationView'
-import { CommandPalette } from './components/CommandPalette'
 import { LegalDocumentGenerator } from './components/LegalDocumentGenerator'
 import { DynamicTemplateEditor } from './components/DynamicTemplateEditor'
-import { SsoAndNotificationSettings } from './components/SsoAndNotificationSettings'
 import { convertPropertyRecordToMasterRecord, type PropertyMasterRecord } from './lib/masterRecordReconciliation'
 import { downloadMasterRecordsXlsx } from './lib/excel'
 import {
@@ -101,7 +95,6 @@ export type Screen =
   | 'negociacion'
   | 'formatos_editor'
   | 'exportar'
-  | 'portal_notarial'
   | 'trazabilidad'
   | 'usuarios'
   | 'configuracion'
@@ -134,7 +127,6 @@ const navGroups: NavGroup[] = [
     items: [
       { id: 'usuarios', label: 'Participantes y Roles', icon: Users },
       { id: 'trazabilidad', label: 'Auditoría Forense', icon: ShieldCheck },
-      { id: 'portal_notarial', label: 'Portal Notarial', icon: Share2 },
       { id: 'configuracion', label: 'Configuración Técnica', icon: Settings2 },
     ],
   },
@@ -164,12 +156,20 @@ const screenLabels: Record<Screen, { title: string; eyebrow: string }> = {
   negociacion: { title: 'Negociación y Afectaciones', eyebrow: 'CATASTRO, AVALÚOS Y COMPENSACIÓN' },
   formatos_editor: { title: 'Plantillas y Minutas', eyebrow: 'GENERACIÓN DOCUMENTAL' },
   exportar: { title: 'Entregables y Cierre', eyebrow: 'MATRICES EXCEL Y DOCUMENTOS' },
-  portal_notarial: { title: 'Portal Notarial y Terceros', eyebrow: 'ENLACES SEGUROS HMAC Y OTP' },
   trazabilidad: { title: 'Auditoría Forense', eyebrow: 'REGISTRO INMUTABLE SHA-256' },
   usuarios: { title: 'Participantes y Roles', eyebrow: 'GOBERNANZA RBAC' },
   configuracion: { title: 'Configuración Técnica', eyebrow: 'SISTEMA, IA Y PROMPTS' },
   papelera: { title: 'Papelera de Reciclaje', eyebrow: 'RECUPERACIÓN SEGURA' },
   lotes_nuevo: { title: 'Carga de Lote Asistida', eyebrow: 'INGESTA A PANTALLA COMPLETA' },
+}
+
+const navShortLabels: Partial<Record<Screen, string>> = {
+  inicio: 'Inicio',
+  expedientes: 'Expedientes',
+  proyecto_detalle: 'Ficha',
+  usuarios: 'Equipo',
+  trazabilidad: 'Auditoría',
+  configuracion: 'Ajustes',
 }
 
 const kindLabels: Record<DocumentKind, string> = { estudio_titulos: 'Estudio de títulos', plano: 'Plano', linderos: 'Linderos / Cabida', negociacion: 'Negociación', soporte: 'Soporte', sin_clasificar: 'Sin clasificar' }
@@ -198,7 +198,7 @@ function Brand() {
 }
 
 function App() {
-  const { user, loading: authLoading, signOut } = useAuth()
+  const { user, loading: authLoading, status: authStatus, signOut } = useAuth()
   const remote = dataMode === 'supabase'
   const [screen, setScreen] = useState<Screen>('inicio')
   const [state, setState] = useState<PlatformState>(() =>
@@ -225,38 +225,9 @@ function App() {
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
   const [online, setOnline] = useState(navigator.onLine)
   const [lastSync, setLastSync] = useState<Date | null>(null)
-  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
   const [density, setDensity] = useState<VisualDensity>('comfortable')
-  const [isNotaryModalOpen, setIsNotaryModalOpen] = useState(false)
-  const [isNotaryAdminModalOpen, setIsNotaryAdminModalOpen] = useState(false)
   const [isInviteUserModalOpen, setIsInviteUserModalOpen] = useState(false)
   const [isExcelConfigModalOpen, setIsExcelConfigModalOpen] = useState(false)
-  const [notaryLinks, setNotaryLinks] = useState<NotaryLinkRecord[]>([
-    {
-      payload: {
-        tokenId: 'tok-notary-demo1',
-        projectId: 'PRJ-DEMO-01',
-        recipientName: 'Dr. Mario Gómez Rincón',
-        recipientOrganization: 'Notaría 45 de Bogotá',
-        role: 'notario',
-        permissions: ['read_minute', 'read_titles', 'read_plan', 'submit_concept', 'attach_support'],
-        createdAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
-        expiresAt: new Date(Date.now() + 22 * 3600 * 1000).toISOString(),
-        secretSalt: 'salt-demo-1',
-      },
-      token: 'ttm_ext_demo_token_1',
-      isRevoked: false,
-      lastAccessedAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-    },
-  ])
-
-  const [publicPortalToken, setPublicPortalToken] = useState<string | null>(() => {
-    const hash = window.location.hash
-    if (hash.startsWith('#/public/portal/')) {
-      return hash.replace('#/public/portal/', '')
-    }
-    return null
-  })
 
   // US-209: Scroll Restoration al navegar entre vistas
   useEffect(() => {
@@ -272,15 +243,16 @@ function App() {
     }
   }, [screen])
 
-  // Sincronización de URL y Deep Linking (US-201, US-202, US-203, US-289)
+  // Sincronización de URL y Deep Linking.
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash
-      if (hash.startsWith('#/public/portal/')) {
-        setPublicPortalToken(hash.replace('#/public/portal/', ''))
-      } else {
-        setPublicPortalToken(null)
-        if (hash.startsWith('#/app/')) {
+      if (!hash.startsWith('#/app/')) {
+        setScreen('inicio')
+        window.location.hash = '#/app/inicio'
+        return
+      }
+      if (hash.startsWith('#/app/')) {
           const parts = hash.replace('#/app/', '').split('?')
           const targetScreen = parts[0] as Screen
           const validScreens: Screen[] = [
@@ -294,7 +266,6 @@ function App() {
             'negociacion',
             'formatos_editor',
             'exportar',
-            'portal_notarial',
             'trazabilidad',
             'usuarios',
             'configuracion',
@@ -320,21 +291,21 @@ function App() {
           if (validScreens.includes(targetScreen)) {
             setScreen(targetScreen)
           }
-        }
       }
     }
     window.addEventListener('hashchange', handleHashChange)
+    // Process the initial URL as well as subsequent changes. In particular,
+    // retired public portal URLs must not remain visible in the address bar.
+    handleHashChange()
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [])
 
   useEffect(() => {
-    if (!publicPortalToken) {
-      const currentHash = window.location.hash
-      if (!currentHash.startsWith(`#/app/${screen}`)) {
-        window.location.hash = `#/app/${screen}`
-      }
+    const currentHash = window.location.hash
+    if (!currentHash.startsWith(`#/app/${screen}`)) {
+      window.location.hash = `#/app/${screen}`
     }
-  }, [screen, publicPortalToken])
+  }, [screen])
 
   // HU-V2-053: Redirección de pantallas obsoletas a la Ficha del Expediente unificada
   useEffect(() => {
@@ -353,16 +324,6 @@ function App() {
     }
   }, [screen, activeProjectId])
 
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        setIsCommandPaletteOpen((prev) => !prev)
-      }
-    }
-    window.addEventListener('keydown', handleGlobalKeyDown)
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [])
   const activeProject = state.projects.find((project) => project.id === activeProjectId)
   const clearProjectContext = () => {
     setActiveProjectId('')
@@ -375,16 +336,26 @@ function App() {
     sonnerToast.success(message)
     window.setTimeout(() => setNotice(null), 4000)
   }
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      setActiveProjectId('')
+      setScreen('inicio')
+      if (!remote) toast('Sesión local cerrada.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No fue posible cerrar la sesión.')
+    }
+  }
 
   // Las rutas operativas trabajan sobre un expediente concreto. Si se abre una
   // URL profunda sin contexto, llevamos al usuario al selector en lugar de
   // renderizar una pantalla vacía o una vista con datos ambiguos.
   useEffect(() => {
-    if (!publicPortalToken && screenRequiresProject(screen) && !activeProject) {
+    if (screenRequiresProject(screen) && !activeProject) {
       setScreen('expedientes')
       toast('Selecciona un expediente para continuar.')
     }
-  }, [activeProject, publicPortalToken, screen])
+  }, [activeProject, screen])
 
   const refresh = useCallback(async (silent = false) => {
     if (!remote || !user) return
@@ -1070,23 +1041,6 @@ function App() {
     ) : (
       <ProjectRequired onSelect={() => setScreen('expedientes')} />
     ),
-    portal_notarial: (
-      <NotaryPortalAdminView
-        links={notaryLinks}
-        projects={state.projects}
-        activeProjectId={activeProjectId}
-        onCreateLink={(newLink: any) => {
-          setNotaryLinks((prev) => [newLink, ...prev])
-          toast('Enlace notarial seguro generado con firma HMAC y OTP.')
-        }}
-        onRevokeLink={(tokenId: string) => {
-          setNotaryLinks((prev) =>
-            prev.map((l) => (l.payload.tokenId === tokenId ? { ...l, isRevoked: true } : l))
-          )
-          toast('Enlace notarial revocado inmediatamente.')
-        }}
-      />
-    ),
     trazabilidad: (
       <AuditTrailView
         events={state.audit}
@@ -1095,22 +1049,9 @@ function App() {
       />
     ),
     usuarios: (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="eyebrow">GOBERNANZA Y ACCESOS</p>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Participantes y Roles</h2>
-            <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-              Gestione el equipo del proyecto y sus permisos por rol RBAC (6 perfiles canónicos).
-            </p>
-          </div>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => setIsInviteUserModalOpen(true)}
-          >
-            <Plus size={14} /> Invitar Miembro
-          </button>
+      <div className="team-page space-y-4">
+        <div className="team-page-header">
+          <p className="eyebrow">Participantes y Roles</p>
         </div>
         {activeProject ? (
           <UsersManagementView project={activeProject} onNotice={toast} onError={(msg) => setError(msg)} />
@@ -1146,7 +1087,6 @@ function App() {
           }}
           isLocalMode={dataMode === 'local'}
         />
-        <SsoAndNotificationSettings />
       </div>
     ),
     papelera: (
@@ -1244,12 +1184,8 @@ function App() {
     viewer: 'Consulta',
   }
 
-  if (publicPortalToken) {
-    return <PublicNotaryPortal token={publicPortalToken} />
-  }
-
   return <SessionGuard currentRole={activeProject?.role}>
-    {remote && !user ? <AuthScreen /> : (
+    {authStatus === 'unauthenticated' ? <AuthScreen /> : (
       <div className={`app-shell ${density === 'compact' ? 'density-compact' : 'density-comfortable'}`}>
         <aside className="sidebar">
           <Brand />
@@ -1308,7 +1244,7 @@ function App() {
                       }}
                     >
                       <Icon size={18} />
-                      <span className="nav-label">{label}</span>
+                      <span className="nav-label">{navShortLabels[id] ?? label}</span>
                       {isUnavailable && <span className="nav-context-mark" aria-hidden="true">·</span>}
                     </button>
                   )
@@ -1319,10 +1255,6 @@ function App() {
 
           <div className="sidebar-footer">
             <div className="sidebar-footer-top">
-              <div className="sidebar-sync-badge">
-                <span className={dataMode === 'local' ? 'mode-dot local' : 'mode-dot'} />
-                <span>{dataMode === 'local' ? 'Modo local' : 'Supabase conectado'}</span>
-              </div>
               <div className="sidebar-footer-tools">
                 {remote && (
                   <button
@@ -1335,15 +1267,6 @@ function App() {
                     <RefreshCw size={13} className={loading ? 'spin' : ''} />
                   </button>
                 )}
-                <button
-                  type="button"
-                  className="sidebar-tool-icon-btn"
-                  onClick={() => setIsCommandPaletteOpen(true)}
-                  aria-label="Buscar o comandos (Ctrl+K)"
-                  title="Comandos rápidos (Ctrl+K)"
-                >
-                  <Search size={13} />
-                </button>
                 <ThemeToggle />
               </div>
             </div>
@@ -1361,7 +1284,7 @@ function App() {
             <button
               type="button"
               className="sidebar-logout-btn"
-              onClick={() => void signOut()}
+              onClick={() => void handleSignOut()}
               title="Cerrar sesión en Territorium"
             >
               <LogOut size={15} />
@@ -1370,61 +1293,24 @@ function App() {
           </div>
         </aside>
         <main>
+          <header className="workspace-context-bar" aria-label="Contexto de navegación">
+            <div className="workspace-breadcrumbs">
+              <span>Territorium</span>
+              <span className="workspace-breadcrumb-separator" aria-hidden="true">/</span>
+              {activeProject && <><span>{activeProject.name}</span><span className="workspace-breadcrumb-separator" aria-hidden="true">/</span></>}
+              <strong>{screenLabels[screen].title}</strong>
+            </div>
+            <div className="workspace-context-actions">
+              <span className={online ? 'workspace-connection is-online' : 'workspace-connection'}>
+                <span aria-hidden="true" />{online ? 'Conectado' : 'Sin conexión'}
+              </span>
+            </div>
+          </header>
           {!online && <div className="offline-banner"><WifiOff size={16} />Sin conexión. Los cambios remotos están pausados.</div>}
           {error && <div className="error-banner" role="alert"><AlertTriangle size={17} /><span>{error}</span><button onClick={() => setError(null)} aria-label="Cerrar error"><X size={15} /></button></div>}
           <section className="page-content">{loading && !state.projects.length ? <div className="loading-card"><LoaderCircle className="spin" />Cargando información protegida…</div> : content}</section>
         </main>
         {notice && <div className="toast"><CheckCircle2 size={18} />{notice}<button onClick={() => setNotice(null)} aria-label="Cerrar"><X size={16} /></button></div>}
-        <CommandPalette
-          isOpen={isCommandPaletteOpen}
-          onClose={() => setIsCommandPaletteOpen(false)}
-          projects={state.projects}
-          batches={state.batches}
-          records={state.records}
-          onSelectTab={(tabKey) => {
-            const screenMap: Record<string, Screen> = {
-              proyectos: 'expedientes',
-              expedientes: 'expedientes',
-              ingesta: 'carga',
-              carga: 'carga',
-              monitor: 'monitor',
-              revision: 'revision',
-              discrepancias: 'discrepancias',
-              negociacion: 'negociacion',
-              participantes: 'usuarios',
-              usuarios: 'usuarios',
-              configuracion: 'configuracion',
-              exportacion: 'exportar',
-              exportar: 'exportar',
-              notarial: 'portal_notarial',
-              portal_notarial: 'portal_notarial',
-              auditoria: 'trazabilidad',
-              trazabilidad: 'trazabilidad',
-              plantillas: 'formatos_editor',
-              formatos_editor: 'formatos_editor',
-            }
-            const s = screenMap[tabKey] || (tabKey as Screen)
-            setScreen(s)
-          }}
-          onSelectProject={(projId) => setActiveProjectId(projId)}
-        />
-        <ShareNotaryLinkModal
-          open={isNotaryModalOpen}
-          onOpenChange={setIsNotaryModalOpen}
-          projectId={activeProjectId || 'default-project'}
-          propertyName={activeProject?.name}
-        />
-        <NotaryLinksAdminModal
-          open={isNotaryAdminModalOpen}
-          onOpenChange={setIsNotaryAdminModalOpen}
-          links={notaryLinks}
-          onRevokeLink={(tokenId) => {
-            setNotaryLinks((prev) =>
-              prev.map((l) => (l.payload.tokenId === tokenId ? { ...l, isRevoked: true } : l))
-            )
-            toast('Enlace notarial revocado inmediatamente (US-295).')
-          }}
-        />
         <InviteUserModal
           open={isInviteUserModalOpen}
           onOpenChange={setIsInviteUserModalOpen}

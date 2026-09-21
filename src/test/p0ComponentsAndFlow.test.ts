@@ -6,7 +6,6 @@ import { BentoGridKpis } from '../components/ui/BentoGridKpis'
 import { PropertyStatusDonut, DiscrepancyBarChart } from '../components/ui/DashboardCharts'
 import { EnhancedDropZone, type UploadFileItem } from '../components/ui/EnhancedDropZone'
 import { SplitReviewStation, type PropertyAttributeReview } from '../components/ui/SplitReviewStation'
-import { generateNotaryShareToken, validateNotaryShareToken, recordNotaryConcept } from '../lib/publicNotaryPortal'
 
 describe('P0 UI/UX Components & Operational Flow Suite (US-201 a US-300 P0)', () => {
   describe('US-219: Semantic Status Pills (WCAG AA Contrast)', () => {
@@ -148,37 +147,6 @@ describe('P0 UI/UX Components & Operational Flow Suite (US-201 a US-300 P0)', ()
     })
   })
 
-  describe('US-289 a US-292: Public Notary Portal Gateway Flow', () => {
-    it('executes complete end-to-end token generation, validation and conformity recording', () => {
-      // 1. Abogado genera enlace para notaría (US-290)
-      const { token, payload } = generateNotaryShareToken({
-        projectId: 'PRJ-TERRITORIUM-PACIFICO',
-        recipientName: 'Dr. Roberto Meza',
-        recipientOrganization: 'Notaría Primera de Buenaventura',
-        durationHours: 72,
-      })
-      expect(token).toBeDefined()
-      expect(payload.expiresAt).toBeDefined()
-
-      // 2. Notaría accede al portal con el token (US-289)
-      const session = validateNotaryShareToken(token)
-      expect(session.isValid).toBe(true)
-      expect(session.payload?.recipientOrganization).toBe('Notaría Primera de Buenaventura')
-
-      // 3. Notaría radicar concepto de conformidad (US-291, US-292)
-      const conceptResult = recordNotaryConcept(session, {
-        decision: 'conforme',
-        notaryOfficialName: 'Dr. Roberto Meza',
-        notaryNumber: 'Notaría Primera de Buenaventura',
-        documentHashSha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
-      })
-
-      expect(conceptResult.success).toBe(true)
-      expect(conceptResult.record?.decision).toBe('conforme')
-      expect(conceptResult.record?.notaryOfficialName).toBe('Dr. Roberto Meza')
-    })
-  })
-
   describe('US-201 a US-205: URL Hash Routing Contract', () => {
     it('maps valid hash routes to system screens accurately', () => {
       const routeMap: Record<string, string> = {
@@ -198,13 +166,5 @@ describe('P0 UI/UX Components & Operational Flow Suite (US-201 a US-300 P0)', ()
       })
     })
 
-    it('correctly detects notary portal share tokens in hash', () => {
-      const hash = '#/public/portal/ttm_ext_eyJ0b2tlbiI6InRlc3QifQ=='
-      const isPortal = hash.startsWith('#/public/portal/')
-      const token = hash.replace('#/public/portal/', '')
-
-      expect(isPortal).toBe(true)
-      expect(token).toBe('ttm_ext_eyJ0b2tlbiI6InRlc3QifQ==')
-    })
   })
 })

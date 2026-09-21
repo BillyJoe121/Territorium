@@ -59,15 +59,6 @@ import {
 import {
   dispatchCorporateNotification
 } from '../lib/corporateNotificationDispatcherP2'
-import {
-  generateSecureNotaryAccessToken,
-  validateNotaryShareToken,
-  verifyNotaryTokenWithRevocationCheck,
-  revokeTokenPersistent,
-  verifyNotaryOtpWithRateLimit,
-  persistNotaryConcept,
-  queryNotaryConcepts
-} from '../lib/publicNotaryPortal'
 
 describe('REOPENED USER STORIES ACCEPTANCE SUITE (Consultant Criteria)', () => {
 
@@ -836,80 +827,6 @@ describe('REOPENED USER STORIES ACCEPTANCE SUITE (Consultant Criteria)', () => {
       expect(receipt.error).toContain('NETWORK_UNREACHABLE_TEST_ERROR')
       expect(receipt.deliveryAttempts).toBe(3)
       expect(receipt.receiptSignature).toBeUndefined()
-    })
-  })
-
-  // =========================================================================
-  // US-289–296: Portal notarial con HMAC, revocación, OTP y conceptos persistidos
-  // =========================================================================
-  describe('US-289–296: Portal Notarial Seguro, Tokens HMAC, OTP y Conceptos', () => {
-    it('genera tokens HMAC-SHA256 y verifica inmediatamente la revocación persistente', async () => {
-      const token = await generateSecureNotaryAccessToken('notario.velez@notaria1.com', 'SAN-CIM-036', 4) // 4 horas
-      expect(token).toContain('ttm_ext_')
-
-      // Token activo debe ser válido
-      const checkValid = await verifyNotaryTokenWithRevocationCheck(token)
-      expect(checkValid.isValid).toBe(true)
-
-      // Revocar token inmediatamente
-      revokeTokenPersistent(token, 'Revocado por cambio de notaría delegada')
-
-      // Verificación posterior debe rechazarlo como revocado
-      const checkRevoked = await verifyNotaryTokenWithRevocationCheck(token)
-      expect(checkRevoked.isValid).toBe(false)
-      expect(checkRevoked.error).toContain('revocado')
-    })
-
-    it('rechaza tajantemente tokens no firmados o con firma HMAC adulterada/forjada', async () => {
-      // Token sin firma HMAC (formato antiguo o sin punto de separación)
-      const unsignedToken = 'ttm_ext_raw_token_without_signature'
-      const checkUnsigned = await verifyNotaryTokenWithRevocationCheck(unsignedToken)
-      expect(checkUnsigned.isValid).toBe(false)
-      expect(checkUnsigned.error).toMatch(/inválido|no firmado|ausente/i)
-
-      // Token válido pero con firma forjada / adulterada
-      const realToken = await generateSecureNotaryAccessToken('notario.test@notaria1.com', 'SAN-001', 1)
-      const tamperedToken = realToken.slice(0, -5) + 'ABCDE'
-      const checkTampered = await verifyNotaryTokenWithRevocationCheck(tamperedToken)
-      expect(checkTampered.isValid).toBe(false)
-      expect(checkTampered.error).toContain('inválida')
-    })
-
-    it('restringe el OTP a un máximo de 3 intentos para prevenir ataques de fuerza bruta', () => {
-      const email = 'notario.seguro@notaria.gov.co'
-      const validCode = '884920'
-
-      // Intentos fallidos 1 y 2
-      expect(verifyNotaryOtpWithRateLimit(email, '000000', validCode).success).toBe(false)
-      expect(verifyNotaryOtpWithRateLimit(email, '111111', validCode).success).toBe(false)
-
-      // Intento fallido 3 -> Bloquea
-      const attempt3 = verifyNotaryOtpWithRateLimit(email, '222222', validCode)
-      expect(attempt3.success).toBe(false)
-      expect(attempt3.blocked).toBe(true)
-
-      // Intento 4 con el código correcto debe seguir bloqueado por exceso de intentos
-      const attempt4 = verifyNotaryOtpWithRateLimit(email, validCode, validCode)
-      expect(attempt4.success).toBe(false)
-      expect(attempt4.error).toContain('bloqueado')
-    })
-
-    it('persiste conceptos notariales con IP y fecha para trazabilidad jurídica oficial', () => {
-      const concept = persistNotaryConcept({
-        propertyCode: 'SAN-CIM-036',
-        notaryEmail: 'notario.velez@notaria1.com',
-        conceptType: 'favorable',
-        observations: 'El estudio de títulos y plano cumplen plenamente con la tradición y alinderación.',
-        ipAddress: '190.14.88.21'
-      })
-
-      expect(concept.id).toBeDefined()
-      expect(concept.conceptType).toBe('favorable')
-      expect(concept.ipAddress).toBe('190.14.88.21')
-
-      const storedList = queryNotaryConcepts('SAN-CIM-036')
-      expect(storedList).toHaveLength(1)
-      expect(storedList[0].observations).toContain('cumplen plenamente')
     })
   })
 

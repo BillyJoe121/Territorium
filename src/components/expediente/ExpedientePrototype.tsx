@@ -603,9 +603,10 @@ export function ExpedientePrototype({ project }: { project: Project }) {
   return (
     <div className="expediente-prototype">
       <PageHeader
+        className="expediente-header-compact"
         eyebrow="FICHA DE EXPEDIENTE · UN PREDIO"
-        title={project.name}
-        description={`Gestión predial de ${project.municipality}, ${project.department}. El flujo de extracción y generación se concentra en esta ficha.`}
+        title={undefined}
+        description={undefined}
         meta={<div className="expediente-header-meta"><span><MapPin size={14} />{project.municipality}, {project.department}</span><span>Prototipo funcional</span></div>}
         actions={<button type="button" className="expediente-header-reset" onClick={resetDemo}><RotateCcw size={15} />Reiniciar demo</button>}
       />

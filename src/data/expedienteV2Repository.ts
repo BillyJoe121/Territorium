@@ -43,12 +43,36 @@ export interface ExpedienteResultVersionSnapshot {
   scope: 'group' | 'consolidated'
   groupId: string | null
   versionNumber: number
+  editRevision: number
   sourceInputVersion?: number | null
   status: 'draft' | 'approved' | 'superseded' | 'stale'
   payload: Record<string, unknown>
   changeSummary: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface ExpedienteDocumentVersionSnapshot {
+  id: string
+  projectId: string
+  sourceConsolidationVersionId: string
+  parentDocumentVersionId: string | null
+  versionNumber: number
+  content: Record<string, unknown>
+  changeSummary: string | null
+  createdAt: string
+  finalizedAt: string | null
+}
+
+export interface ExpedienteDocumentAiRevisionSnapshot {
+  id: string
+  projectId: string
+  sourceDocumentVersionId: string
+  userComment: string
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'accepted' | 'discarded'
+  proposedContent: Record<string, unknown> | null
+  errorCode: string | null
+  createdAt: string
 }
 
 export interface QueueGroupAnalysisInput {
@@ -77,12 +101,19 @@ export interface ExpedienteV2Repository {
     payload: Record<string, unknown>,
     changeSummary?: string,
     expectedVersionNumber?: number,
-  ): Promise<void>
+  ): Promise<number>
   approveResult(resultVersionId: string, note?: string): Promise<string>
   getResultVersion(groupId: string, versionNumber?: number): Promise<ExpedienteResultVersionSnapshot | null>
   getConsolidatedResultVersion(projectId: string, versionNumber?: number): Promise<ExpedienteResultVersionSnapshot | null>
   reprocessGroup(groupId: string): Promise<string>
   consolidate(projectId: string, userId?: string): Promise<string>
+  getCurrentDocument(projectId: string): Promise<ExpedienteDocumentVersionSnapshot | null>
+  saveDocument(projectId: string, content: Record<string, unknown>, expectedCurrentDocumentId: string | null, changeSummary?: string): Promise<ExpedienteDocumentVersionSnapshot>
+  queueDocumentAiRevision(documentVersionId: string, comment: string): Promise<string>
+  getDocumentAiRevision(revisionId: string): Promise<ExpedienteDocumentAiRevisionSnapshot | null>
+  acceptDocumentAiRevision(revisionId: string): Promise<ExpedienteDocumentVersionSnapshot>
+  discardDocumentAiRevision(revisionId: string): Promise<void>
+  finalizeDocument(documentVersionId: string): Promise<void>
 }
 
 export type ExpedienteV2RepositoryMode = 'demo' | 'supabase'
@@ -113,7 +144,7 @@ export class SupabaseExpedienteV2Repository implements ExpedienteV2Repository {
       client.from('expediente_property_identities').select('id,project_id,identity_version,folio,cadastral_id,property_name,municipality,department,village').eq('project_id', projectId).single(),
       client.from('expediente_document_groups').select('id,project_id,group_key,status,input_version,approved_result_version_id,current_negotiation_file_id').eq('project_id', projectId),
       client.from('expediente_consolidations').select('status,approved_result_version_id').eq('project_id', projectId).single(),
-      client.from('expediente_final_document_states').select('status').eq('project_id', projectId).single(),
+      client.from('expediente_final_document_states').select('status,current_document_version_id').eq('project_id', projectId).single(),
     ])
 
     const firstError = [identityResult, groupsResult, consolidationResult, documentResult].find((result) => result.error)?.error
@@ -174,39 +205,23 @@ export class SupabaseExpedienteV2Repository implements ExpedienteV2Repository {
     payload: Record<string, unknown>,
     changeSummary?: string,
     expectedVersionNumber?: number,
-  ): Promise<void> {
+  ): Promise<number> {
     const client = requireSupabase()
-
-    // Optimistic concurrency check (HU-V2-043)
-    if (expectedVersionNumber !== undefined) {
-      const { data: current, error: fetchErr } = await client
-        .from('expediente_result_versions')
-        .select('version_number, status')
-        .eq('id', resultVersionId)
-        .single()
-
-      if (fetchErr) throw new Error(fetchErr.message)
-      if (current && current.version_number !== expectedVersionNumber) {
-        throw new EditConflictError(
-          `Conflicto de concurrencia: la versión esperada era ${expectedVersionNumber}, pero el servidor tiene la versión ${current.version_number}.`,
-          current.version_number,
-        )
+    if (expectedVersionNumber === undefined) throw new Error('Falta el token de edición para guardar el borrador.')
+    const { data, error } = await client.rpc('save_expediente_result_draft', {
+      p_result_version_id: resultVersionId,
+      p_payload: payload,
+      p_change_summary: changeSummary ?? null,
+      p_expected_edit_revision: expectedVersionNumber,
+    })
+    if (error) {
+      if (error.code === '40001' || error.message.includes('EDIT_CONFLICT')) {
+        const match = error.message.match(/(\d+)/)
+        throw new EditConflictError('Otro revisor guardó cambios antes que tú. Recarga el resultado antes de continuar.', Number(match?.[1] ?? 0))
       }
-      if (current && current.status !== 'draft') {
-        throw new Error('Solo puede modificarse una versión en estado borrador (draft).')
-      }
+      throw new Error(error.message)
     }
-
-    const { error } = await client
-      .from('expediente_result_versions')
-      .update({
-        payload,
-        change_summary: changeSummary ?? null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', resultVersionId)
-
-    if (error) throw new Error(error.message)
+    return Number(data)
   }
 
   async approveResult(resultVersionId: string, note?: string): Promise<string> {
@@ -242,6 +257,7 @@ export class SupabaseExpedienteV2Repository implements ExpedienteV2Repository {
       scope: data.scope,
       groupId: data.group_id,
       versionNumber: data.version_number,
+      editRevision: data.edit_revision ?? 1,
       sourceInputVersion: data.source_input_version,
       status: data.status,
       payload: data.payload ?? {},
@@ -275,6 +291,7 @@ export class SupabaseExpedienteV2Repository implements ExpedienteV2Repository {
       scope: data.scope,
       groupId: data.group_id,
       versionNumber: data.version_number,
+      editRevision: data.edit_revision ?? 1,
       status: data.status,
       payload: data.payload ?? {},
       changeSummary: data.change_summary,
@@ -369,11 +386,104 @@ export class SupabaseExpedienteV2Repository implements ExpedienteV2Repository {
 
     return created.id
   }
+
+  async getCurrentDocument(projectId: string): Promise<ExpedienteDocumentVersionSnapshot | null> {
+    const client = requireSupabase()
+    const { data, error } = await client
+      .from('expediente_document_versions')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('is_current', true)
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    return data ? mapDocumentVersion(data) : null
+  }
+
+  async saveDocument(projectId: string, content: Record<string, unknown>, expectedCurrentDocumentId: string | null, changeSummary?: string): Promise<ExpedienteDocumentVersionSnapshot> {
+    const client = requireSupabase()
+    const { data: id, error } = await client.rpc('save_expediente_document_version', {
+      p_project_id: projectId,
+      p_content: content,
+      p_expected_current_document_id: expectedCurrentDocumentId,
+      p_change_summary: changeSummary ?? null,
+    })
+    if (error) throw new Error(error.code === '40001' ? 'El documento cambió en otro dispositivo. Recarga antes de guardar.' : error.message)
+    const { data, error: fetchError } = await client.from('expediente_document_versions').select('*').eq('id', id).single()
+    if (fetchError) throw new Error(fetchError.message)
+    return mapDocumentVersion(data)
+  }
+
+  async queueDocumentAiRevision(documentVersionId: string, comment: string): Promise<string> {
+    const client = requireSupabase()
+    const { data, error } = await client.rpc('queue_expediente_document_ai_revision', {
+      p_document_version_id: documentVersionId,
+      p_user_comment: comment,
+    })
+    if (error) throw new Error(error.message)
+    return String(data)
+  }
+
+  async getDocumentAiRevision(revisionId: string): Promise<ExpedienteDocumentAiRevisionSnapshot | null> {
+    const client = requireSupabase()
+    const { data, error } = await client.from('expediente_document_ai_revisions').select('*').eq('id', revisionId).maybeSingle()
+    if (error) throw new Error(error.message)
+    return data ? mapDocumentAiRevision(data) : null
+  }
+
+  async acceptDocumentAiRevision(revisionId: string): Promise<ExpedienteDocumentVersionSnapshot> {
+    const client = requireSupabase()
+    const { data: id, error } = await client.rpc('accept_expediente_document_ai_revision', { p_revision_id: revisionId })
+    if (error) throw new Error(error.code === '40001' ? 'El documento cambió antes de aceptar la propuesta. Recarga y revisa de nuevo.' : error.message)
+    const { data, error: fetchError } = await client.from('expediente_document_versions').select('*').eq('id', id).single()
+    if (fetchError) throw new Error(fetchError.message)
+    return mapDocumentVersion(data)
+  }
+
+  async discardDocumentAiRevision(revisionId: string): Promise<void> {
+    const client = requireSupabase()
+    const { error } = await client.rpc('discard_expediente_document_ai_revision', { p_revision_id: revisionId })
+    if (error) throw new Error(error.message)
+  }
+
+  async finalizeDocument(documentVersionId: string): Promise<void> {
+    const client = requireSupabase()
+    const { error } = await client.rpc('finalize_expediente_document', { p_document_version_id: documentVersionId })
+    if (error) throw new Error(error.message)
+  }
+}
+
+function mapDocumentVersion(data: any): ExpedienteDocumentVersionSnapshot {
+  return {
+    id: data.id,
+    projectId: data.project_id,
+    sourceConsolidationVersionId: data.source_consolidation_version_id,
+    parentDocumentVersionId: data.parent_document_version_id ?? null,
+    versionNumber: data.version_number,
+    content: data.content ?? {},
+    changeSummary: data.change_summary ?? null,
+    createdAt: data.created_at,
+    finalizedAt: data.finalized_at ?? null,
+  }
+}
+
+function mapDocumentAiRevision(data: any): ExpedienteDocumentAiRevisionSnapshot {
+  return {
+    id: data.id,
+    projectId: data.project_id,
+    sourceDocumentVersionId: data.source_document_version_id,
+    userComment: data.user_comment,
+    status: data.status,
+    proposedContent: data.proposed_content ?? null,
+    errorCode: data.error_code ?? null,
+    createdAt: data.created_at,
+  }
 }
 
 /** Repositorio determinista para pruebas de interfaz y modo demo aislado. */
 export class DemoExpedienteV2Repository implements ExpedienteV2Repository {
   private readonly results: Map<string, ExpedienteResultVersionSnapshot>
+  private readonly documents = new Map<string, ExpedienteDocumentVersionSnapshot>()
+  private readonly aiRevisions = new Map<string, ExpedienteDocumentAiRevisionSnapshot>()
 
   constructor(
     private readonly snapshots: Map<string, ExpedienteWorkflowSnapshot>,
@@ -398,12 +508,12 @@ export class DemoExpedienteV2Repository implements ExpedienteV2Repository {
     payload: Record<string, unknown>,
     changeSummary?: string,
     expectedVersionNumber?: number,
-  ): Promise<void> {
+  ): Promise<number> {
     const existing = this.results.get(resultVersionId)
-    if (existing && expectedVersionNumber !== undefined && existing.versionNumber !== expectedVersionNumber) {
+    if (existing && expectedVersionNumber !== undefined && existing.editRevision !== expectedVersionNumber) {
       throw new EditConflictError(
-        `Conflicto en demo: versión esperada ${expectedVersionNumber}, servidor tiene ${existing.versionNumber}.`,
-        existing.versionNumber,
+        `Conflicto en demo: revisión esperada ${expectedVersionNumber}, servidor tiene ${existing.editRevision}.`,
+        existing.editRevision,
       )
     }
 
@@ -411,6 +521,8 @@ export class DemoExpedienteV2Repository implements ExpedienteV2Repository {
       existing.payload = { ...payload }
       existing.changeSummary = changeSummary ?? null
       existing.updatedAt = new Date().toISOString()
+      existing.editRevision += 1
+      return existing.editRevision
     } else {
       this.results.set(resultVersionId, {
         id: resultVersionId,
@@ -418,12 +530,14 @@ export class DemoExpedienteV2Repository implements ExpedienteV2Repository {
         scope: 'group',
         groupId: 'titles-1',
         versionNumber: expectedVersionNumber ?? 1,
+        editRevision: 2,
         status: 'draft',
         payload,
         changeSummary: changeSummary ?? null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })
+      return 2
     }
   }
 
@@ -461,6 +575,7 @@ export class DemoExpedienteV2Repository implements ExpedienteV2Repository {
       scope: 'consolidated',
       groupId: null,
       versionNumber: 1,
+      editRevision: 1,
       status: 'draft',
       payload: { consolidated: true },
       changeSummary: 'Consolidación demo v1',
@@ -468,6 +583,70 @@ export class DemoExpedienteV2Repository implements ExpedienteV2Repository {
       updatedAt: new Date().toISOString(),
     })
     return consId
+  }
+
+  async getCurrentDocument(projectId: string): Promise<ExpedienteDocumentVersionSnapshot | null> {
+    return structuredClone([...this.documents.values()].find((document) => document.projectId === projectId && !document.finalizedAt) ?? null)
+  }
+
+  async saveDocument(projectId: string, content: Record<string, unknown>, expectedCurrentDocumentId: string | null, changeSummary?: string): Promise<ExpedienteDocumentVersionSnapshot> {
+    const current = await this.getCurrentDocument(projectId)
+    if ((current?.id ?? null) !== expectedCurrentDocumentId) throw new EditConflictError('El documento demo cambió antes de guardar.', current?.versionNumber ?? 0)
+    const version: ExpedienteDocumentVersionSnapshot = {
+      id: `demo-document-${crypto.randomUUID()}`,
+      projectId,
+      sourceConsolidationVersionId: 'demo-consolidated-1',
+      parentDocumentVersionId: current?.id ?? null,
+      versionNumber: (current?.versionNumber ?? 0) + 1,
+      content: structuredClone(content),
+      changeSummary: changeSummary ?? null,
+      createdAt: new Date().toISOString(),
+      finalizedAt: null,
+    }
+    if (current) this.documents.delete(current.id)
+    this.documents.set(version.id, version)
+    return structuredClone(version)
+  }
+
+  async queueDocumentAiRevision(documentVersionId: string, comment: string): Promise<string> {
+    const source = [...this.documents.values()].find((document) => document.id === documentVersionId)
+    if (!source) throw new Error('Documento demo inexistente.')
+    const id = `demo-ai-${crypto.randomUUID()}`
+    this.aiRevisions.set(id, {
+      id,
+      projectId: source.projectId,
+      sourceDocumentVersionId: source.id,
+      userComment: comment,
+      status: 'queued',
+      proposedContent: null,
+      errorCode: null,
+      createdAt: new Date().toISOString(),
+    })
+    return id
+  }
+
+  async getDocumentAiRevision(revisionId: string): Promise<ExpedienteDocumentAiRevisionSnapshot | null> {
+    const revision = this.aiRevisions.get(revisionId)
+    return revision ? structuredClone(revision) : null
+  }
+
+  async acceptDocumentAiRevision(revisionId: string): Promise<ExpedienteDocumentVersionSnapshot> {
+    const revision = this.aiRevisions.get(revisionId)
+    if (!revision?.proposedContent || revision.status !== 'completed') throw new Error('La propuesta demo no está lista.')
+    const document = await this.saveDocument(revision.projectId, revision.proposedContent, revision.sourceDocumentVersionId, 'Propuesta IA aceptada')
+    revision.status = 'accepted'
+    return document
+  }
+
+  async discardDocumentAiRevision(revisionId: string): Promise<void> {
+    const revision = this.aiRevisions.get(revisionId)
+    if (revision) revision.status = 'discarded'
+  }
+
+  async finalizeDocument(documentVersionId: string): Promise<void> {
+    const document = this.documents.get(documentVersionId)
+    if (!document) throw new Error('Documento demo inexistente.')
+    document.finalizedAt = new Date().toISOString()
   }
 }
 

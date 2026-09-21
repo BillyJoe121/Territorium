@@ -387,19 +387,12 @@ kbd { color: var(--ui-ink-soft) !important; background: var(--ui-surface-muted) 
 .project-overview-meta { display: inline-flex; align-items: center; gap: 8px; color: var(--ui-ink-soft); font-size: 12px; }
 .project-required { max-width: 520px; margin: 8vh auto; }
 
-/* Authentication and public notary portal retain their legal content while matching the new system. */
+/* Authentication retains its legal content while matching the new system. */
 .auth-page { background: var(--ui-canvas); }
 .auth-brand-panel { background: #183a2b; }
 .auth-brand-panel:after { display: none; }
 .auth-form-panel { background: var(--ui-canvas); }
 .auth-card { max-width: 460px; }
-.public-notary-portal { color: var(--ui-ink); background: var(--ui-canvas); }
-.notary-portal-header { background: #183a2b; border-bottom: 1px solid rgb(255 255 255 / 14%); }
-.recipient-pill { color: #b8c8be; }
-.portal-pane-header { border-color: var(--ui-line); }
-.minute-text-box, .boundaries-box, .receipt-box { color: var(--ui-ink); background: var(--ui-surface-muted); border-color: var(--ui-line); border-radius: var(--ui-radius-sm); }
-.decision-card, .decision-radio-card { border-color: var(--ui-line-strong); border-radius: var(--ui-radius-sm); }
-.decision-card.selected, .decision-radio-card.selected { border-color: var(--ui-accent); background: var(--ui-accent-soft); }
 
 /* Existing utility-heavy components inherit the same light surface without a Tailwind migration. */
 .app-shell .bg-slate-900, .app-shell .bg-slate-900\/90, .app-shell .bg-slate-950, .app-shell .bg-slate-950\/60,
@@ -439,7 +432,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .topbar-actions { width: 100%; flex-wrap: wrap; }
   .page-content { padding: 22px 16px 42px; }
   .card { padding: 17px; }
-  .projects-layout, .two-column, .review-layout, .notary-portal-grid { grid-template-columns: 1fr; }
+  .projects-layout, .two-column, .review-layout { grid-template-columns: 1fr; }
   .dashboard-page .hero { min-height: 210px; padding: 24px; }
   .dashboard-hero-meta { text-align: left; }
 }

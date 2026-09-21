@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { CheckCircle2, KeyRound, LoaderCircle, Mail, RefreshCw, Shield, ShieldAlert, ShieldCheck, UserCheck, UserMinus, UserPlus, Users } from 'lucide-react'
 import type { Project, ProjectMember, ProjectRole } from '../types'
-import { addProjectMember, inviteOrRecoverUser, listProjectMembers, removeProjectMember, updateMemberRole } from '../data/platformRepository'
+import { inviteOrRecoverUser, listProjectMembers, removeProjectMember, updateMemberRole } from '../data/platformRepository'
 import { dataMode } from '../lib/supabase'
 
 interface UsersManagementViewProps {
@@ -257,14 +257,6 @@ export function UsersManagementView({ project, onNotice, onError }: UsersManagem
 
   return (
     <div className="users-management-view">
-      <div className="intro">
-        <p className="eyebrow">{project.name.toUpperCase()} · SEGURIDAD Y ACCESO</p>
-        <h2>Participantes y roles de mínimo privilegio</h2>
-        <p>
-          Administra quién puede operar, revisar o consultar este expediente. Aplica el principio de mínimo privilegio para proteger los datos jurídicos y la trazabilidad de decisiones.
-        </p>
-      </div>
-
       <div className="users-content-wrap">
         <section className="card members-card">
           <div className="section-title">

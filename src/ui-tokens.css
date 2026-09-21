@@ -7,18 +7,18 @@
   /* =========================================================================
      1. Superficies y Fondos
      ========================================================================= */
-  --color-bg-app: #F7F8FA;
+  --color-bg-app: #FFFFFF;
   --color-surface: #FFFFFF;
-  --color-surface-subtle: #F1F3F6;
-  --color-surface-hover: #EDF1F6;
-  --color-surface-active: #E5EAEF;
+  --color-surface-subtle: #F7F7F8;
+  --color-surface-hover: #F2F3F5;
+  --color-surface-active: #F0EDFF;
 
   /* =========================================================================
      2. Textos y Tipografía
      ========================================================================= */
-  --color-text-primary: #182230;
-  --color-text-secondary: #526071;
-  --color-text-muted: #667085;
+  --color-text-primary: #20242D;
+  --color-text-secondary: #737B89;
+  --color-text-muted: #9299A5;
   --color-text-inverse: #FFFFFF;
 
   --font-sans: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -27,18 +27,18 @@
   /* =========================================================================
      3. Bordes y Delimitadores
      ========================================================================= */
-  --color-border-subtle: #E4E7EC;
-  --color-border-control: #98A2B3;
-  --color-border-strong: #667085;
+  --color-border-subtle: #E7E8EC;
+  --color-border-control: #D7DAE0;
+  --color-border-strong: #AEB4BF;
 
   /* =========================================================================
-     4. Acento y Acción Principal (Azul Contenido)
+     4. Acento y Acción Principal (Índigo de workspace)
      ========================================================================= */
-  --color-accent: #2459D3;
-  --color-accent-hover: #1E48AD;
-  --color-accent-active: #173788;
-  --color-accent-subtle: #EDF3FF;
-  --color-accent-border: #BCD0FB;
+  --color-accent: #6045E8;
+  --color-accent-hover: #4F35D3;
+  --color-accent-active: #4026BA;
+  --color-accent-subtle: #F0EDFF;
+  --color-accent-border: #D6CEFF;
 
   /* =========================================================================
      5. Semántica de Estados Operativos (WCAG AA)
@@ -98,7 +98,7 @@
   --transition-drawer: 220ms cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Layout dimensions */
-  --sidebar-width-expanded: 248px;
+  --sidebar-width-expanded: 72px;
   --sidebar-width-collapsed: 72px;
   --topbar-height: 64px;
 }

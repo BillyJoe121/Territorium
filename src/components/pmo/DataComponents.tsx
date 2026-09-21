@@ -2,12 +2,27 @@ import type { CSSProperties, ReactNode } from 'react'
 import { CheckCircle2, Clock3, XCircle } from 'lucide-react'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 
-export function ChartPanel({ title, summary, children }: { title: string; summary?: string; children: ReactNode }) {
+export function ChartPanel({
+  title,
+  summary,
+  eyebrow,
+  className,
+  children,
+}: {
+  title: string
+  summary?: string
+  eyebrow?: string
+  className?: string
+  children: ReactNode
+}) {
   return (
-    <section className="chart-card">
+    <section className={`chart-card${className ? ` ${className}` : ''}`}>
       <div className="chart-header">
-        <h4>{title}</h4>
-        {summary && <span className="badge badge-neutral">{summary}</span>}
+        <div className="chart-heading">
+          {eyebrow && <p className="chart-eyebrow">{eyebrow}</p>}
+          <h4>{title}</h4>
+        </div>
+        {summary && <span className="chart-summary">{summary}</span>}
       </div>
       <div className="chart-container">{children}</div>
     </section>

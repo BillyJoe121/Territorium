@@ -59,21 +59,21 @@ export const InviteUserModal: React.FC<InviteUserModalProps> = ({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <PortalWrapper>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm transition-opacity" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md p-5 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/90 focus:outline-none">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <Dialog.Overlay className="invite-user-overlay fixed inset-0 z-50 bg-black/70 backdrop-blur-sm transition-opacity" />
+        <Dialog.Content className="invite-user-dialog fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md p-5 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/90 focus:outline-none">
+          <div className="invite-user-header flex items-center justify-between pb-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
-              <UserPlus className="w-5 h-5 text-emerald-400" />
-              <Dialog.Title className="text-sm font-semibold text-slate-100">
+              <UserPlus className="invite-user-title-icon w-5 h-5 text-emerald-400" />
+              <Dialog.Title className="invite-user-title text-sm font-semibold text-slate-100">
                 Invitar Miembro al Proyecto
               </Dialog.Title>
             </div>
-            <Dialog.Close className="p-1 text-slate-400 hover:text-slate-200 rounded-lg">
+            <Dialog.Close className="invite-user-close p-1 text-slate-400 hover:text-slate-200 rounded-lg">
               <X className="w-4 h-4" />
             </Dialog.Close>
           </div>
 
-          <Dialog.Description className="text-xs text-slate-400 mt-2">
+          <Dialog.Description className="invite-user-description text-xs text-slate-400 mt-2">
             Asigne permisos institucionales para el proyecto {projectName ? <strong>{projectName}</strong> : 'seleccionado'}.
           </Dialog.Description>
 
@@ -86,7 +86,7 @@ export const InviteUserModal: React.FC<InviteUserModalProps> = ({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Dra. Carolina Martínez"
-                className="w-full px-3 py-2 text-xs bg-slate-800/80 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                className="invite-user-input w-full px-3 py-2 text-xs bg-slate-800/80 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
               />
             </div>
 
@@ -99,7 +99,7 @@ export const InviteUserModal: React.FC<InviteUserModalProps> = ({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="carolina.martinez@abogados.com"
-                  className={`w-full pl-8 pr-8 py-2 text-xs bg-slate-800/80 border rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none ${
+                  className={`invite-user-input w-full pl-8 pr-8 py-2 text-xs bg-slate-800/80 border rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none ${
                     email.length > 0 && !isValidEmail(email)
                       ? 'border-rose-500 focus:border-rose-400'
                       : 'border-slate-700 focus:border-emerald-500'
@@ -128,7 +128,7 @@ export const InviteUserModal: React.FC<InviteUserModalProps> = ({
                   <div
                     key={r.role}
                     onClick={() => setRole(r.role)}
-                    className={`flex items-start gap-2.5 p-2 rounded-lg border transition-colors cursor-pointer select-none ${
+                    className={`invite-user-role flex items-start gap-2.5 p-2 rounded-lg border transition-colors cursor-pointer select-none ${
                       role === r.role
                         ? 'bg-slate-800 border-emerald-500/50 text-slate-100'
                         : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:bg-slate-800/40'
@@ -158,14 +158,14 @@ export const InviteUserModal: React.FC<InviteUserModalProps> = ({
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
-                className="px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 rounded-lg transition-colors"
+                className="invite-user-cancel px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 rounded-lg transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={!isFormValid || isSubmitting}
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-slate-950 bg-emerald-400 hover:bg-emerald-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-emerald-950"
+                className="invite-user-submit inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-slate-950 bg-emerald-400 hover:bg-emerald-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-emerald-950"
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 <span>{isSubmitting ? 'Enviando...' : 'Enviar Invitación'}</span>

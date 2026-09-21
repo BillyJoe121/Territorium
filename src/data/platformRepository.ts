@@ -2,6 +2,7 @@ import * as tus from 'tus-js-client'
 import { config } from '../lib/config'
 import { requireSupabase } from '../lib/supabase'
 import { DEFAULT_EXTRACTOR_CONFIGS, DEFAULT_PROMPT_VERSIONS } from '../lib/extractorConfig'
+import { normalizeRole, type CanonicalRole } from '../types'
 import type {
   AiExecutionLog,
   AuditEvent,
@@ -635,82 +636,25 @@ export async function listProjectMembers(projectId: string): Promise<ProjectMemb
   }))
 }
 
-export async function addProjectMember(projectId: string, userId: string, role: ProjectRole): Promise<void> {
-  const client = requireSupabase()
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) throw new Error('La sesión expiró.')
-
-  const { error } = await client
-    .from('project_members')
-    .insert({ project_id: projectId, user_id: userId, role })
-
-  if (error) throw new Error(error.message)
-
-  await client.from('audit_events').insert({
-    project_id: projectId,
-    actor_id: user.id,
-    action: 'member.added',
-    entity_type: 'project_member',
-    entity_id: projectId,
-    metadata: { userId, role, detail: `Usuario añadido con rol de mínimo privilegio: ${role}` }
-  })
-}
-
 export async function updateMemberRole(projectId: string, userId: string, role: ProjectRole): Promise<void> {
-  const client = requireSupabase()
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) throw new Error('La sesión expiró.')
-
-  const { error } = await client
-    .from('project_members')
-    .update({ role })
-    .eq('project_id', projectId)
-    .eq('user_id', userId)
-
-  if (error) throw new Error(error.message)
-
-  await client.from('audit_events').insert({
-    project_id: projectId,
-    actor_id: user.id,
-    action: 'member.role_updated',
-    entity_type: 'project_member',
-    entity_id: projectId,
-    metadata: { userId, role, detail: `Rol actualizado a ${role}` }
-  })
+  await inviteOrRecoverUser({ action: 'update_role', projectId, userId, role })
 }
 
 export async function removeProjectMember(projectId: string, userId: string): Promise<void> {
-  const client = requireSupabase()
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) throw new Error('La sesión expiró.')
-
-  const { error } = await client
-    .from('project_members')
-    .delete()
-    .eq('project_id', projectId)
-    .eq('user_id', userId)
-
-  if (error) throw new Error(error.message)
-
-  await client.from('audit_events').insert({
-    project_id: projectId,
-    actor_id: user.id,
-    action: 'member.removed',
-    entity_type: 'project_member',
-    entity_id: projectId,
-    metadata: { userId, detail: 'Acceso revocado del expediente' }
-  })
+  await inviteOrRecoverUser({ action: 'deactivate', projectId, userId })
 }
 
 export async function inviteOrRecoverUser(input: {
-  action: 'invite' | 'recover' | 'deactivate'
-  email: string
+  action: 'invite' | 'recover' | 'deactivate' | 'update_role'
+  email?: string
   role?: ProjectRole
-  projectId?: string
+  projectId: string
+  userId?: string
 }): Promise<{ success: boolean; message: string }> {
   const client = requireSupabase()
+  const role: CanonicalRole | undefined = input.role ? normalizeRole(input.role) : undefined
   const { data, error } = await client.functions.invoke('manage-users', {
-    body: input
+    body: { ...input, role }
   })
 
   if (error) throw new Error(error.message)
@@ -897,4 +841,3 @@ export function subscribeToProject(projectId: string, onChange: () => void) {
   channel.subscribe()
   return () => { client.removeChannel(channel) }
 }
-

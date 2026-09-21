@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from openai import AsyncOpenAI
 
 from .ai_provider import OpenAIExtractionProvider
+from .document_ai_revision import process_document_ai_revision
 from .expediente_v2 import process_expediente_v2_task
 from .pipeline import process_job
 from .pipeline_v2 import Phase4PipelineOrchestrator
@@ -60,6 +61,10 @@ async def expediente_v2_worker_loop(stop: asyncio.Event) -> None:
                     if cleanup_counter % 25 == 0:
                         await gateway.cleanup_expired_expediente_uploads()
                     continue
+                revision = await gateway.claim_document_ai_revision()
+                if revision:
+                    await process_document_ai_revision(gateway, revision, ai_client, settings.ai_model)
+                    continue
                 if cleanup_counter % 30 == 0:
                     await gateway.cleanup_expired_expediente_uploads()
                 cleanup_counter += 1
@@ -106,4 +111,3 @@ async def ready() -> dict[str, str]:
         "phase3": "ingestion-ready",
         "phase4": "ai-ready" if settings.ready else "deterministic-ready",
     }
-

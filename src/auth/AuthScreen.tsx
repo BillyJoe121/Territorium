@@ -27,14 +27,68 @@ export function AuthScreen() {
     finally { setBusy(false) }
   }
 
-  return <main className="auth-page">
-    <section className="auth-brand-panel"><div className="auth-brand"><span className="auth-brand-icon">T</span><div><strong>TERRIT<span>O</span>RIUM</strong><small>GESTIÓN PREDIAL, ORDENAMIENTO Y DERECHO DE TIERRAS</small></div></div><div className="auth-pitch"><p className="eyebrow">INFORMACIÓN PREDIAL CON TRAZABILIDAD</p><h1>De documentos dispersos a decisiones verificables.</h1><p>Carga, extrae y revisa la información jurídica y técnica de cada predio en un espacio privado.</p><div className="auth-trust"><ShieldCheck size={20} /><span>Archivos privados, permisos por expediente y auditoría de decisiones.</span></div></div></section>
-    <section className="auth-form-panel"><form className="auth-form" onSubmit={submit}><p className="eyebrow">ACCESO SEGURO</p><h2>{mode === 'signin' ? 'Bienvenido de nuevo' : mode === 'signup' ? 'Crear cuenta' : 'Recuperar acceso'}</h2><p>{mode === 'recovery' ? 'Te enviaremos instrucciones al correo registrado.' : 'Ingresa con tu cuenta de Territorium.'}</p>
-      <label><span>Correo electrónico</span><div className="input-with-icon"><Mail size={17} /><input name="email" type="email" autoComplete="email" required placeholder="nombre@empresa.com" /></div></label>
-      {mode !== 'recovery' && <label><span>Contraseña</span><div className="input-with-icon"><KeyRound size={17} /><input name="password" type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} minLength={10} required placeholder="Mínimo 10 caracteres" /></div></label>}
-      {error && <div className="form-error" role="alert">{error}</div>}{message && <div className="form-success" role="status">{message}</div>}
-      <button className="button primary auth-submit" type="submit" disabled={busy}>{busy ? <LoaderCircle className="spin" size={17} /> : <ArrowRight size={17} />}{busy ? 'Procesando…' : mode === 'signin' ? 'Ingresar' : mode === 'signup' ? 'Crear cuenta' : 'Enviar enlace'}</button>
-      <div className="auth-links">{mode === 'signin' ? <><button type="button" onClick={() => setMode('recovery')}>Olvidé mi contraseña</button><button type="button" onClick={() => setMode('signup')}>Crear una cuenta</button></> : <button type="button" onClick={() => setMode('signin')}>Volver al inicio de sesión</button>}</div>
-    </form></section>
-  </main>
+  return (
+    <main className="auth-page">
+      <section className="auth-brand-panel">
+        <div className="auth-brand">
+          <span className="auth-brand-icon" aria-hidden="true">T</span>
+          <div className="auth-brand-wordmark">
+            <strong>TERRITORIUM</strong>
+            <small>Gestión predial, ordenamiento y derecho de tierras</small>
+          </div>
+        </div>
+
+        <div className="auth-pitch">
+          <p className="eyebrow">Información predial con trazabilidad</p>
+          <h1>De documentos dispersos a decisiones verificables.</h1>
+          <p>Carga, extrae y revisa la información jurídica y técnica de cada predio en un espacio privado.</p>
+          <div className="auth-trust">
+            <ShieldCheck size={20} aria-hidden="true" />
+            <span>Archivos privados, permisos por expediente y auditoría de decisiones.</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="auth-form-panel">
+        <form className="auth-form" onSubmit={submit}>
+          <div className="auth-form-heading">
+            <p className="eyebrow">Acceso seguro</p>
+            <h2>{mode === 'signin' ? 'Bienvenido de nuevo' : mode === 'signup' ? 'Crear cuenta' : 'Recuperar acceso'}</h2>
+            <p>{mode === 'recovery' ? 'Te enviaremos instrucciones al correo registrado.' : 'Ingresa con tu cuenta de Territorium.'}</p>
+          </div>
+
+          <label className="auth-field">
+            <span>Correo electrónico</span>
+            <div className="input-with-icon">
+              <Mail size={17} aria-hidden="true" />
+              <input name="email" type="email" autoComplete="email" required placeholder="nombre@empresa.com" />
+            </div>
+          </label>
+          {mode !== 'recovery' && (
+            <label className="auth-field">
+              <span>Contraseña</span>
+              <div className="input-with-icon">
+                <KeyRound size={17} aria-hidden="true" />
+                <input name="password" type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} minLength={10} required placeholder="Mínimo 10 caracteres" />
+              </div>
+            </label>
+          )}
+          {error && <div className="form-error" role="alert">{error}</div>}
+          {message && <div className="form-success" role="status">{message}</div>}
+          <button className="button primary auth-submit" type="submit" disabled={busy}>
+            {busy ? <LoaderCircle className="spin" size={17} /> : <ArrowRight size={17} />}
+            {busy ? 'Procesando…' : mode === 'signin' ? 'Ingresar' : mode === 'signup' ? 'Crear cuenta' : 'Enviar enlace'}
+          </button>
+          <div className="auth-links">
+            {mode === 'signin' ? (
+              <>
+                <button type="button" onClick={() => setMode('recovery')}>Olvidé mi contraseña</button>
+                <button type="button" onClick={() => setMode('signup')}>Crear una cuenta</button>
+              </>
+            ) : <button type="button" onClick={() => setMode('signin')}>Volver al inicio de sesión</button>}
+          </div>
+        </form>
+      </section>
+    </main>
+  )
 }

@@ -77,4 +77,16 @@ describe('contrato de repositorio del expediente v2', () => {
     expect(consVer).toBeDefined()
     expect(consVer?.scope).toBe('consolidated')
   })
+
+  it('versiona el documento y rechaza un guardado concurrente obsoleto', async () => {
+    const repository = new DemoExpedienteV2Repository(new Map([['project-1', snapshot]]))
+    const first = await repository.saveDocument('project-1', { type: 'doc', content: [] }, null, 'Versión inicial')
+    const second = await repository.saveDocument('project-1', { type: 'doc', content: [{ type: 'paragraph' }] }, first.id, 'Edición manual')
+
+    expect(second.versionNumber).toBe(2)
+    expect(second.parentDocumentVersionId).toBe(first.id)
+    await expect(
+      repository.saveDocument('project-1', { type: 'doc', content: [] }, first.id, 'Intento obsoleto'),
+    ).rejects.toThrow(EditConflictError)
+  })
 })

@@ -14,7 +14,11 @@ export const ThemeToggle: React.FC<{ className?: string }> = ({ className = '' }
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(THEME_STORAGE_KEY)
       if (saved === 'light' || saved === 'dark') return saved
-      return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+      // The workspace language is intentionally light by default: it keeps
+      // dense legal data, tables and side-context panels legible. A user's
+      // explicit stored choice is still preserved and dark mode remains a
+      // first-class toggle.
+      return 'light'
     }
     return 'dark'
   })

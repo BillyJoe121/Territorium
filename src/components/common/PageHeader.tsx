@@ -1,11 +1,12 @@
 import React from 'react'
 
 export interface PageHeaderProps {
-  title: string
+  title?: string
   eyebrow?: string
   description?: string
   actions?: React.ReactNode
   meta?: React.ReactNode
+  className?: string
 }
 
 export function PageHeader({
@@ -14,12 +15,13 @@ export function PageHeader({
   description,
   actions,
   meta,
+  className,
 }: PageHeaderProps) {
   return (
-    <header className="page-header-banner">
+    <header className={`page-header-banner${className ? ` ${className}` : ''}`}>
       <div className="header-text-group">
-        {eyebrow && <p className="header-eyebrow">{eyebrow}</p>}
-        <h1 className="header-title">{title}</h1>
+        {!title && eyebrow && <p className="header-eyebrow">{eyebrow}</p>}
+        {title && <h1 className="header-title">{title}</h1>}
         {description && <p className="header-description">{description}</p>}
       </div>
 

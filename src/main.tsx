@@ -4,6 +4,7 @@ import App from './App'
 import './production.css'
 import './ui-system.css'
 import './styles.css'
+import './workspace-visual.css'
 import { AuthProvider } from './auth/AuthContext'
 import { ErrorBoundary } from './ErrorBoundary'
 

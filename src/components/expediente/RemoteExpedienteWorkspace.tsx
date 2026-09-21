@@ -36,6 +36,7 @@ import {
 } from '../../data/expedienteUpload'
 import {
   createExpedienteV2Repository,
+  type ExpedienteDocumentVersionSnapshot,
   type ExpedienteResultVersionSnapshot,
   type ExpedienteV2Repository,
 } from '../../data/expedienteV2Repository'
@@ -198,8 +199,9 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
   const [documentState, setDocumentState] = useState<{
     status: PrototypeDocumentStatus
     version: number
+    id: string | null
     updatedAt?: string
-  }>({ status: 'blocked', version: 1 })
+  }>({ status: 'blocked', version: 1, id: null })
   const [documentContent, setDocumentContent] = useState<JSONContent>(initialDocumentContent)
   const [documentDirty, setDocumentDirty] = useState(false)
 
@@ -208,9 +210,21 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
   const [currentProposal, setCurrentProposal] = useState<AiRevisionProposal | null>(null)
   const [proposalModalOpen, setProposalModalOpen] = useState(false)
   const [lastUserComment, setLastUserComment] = useState('')
+  const [activeAiRevisionId, setActiveAiRevisionId] = useState<string | null>(null)
 
   const mounted = useRef(true)
   const repo: ExpedienteV2Repository = useMemo(() => createExpedienteV2Repository({ mode: 'supabase' }), [])
+
+  const applyDocumentSnapshot = useCallback((document: ExpedienteDocumentVersionSnapshot) => {
+    setDocumentContent(document.content as JSONContent)
+    setDocumentDirty(false)
+    setDocumentState({
+      id: document.id,
+      status: document.finalizedAt ? 'final' : 'editable',
+      version: document.versionNumber,
+      updatedAt: new Intl.DateTimeFormat('es-CO', { timeStyle: 'medium' }).format(new Date(document.createdAt)),
+    })
+  }, [])
 
   const refresh = useCallback(async () => {
     try {
@@ -231,11 +245,6 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
           setConsolidatedRows(adapted.rows)
           if (consSnap.status === 'approved') {
             setConsolidationStatus('approved')
-            setDocumentState((prev) => ({
-              ...prev,
-              status: prev.status === 'blocked' ? 'editable' : prev.status,
-              version: consSnap.versionNumber,
-            }))
           } else {
             setConsolidationStatus('review_ready')
           }
@@ -243,12 +252,14 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
       } catch {
         // Non-blocking if table not populated yet
       }
+      const document = await repo.getCurrentDocument(project.id)
+      if (mounted.current && document) applyDocumentSnapshot(document)
     } catch (caught) {
       if (mounted.current) setError(caught instanceof Error ? caught.message : 'No fue posible sincronizar el expediente.')
     } finally {
       if (mounted.current) setLoading(false)
     }
-  }, [project.id, repo])
+  }, [applyDocumentSnapshot, project.id, repo])
 
   useEffect(() => {
     mounted.current = true
@@ -260,6 +271,52 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
       unsubscribe()
     }
   }, [project.id, refresh])
+
+  useEffect(() => {
+    if (!activeAiRevisionId) return
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const revision = await repo.getDocumentAiRevision(activeAiRevisionId)
+        if (cancelled || !revision) return
+        if (revision.status === 'completed' && revision.proposedContent) {
+          const proposal = createAiRevisionProposal(
+            {
+              id: revision.id,
+              expedienteId: project.id,
+              sourceVersion: documentState.version,
+              userComment: revision.userComment,
+              requestedBy: project.clientName || 'Analista Jurídico Territorium',
+              requestedAt: revision.createdAt,
+              scope: 'narrative_only',
+            },
+            documentContent,
+            extractNarrativeSection(revision.proposedContent as JSONContent),
+            consolidatedMasterRecord || undefined,
+          )
+          setLastUserComment(revision.userComment)
+          setCurrentProposal({ ...proposal, id: revision.id, requestId: revision.id, proposedContent: revision.proposedContent as JSONContent })
+          setProposalModalOpen(true)
+          setActiveAiRevisionId(null)
+          setDocumentState((previous) => ({ ...previous, status: 'editable' }))
+          return
+        }
+        if (revision.status === 'failed') {
+          setActiveAiRevisionId(null)
+          setDocumentState((previous) => ({ ...previous, status: 'editable' }))
+          setError('La revisión de IA no pudo completarse tras los reintentos. Inténtalo de nuevo.')
+        }
+      } catch (caught) {
+        if (!cancelled) setError(caught instanceof Error ? caught.message : 'No fue posible consultar la revisión de IA.')
+      }
+    }
+    void poll()
+    const timer = window.setInterval(() => void poll(), 2000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [activeAiRevisionId, consolidatedMasterRecord, documentContent, documentState.version, project.clientName, project.id, repo])
 
   const approvedGroupsCount = useMemo(
     () => (groups ? orderedKeys.filter((key) => groups[key].status === 'approved').length : 0),
@@ -323,6 +380,7 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
           scope: 'group',
           groupId: group.id,
           versionNumber: 1,
+          editRevision: 1,
           status: 'draft',
           payload,
           changeSummary: null,
@@ -347,14 +405,15 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
     const existing = groupResult.version
     const updatedPayload = adaptTableRowsToPayload(key, rows, existing.payload)
     if (existing.id) {
-      await repo.saveDraft(existing.id, updatedPayload, 'Edición manual de revisor', existing.versionNumber)
+      const editRevision = await repo.saveDraft(existing.id, updatedPayload, 'Edición manual de revisor', existing.editRevision)
+      existing.editRevision = editRevision
     }
     setGroupResult((curr) =>
       curr
         ? {
             ...curr,
             rows,
-            version: { ...curr.version, payload: updatedPayload },
+            version: { ...curr.version, payload: updatedPayload, editRevision: existing.editRevision },
           }
         : null,
     )
@@ -368,7 +427,7 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
     const updatedPayload = adaptTableRowsToPayload(key, rows, existing.payload)
 
     if (existing.id) {
-      await repo.saveDraft(existing.id, updatedPayload, 'Edición previa a aprobación', existing.versionNumber)
+      await repo.saveDraft(existing.id, updatedPayload, 'Edición previa a aprobación', existing.editRevision)
       await repo.approveResult(existing.id, 'Aprobado formalmente por revisor jurídico')
     }
 
@@ -420,12 +479,13 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
   async function handleSaveConsolidatedDraft(rows: EditableResultRow[]) {
     if (!consolidatedResultVersion) return
     const updatedPayload = adaptTableRowsToPayload('consolidated', rows, consolidatedResultVersion.payload)
-    await repo.saveDraft(
+    const editRevision = await repo.saveDraft(
       consolidatedResultVersion.id,
       updatedPayload,
       'Edición manual en consolidado',
-      consolidatedResultVersion.versionNumber,
+      consolidatedResultVersion.editRevision,
     )
+    setConsolidatedResultVersion((current) => current ? { ...current, payload: updatedPayload, editRevision } : current)
     setConsolidatedRows(rows)
     setNotice('Borrador del registro consolidado guardado exitosamente.')
   }
@@ -437,7 +497,7 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
       consolidatedResultVersion.id,
       updatedPayload,
       'Guardado antes de aprobar consolidado',
-      consolidatedResultVersion.versionNumber,
+      consolidatedResultVersion.editRevision,
     )
     await repo.approveResult(consolidatedResultVersion.id, 'Consolidado aprobado para generación final')
     setConsolidationStatus('approved')
@@ -451,13 +511,13 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
       projectName: project.name,
       compiledBy: project.clientName,
     })
-    setDocumentContent(compiled.content)
-    setDocumentDirty(false)
-    setDocumentState({
-      status: 'editable',
-      version: 1,
-      updatedAt: new Intl.DateTimeFormat('es-CO', { timeStyle: 'medium' }).format(new Date()),
-    })
+    const document = await repo.saveDocument(
+      project.id,
+      compiled.content as Record<string, unknown>,
+      documentState.id,
+      'Documento inicial desde consolidado aprobado',
+    )
+    applyDocumentSnapshot(document)
     setView('document')
     setNotice('Consolidado aprobado. Se compiló el documento oficial en el editor Tiptap.')
     await refresh()
@@ -510,67 +570,79 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
     }
   }
 
-  function handleRequestAiRevision(comment: string) {
+  async function handleRequestAiRevision(comment: string) {
     setAiDialogOpen(false)
     setLastUserComment(comment)
-
-    const currentNarrative = extractNarrativeSection(documentContent)
-    const simulatedNarrative = `${currentNarrative}\n\n[Consideración solicitada por analista: "${comment}"]\nSe certifica que la cabida superficiaria y la franja de servidumbre concuerdan rigurosamente con los levantamientos topográficos y catastrales sin afectación a terceros.`
-
-    const proposal = createAiRevisionProposal(
-      {
-        id: `ai-remote-${Date.now()}`,
-        expedienteId: project.id,
-        sourceVersion: documentState.version,
-        userComment: comment,
-        requestedBy: project.clientName || 'Analista Jurídico Territorium',
-        requestedAt: new Date().toISOString(),
-        scope: 'narrative_only',
-      },
-      documentContent,
-      simulatedNarrative,
-      consolidatedMasterRecord || undefined,
-    )
-
-    setCurrentProposal(proposal)
-    setProposalModalOpen(true)
+    if (documentDirty || !documentState.id) {
+      setError('Guarda la versión actual antes de solicitar una revisión a IA.')
+      return
+    }
+    try {
+      const revisionId = await repo.queueDocumentAiRevision(documentState.id, comment)
+      setActiveAiRevisionId(revisionId)
+      setDocumentState((previous) => ({ ...previous, status: 'reprocessing' }))
+      setNotice('Solicitud enviada a IA. La propuesta aparecerá cuando el worker finalice el procesamiento.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No fue posible solicitar la revisión de IA.')
+    }
   }
 
-  function handleAcceptAiProposal(proposal: AiRevisionProposal) {
-    setDocumentContent(proposal.proposedContent)
-    setDocumentState((prev) => ({
-      ...prev,
-      status: 'editable',
-      version: proposal.proposedVersion,
-      updatedAt: new Intl.DateTimeFormat('es-CO', { timeStyle: 'medium' }).format(new Date()),
-    }))
-    setDocumentDirty(true)
-    setNotice(`Propuesta v${proposal.proposedVersion} adoptada. Los campos estructurados protegidos permanecen intactos.`)
+  async function handleAcceptAiProposal(proposal: AiRevisionProposal) {
+    try {
+      const document = await repo.acceptDocumentAiRevision(proposal.requestId)
+      applyDocumentSnapshot(document)
+      setCurrentProposal(null)
+      setProposalModalOpen(false)
+      setActiveAiRevisionId(null)
+      setNotice(`Propuesta v${document.versionNumber} adoptada y guardada en Supabase.`)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No fue posible adoptar la propuesta de IA.')
+    }
   }
 
-  function handleDiscardAiProposal() {
+  async function handleDiscardAiProposal() {
+    try {
+      if (currentProposal) await repo.discardDocumentAiRevision(currentProposal.requestId)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No fue posible descartar la propuesta de IA.')
+      return
+    }
     setCurrentProposal(null)
+    setProposalModalOpen(false)
+    setActiveAiRevisionId(null)
+    setDocumentState((previous) => ({ ...previous, status: 'editable' }))
     setNotice('Propuesta de IA descartada. El documento actual no sufrió modificaciones.')
   }
 
-  function handleSaveDocument() {
-    setDocumentDirty(false)
-    setDocumentState((prev) => ({
-      ...prev,
-      version: prev.version + 1,
-      updatedAt: new Intl.DateTimeFormat('es-CO', { timeStyle: 'medium' }).format(new Date()),
-    }))
-    setNotice(`Versión ${documentState.version + 1} del documento guardada en Supabase.`)
+  async function handleSaveDocument() {
+    try {
+      const document = await repo.saveDocument(
+        project.id,
+        documentContent as Record<string, unknown>,
+        documentState.id,
+        'Edición manual del documento',
+      )
+      applyDocumentSnapshot(document)
+      setNotice(`Versión ${document.versionNumber} del documento guardada en Supabase.`)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No fue posible guardar el documento.')
+    }
   }
 
-  function handleFinalizeDocument() {
-    setDocumentState((prev) => ({
-      ...prev,
-      status: 'final',
-      updatedAt: new Intl.DateTimeFormat('es-CO', { timeStyle: 'medium' }).format(new Date()),
-    }))
-    setDocumentDirty(false)
-    setNotice('Documento marcado como versión final oficial. Listo para entrega y firma.')
+  async function handleFinalizeDocument() {
+    if (!documentState.id) return
+    try {
+      await repo.finalizeDocument(documentState.id)
+      setDocumentState((previous) => ({
+        ...previous,
+        status: 'final',
+        updatedAt: new Intl.DateTimeFormat('es-CO', { timeStyle: 'medium' }).format(new Date()),
+      }))
+      setDocumentDirty(false)
+      setNotice('Documento marcado como versión final oficial. Listo para entrega y firma.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No fue posible finalizar el documento.')
+    }
   }
 
   if (loading && !groups) return <div className="expediente-remote-loading">Cargando expediente remoto…</div>

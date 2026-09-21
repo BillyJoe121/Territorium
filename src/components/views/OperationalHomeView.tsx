@@ -7,13 +7,13 @@ import {
   FileSpreadsheet,
   FolderKanban,
   Layers,
-  ShieldCheck,
   UploadCloud,
 } from 'lucide-react'
 import type { Batch, Project, PropertyRecord, ReviewTask } from '../../types'
 import { PageHeader } from '../common/PageHeader'
 import {
   DashboardCharts,
+  DASHBOARD_CHART_COLORS,
   type BatchStatusData,
   type DiscrepancyCategoryData,
   type ProjectWorkloadData,
@@ -64,17 +64,17 @@ export function OperationalHomeView({
   const failedBatches = currentBatches.filter((b) => b.jobState === 'fallido')
 
   const propertyStatusData = useMemo<PropertyStatusData[]>(() => [
-    { name: 'Aprobados', value: currentRecords.filter((record) => record.reviewState === 'aprobado').length, color: '#18794E' },
-    { name: 'Por revisar', value: currentRecords.filter((record) => record.reviewState === 'pendiente').length, color: '#9A6700' },
-    { name: 'Devueltos', value: currentRecords.filter((record) => record.reviewState === 'devuelto').length, color: '#B42318' },
+    { name: 'Aprobados', value: currentRecords.filter((record) => record.reviewState === 'aprobado').length, color: DASHBOARD_CHART_COLORS.complete },
+    { name: 'Por revisar', value: currentRecords.filter((record) => record.reviewState === 'pendiente').length, color: DASHBOARD_CHART_COLORS.pending },
+    { name: 'Devueltos', value: currentRecords.filter((record) => record.reviewState === 'devuelto').length, color: DASHBOARD_CHART_COLORS.risk },
   ], [currentRecords])
 
   const batchStatusData = useMemo<BatchStatusData[]>(() => {
     const states = [
-      { key: 'completado', name: 'Completados', color: '#18794E' },
-      { key: 'en_proceso', name: 'En proceso', color: '#2459D3' },
-      { key: 'pendiente', name: 'Pendientes', color: '#9A6700' },
-      { key: 'fallido', name: 'Fallidos', color: '#B42318' },
+      { key: 'completado', name: 'Completados', color: DASHBOARD_CHART_COLORS.complete },
+      { key: 'en_proceso', name: 'En proceso', color: DASHBOARD_CHART_COLORS.accent },
+      { key: 'pendiente', name: 'Pendientes', color: DASHBOARD_CHART_COLORS.pending },
+      { key: 'fallido', name: 'Fallidos', color: DASHBOARD_CHART_COLORS.risk },
     ] as const
     return states.map((state) => ({
       name: state.name,
@@ -114,13 +114,12 @@ export function OperationalHomeView({
   return (
     <div className="space-y-6">
       <PageHeader
+        className={activeProject ? undefined : 'operational-home-header compact'}
         eyebrow="Panel de Control Operativo"
-        title={activeProject ? activeProject.name : 'Operación Territorial Global'}
-        description={
-          activeProject
-            ? `Expediente activo en ${activeProject.municipality}, ${activeProject.department}. Seleccione una tarea para intervenir o cambiar de contexto.`
-            : 'Resumen consolidado de todos los proyectos prediales. Identifique lotes con atención prioritaria y seleccione un expediente para operar.'
-        }
+        title={activeProject?.name}
+        description={activeProject
+          ? `Expediente activo en ${activeProject.municipality}, ${activeProject.department}. Seleccione una tarea para intervenir o cambiar de contexto.`
+          : undefined}
         actions={
           <div className="flex items-center gap-2">
             {activeProject ? (
@@ -152,6 +151,9 @@ export function OperationalHomeView({
           </div>
         }
       />
+
+      <div className="operational-workspace-grid">
+        <div className="operational-main-column">
 
       {/* Fila 1: Bandeja de Atención Prioritaria */}
       <div className="operational-priority-row">
@@ -251,9 +253,9 @@ export function OperationalHomeView({
         discrepancyData={discrepancyData}
       />
 
-      {/* Fila 2: Expedientes Recientes y Acceso Rápido */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 card p-6">
+      {/* Expedientes recientes */}
+      <section className="operational-projects-panel card">
+        <div className="operational-projects-card">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-base font-semibold text-[#182230]">Expedientes Prediales</h2>
@@ -321,60 +323,9 @@ export function OperationalHomeView({
           </div>
         </div>
 
-        {/* Panel Lateral: Enlaces Rápidos y Seguridad */}
-        <div className="space-y-6">
-          <div className="card p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-[#182230] border-b border-[#E4E7EC] pb-2">
-              Flujo Operativo Recomendado
-            </h3>
-            <div className="space-y-2.5 text-xs text-[#526071]">
-              <div className="flex items-start gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-[#F1F3F6] font-semibold text-[#182230] flex items-center justify-center flex-shrink-0">
-                  1
-                </span>
-                <div>
-                  <strong className="text-[#182230] block">Cargar y validar insumos</strong>
-                  <span>Suba escrituras, certificados de tradición y planos topográficos en ZIP.</span>
-                </div>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-[#F1F3F6] font-semibold text-[#182230] flex items-center justify-center flex-shrink-0">
-                  2
-                </span>
-                <div>
-                  <strong className="text-[#182230] block">Revisión jurídica asistida</strong>
-                  <span>Compare valores extraídos contra el documento fuente y resuelva discordancias.</span>
-                </div>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-[#F1F3F6] font-semibold text-[#182230] flex items-center justify-center flex-shrink-0">
-                  3
-                </span>
-                <div>
-                  <strong className="text-[#182230] block">Certificación y entregables</strong>
-                  <span>Genere el libro CORRESPONDENCIA.xlsx con firmas y sellos de tiempo.</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="card p-5 bg-[#F1F3F6] border border-[#E4E7EC] space-y-2">
-            <div className="flex items-center gap-2 text-xs font-semibold text-[#182230]">
-              <ShieldCheck size={16} className="text-[#2459D3]" />
-              <span>Gobernanza y Trazabilidad</span>
-            </div>
-            <p className="text-xs text-[#526071] leading-relaxed">
-              Toda modificación de atributo requiere motivo justificado y queda registrada con hash SHA-256 en la bitácora inmutable.
-            </p>
-            <button
-              type="button"
-              onClick={() => onNavigate('trazabilidad')}
-              className="text-xs font-medium text-[#2459D3] hover:underline block pt-1"
-            >
-              Consultar bitácora forense →
-            </button>
-          </div>
+      </section>
         </div>
+
       </div>
     </div>
   )

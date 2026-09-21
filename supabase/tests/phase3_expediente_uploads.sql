@@ -1,6 +1,6 @@
 begin;
 
-select plan(32);
+select plan(34);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -83,6 +83,19 @@ select lives_ok(
     'phase3-idempotency-key-0001', '{"version":"v1"}'::jsonb, '{"schema":{"version":"v1"}}'::jsonb, '{"provider":"default","model":"none"}'::jsonb
   ) $$,
   'la solicitud de análisis se acepta sin ejecutar contenido en la petición'
+);
+select is(
+  public.queue_expediente_group_execution(
+    (select id from public.expediente_document_groups where project_id = '20000000-0000-0000-0000-000000000001' and group_key = 'titles'),
+    'phase3-idempotency-key-0001', '{"version":"v1"}'::jsonb, '{"schema":{"version":"v1"}}'::jsonb, '{"provider":"default","model":"none"}'::jsonb
+  ),
+  (select id from public.expediente_executions where project_id = '20000000-0000-0000-0000-000000000001'),
+  'la misma clave idempotente devuelve la ejecución original'
+);
+select is(
+  (select count(*) from public.expediente_executions where project_id = '20000000-0000-0000-0000-000000000001'),
+  1::bigint,
+  'un doble clic no crea ejecuciones duplicadas'
 );
 select is(
   (select status from public.expediente_executions where project_id = '20000000-0000-0000-0000-000000000001'),

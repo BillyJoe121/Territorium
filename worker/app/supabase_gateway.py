@@ -40,6 +40,46 @@ class SupabaseGateway:
         rows = response.json()
         return Job.model_validate(rows[0]) if rows else None
 
+    async def claim_document_ai_revision(self) -> Any | None:
+        response = await self._request(
+            "POST",
+            "/rest/v1/rpc/claim_next_expediente_document_ai_revision",
+            json={"p_worker_name": self.settings.worker_name},
+        )
+        rows = response.json()
+        if not rows:
+            return None
+        from .document_ai_revision import DocumentAiRevisionTask
+        row = rows[0]
+        return DocumentAiRevisionTask(
+            id=row["id"],
+            project_id=row["project_id"],
+            source_document_version_id=row["source_document_version_id"],
+            source_content=row["source_content"],
+            user_comment=row["user_comment"],
+            lease_token=row["lease_token"],
+            attempt_count=row["attempt_count"],
+        )
+
+    async def complete_document_ai_revision(
+        self,
+        revision_id: str,
+        lease_token: str,
+        proposed_content: dict[str, Any] | None = None,
+        error_code: str | None = None,
+    ) -> bool:
+        response = await self._request(
+            "POST",
+            "/rest/v1/rpc/complete_expediente_document_ai_revision",
+            json={
+                "p_revision_id": revision_id,
+                "p_lease_token": lease_token,
+                "p_proposed_content": proposed_content,
+                "p_error_code": error_code,
+            },
+        )
+        return bool(response.json())
+
     async def documents(self, batch_id: str) -> list[SourceDocument]:
         response = await self._request("GET", "/rest/v1/source_documents", params={"batch_id": f"eq.{batch_id}", "select": "*", "order": "created_at.asc"})
         priority = {"title_study": 0, "plan": 1, "negotiation": 2, "unclassified": 3, "support": 4}

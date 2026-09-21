@@ -110,12 +110,8 @@ export function ProjectsManagementView({
     <div className="projects-management-view">
       <div className="projects-header-bar">
         <div className="projects-header-info">
-          <p className="eyebrow">ADMINISTRACIÓN TERRITORIAL</p>
           <div className="projects-header-title-wrap">
-            <h2>Expedientes y ciclo de vida</h2>
-            <span className="projects-header-desc">
-              Gestión de expedientes prediales, infraestructura eléctrica y metadatos con trazabilidad.
-            </span>
+            <h1 className="projects-header-kicker">Expedientes y ciclo de vida</h1>
           </div>
         </div>
       </div>

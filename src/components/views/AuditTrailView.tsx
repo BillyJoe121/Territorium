@@ -24,9 +24,6 @@ export function AuditTrailView({ events, activeProjectId, projects, projectName 
   const [pageSize, setPageSize] = useState<number>(10)
   const [currentPage, setCurrentPage] = useState<number>(1)
 
-  const activeProject = projects?.find((p) => p.id === activeProjectId)
-  const resolvedProjectName = projectName || activeProject?.name
-
   function toggleExpand(id: string) {
     setExpandedIds((prev) => {
       const next = new Set(prev)
@@ -64,8 +61,6 @@ export function AuditTrailView({ events, activeProjectId, projects, projectName 
     <div className="audit-trail-view">
       <PageHeader
         eyebrow="Trazabilidad Criptográfica Inmutable"
-        title={resolvedProjectName ? `Bitácora Forense: ${resolvedProjectName}` : 'Trazabilidad de la Plataforma'}
-        description="Registro cronológico e inmutable de todas las acciones operativas, correcciones de atributos con motivo justificado, aprobaciones y exportaciones."
         actions={
           <button
             type="button"

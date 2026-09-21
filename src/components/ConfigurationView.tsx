@@ -144,7 +144,6 @@ export function ConfigurationView({
   return (
     <div className="config-container">
       <div className="intro">
-        <p className="eyebrow">GOBERNANZA & MODELOS DE IA</p>
         <h2>Configuración de Extractores, Prompts y Modelos</h2>
         <p>
           Administra los proveedores de IA, el versionado inmutable de prompts, las políticas de fallback
