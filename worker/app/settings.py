@@ -47,7 +47,7 @@ class Settings:
         if os.getenv("GEMINI_API_KEY") and not base_url:
             base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
-        default_model = "gemini-flash-latest" if (os.getenv("GEMINI_API_KEY") or (base_url and "googleapis.com" in base_url)) else "gpt-5.5"
+        default_model = "gemini-2.5-flash" if (os.getenv("GEMINI_API_KEY") or (base_url and "googleapis.com" in base_url)) else "gpt-5.5"
         ai_model = os.getenv("AI_MODEL", default_model)
 
         return cls(

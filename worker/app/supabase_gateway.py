@@ -232,7 +232,7 @@ class SupabaseGateway:
             ext_map = {"titles": "title_study", "plans": "plan", "title_study": "title_study", "plan": "plan", "negotiation": "negotiation"}
             eff_extractor = ext_map.get(raw_ext, "title_study")
 
-            eff_req_model = requested_model or (ai_res.requested_model if ai_res else "gemini-flash-latest")
+            eff_req_model = requested_model or (ai_res.requested_model if ai_res else "gemini-2.5-flash")
             eff_used_model = used_model or (ai_res.used_model if ai_res else eff_req_model)
             eff_fallback = fallback_triggered or (ai_res.fallback_triggered if ai_res else False)
             eff_fallback_reason = fallback_reason or (ai_res.fallback_reason if ai_res else None)
