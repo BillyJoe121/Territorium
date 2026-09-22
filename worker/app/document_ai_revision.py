@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import dataclass
+import time
 from typing import Any
 
 
@@ -84,6 +86,7 @@ async def process_document_ai_revision(gateway: Any, task: DocumentAiRevisionTas
         current_narrative = extract_narrative(task.source_content)
         if not current_narrative:
             raise ValueError("NARRATIVE_SECTION_MISSING")
+        start_t = time.perf_counter()
         response = await ai_client.chat.completions.create(
             model=model,
             temperature=0.1,
@@ -104,9 +107,29 @@ async def process_document_ai_revision(gateway: Any, task: DocumentAiRevisionTas
                 },
             ],
         )
+        latency_ms = int((time.perf_counter() - start_t) * 1000)
         proposed_narrative = (response.choices[0].message.content or "").strip()
         if not proposed_narrative:
             raise ValueError("AI_EMPTY_RESPONSE")
+        
+        usage = getattr(response, "usage", None)
+        p_tok = getattr(usage, "prompt_tokens", 0) or 0
+        c_tok = getattr(usage, "completion_tokens", 0) or 0
+        t_tok = getattr(usage, "total_tokens", 0) or (p_tok + c_tok)
+
+        with suppress(Exception):
+            await gateway.record_ai_log(
+                project_id=task.project_id,
+                extractor="title_study",
+                requested_model=model,
+                used_model=model,
+                latency_ms=latency_ms,
+                prompt_tokens=p_tok,
+                completion_tokens=c_tok,
+                total_tokens=t_tok,
+                status="success",
+            )
+
         proposed_content = inject_narrative(task.source_content, proposed_narrative)
         await gateway.complete_document_ai_revision(task.id, task.lease_token, proposed_content=proposed_content)
     except ValueError as error:

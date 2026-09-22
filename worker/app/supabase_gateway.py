@@ -192,37 +192,94 @@ class SupabaseGateway:
     async def record_ai_log(
         self,
         *,
-        job: Job,
-        task: DocumentTask | None,
-        document_id: str | None,
-        extractor: ExtractorKey,
-        prompt_version: PromptVersion | None,
-        ai_res: AiExecutionResult,
+        project_id: str | None = None,
+        batch_id: str | None = None,
+        task_id: str | None = None,
+        document_id: str | None = None,
+        extractor: ExtractorKey | str = "title_study",
+        prompt_version: PromptVersion | None = None,
+        prompt_version_id: str | None = None,
+        prompt_version_number: int | None = None,
+        requested_model: str | None = None,
+        used_model: str | None = None,
+        fallback_triggered: bool = False,
+        fallback_reason: str | None = None,
         status: str = "success",
+        latency_ms: int = 0,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        total_tokens: int = 0,
+        estimated_cost_usd: float | None = None,
         error_message: str | None = None,
+        is_test_run: bool = False,
+        job: Job | None = None,
+        task: DocumentTask | None = None,
+        ai_res: AiExecutionResult | None = None,
     ) -> None:
         try:
+            # Reconcile V1 vs V2 parameters
+            eff_project_id = project_id or (job.project_id if job else None)
+            eff_batch_id = batch_id or (job.batch_id if job else None)
+            eff_task_id = task_id or (task.id if task else None)
+            
+            # Normalize extractor key to match Supabase check constraint ('title_study', 'plan', 'negotiation')
+            raw_ext = extractor.value if hasattr(extractor, "value") else str(extractor)
+            ext_map = {"titles": "title_study", "plans": "plan", "title_study": "title_study", "plan": "plan", "negotiation": "negotiation"}
+            eff_extractor = ext_map.get(raw_ext, "title_study")
+
+            eff_req_model = requested_model or (ai_res.requested_model if ai_res else "gemini-flash-latest")
+            eff_used_model = used_model or (ai_res.used_model if ai_res else eff_req_model)
+            eff_fallback = fallback_triggered or (ai_res.fallback_triggered if ai_res else False)
+            eff_fallback_reason = fallback_reason or (ai_res.fallback_reason if ai_res else None)
+            eff_latency = latency_ms or (ai_res.latency_ms if ai_res else 0)
+            eff_prompt_tok = prompt_tokens or (ai_res.prompt_tokens if ai_res else 0)
+            eff_comp_tok = completion_tokens or (ai_res.completion_tokens if ai_res else 0)
+            eff_total_tok = total_tokens or (ai_res.total_tokens if ai_res else (eff_prompt_tok + eff_comp_tok))
+
+            if estimated_cost_usd is not None:
+                eff_cost = float(estimated_cost_usd)
+            else:
+                m = eff_used_model.lower()
+                if "mini" in m or "flash" in m:
+                    p_rate, c_rate = 0.15, 0.60
+                elif "claude-3-5" in m:
+                    p_rate, c_rate = 3.0, 15.0
+                elif "o1" in m or "o3" in m:
+                    p_rate, c_rate = 15.0, 60.0
+                else:
+                    p_rate, c_rate = 2.5, 10.0
+                eff_cost = round((eff_prompt_tok / 1_000_000.0) * p_rate + (eff_comp_tok / 1_000_000.0) * c_rate, 6)
+
             payload = {
-                "project_id": job.project_id,
-                "batch_id": job.batch_id,
-                "task_id": task.id if task else None,
+                "project_id": eff_project_id,
+                "batch_id": eff_batch_id,
+                "task_id": eff_task_id,
                 "document_id": document_id,
-                "extractor_key": extractor.value,
-                "prompt_version_id": prompt_version.id if prompt_version else None,
-                "prompt_version_number": prompt_version.version if prompt_version else None,
-                "requested_model": ai_res.requested_model,
-                "used_model": ai_res.used_model,
-                "fallback_triggered": ai_res.fallback_triggered,
-                "fallback_reason": ai_res.fallback_reason,
+                "extractor_key": eff_extractor,
+                "prompt_version_id": prompt_version_id or (prompt_version.id if prompt_version else None),
+                "prompt_version_number": prompt_version_number or (prompt_version.version if prompt_version else None),
+                "requested_model": eff_req_model,
+                "used_model": eff_used_model,
+                "fallback_triggered": eff_fallback,
+                "fallback_reason": eff_fallback_reason,
                 "status": status,
-                "latency_ms": ai_res.latency_ms,
-                "prompt_tokens": ai_res.prompt_tokens,
-                "completion_tokens": ai_res.completion_tokens,
-                "total_tokens": ai_res.total_tokens,
+                "latency_ms": eff_latency,
+                "prompt_tokens": eff_prompt_tok,
+                "completion_tokens": eff_comp_tok,
+                "total_tokens": eff_total_tok,
+                "estimated_cost_usd": eff_cost,
                 "error_message": error_message,
-                "is_test_run": False,
+                "is_test_run": is_test_run,
             }
-            await self._request("POST", "/rest/v1/ai_execution_logs", json=payload, headers={**self.headers, "Prefer": "return=minimal"})
+            try:
+                await self._request("POST", "/rest/v1/ai_execution_logs", json=payload, headers={**self.headers, "Prefer": "return=minimal"})
+            except Exception:
+                if payload.get("document_id") is not None:
+                    payload["document_id"] = None
+                    try:
+                        await self._request("POST", "/rest/v1/ai_execution_logs", json=payload, headers={**self.headers, "Prefer": "return=minimal"})
+                    except Exception:
+                        pass
         except Exception:
             pass
 
@@ -315,7 +372,12 @@ class SupabaseGateway:
             "PATCH",
             "/rest/v1/expediente_executions",
             params={"id": f"eq.{execution_id}"},
-            json={"status": "review_ready", "completed_at": datetime.now(UTC).isoformat()},
+            json={
+                "status": "review_ready",
+                "stage": "completed",
+                "stage_message": "Extracción completada y lista para revisión.",
+                "completed_at": datetime.now(UTC).isoformat(),
+            },
             headers={**self.headers, "Prefer": "return=minimal"},
         )
 

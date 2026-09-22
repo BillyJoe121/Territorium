@@ -163,6 +163,8 @@ async def trigger_phase4_extraction_if_ready(
             group_key=group_key,
             files=files_payload,
             target_property_code=None,
+            project_id=execution.project_id,
+            gateway=gateway,
         )
 
         output_id = await gateway.save_v2_phase4_output(

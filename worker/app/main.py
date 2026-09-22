@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager, suppress
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
@@ -48,7 +49,11 @@ async def expediente_v2_worker_loop(stop: asyncio.Event) -> None:
         logger.warning("expediente_v2_worker_not_ready missing required configuration")
         return
     gateway = SupabaseGateway(settings)
-    ai_client = AsyncOpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
+    ai_client = (
+        AsyncOpenAI(api_key=settings.openai_api_key, base_url=settings.ai_base_url)
+        if settings.openai_api_key
+        else None
+    )
     orchestrator = Phase4PipelineOrchestrator(ai_client=ai_client, primary_model=settings.ai_model)
     cleanup_counter = 0
     try:
@@ -94,7 +99,19 @@ async def lifespan(_: FastAPI):
             await asyncio.wait_for(expediente_v2_task, timeout=10)
 
 
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+
 app = FastAPI(title="Territorium extraction worker", version="1.0.0", docs_url=None, redoc_url=None, lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")
@@ -111,3 +128,106 @@ async def ready() -> dict[str, str]:
         "phase3": "ingestion-ready",
         "phase4": "ai-ready" if settings.ready else "deterministic-ready",
     }
+
+
+class DeleteFileBody(BaseModel):
+    file_id: str
+
+
+@app.post("/api/expediente/delete-file")
+async def delete_expediente_file_post(body: DeleteFileBody) -> dict[str, Any]:
+    return await _execute_file_deletion(body.file_id)
+
+
+@app.delete("/api/expediente/files/{file_id}")
+async def delete_expediente_file_delete(file_id: str) -> dict[str, Any]:
+    return await _execute_file_deletion(file_id)
+
+
+async def _execute_file_deletion(file_id: str) -> dict[str, Any]:
+    gateway = SupabaseGateway(settings)
+    try:
+        # 1. Fetch target file
+        resp = await gateway.client.get(
+            f"{settings.supabase_url}/rest/v1/expediente_document_files?id=eq.{file_id}&select=id,project_id,group_id,storage_path,original_name",
+            headers=gateway.headers,
+        )
+        files = resp.json()
+        if not files or not isinstance(files, list):
+            raise HTTPException(status_code=404, detail="Archivo no encontrado.")
+        file_row = files[0]
+        group_id = file_row["group_id"]
+        storage_path = file_row.get("storage_path")
+
+        # 2. Check group status
+        grp_resp = await gateway.client.get(
+            f"{settings.supabase_url}/rest/v1/expediente_document_groups?id=eq.{group_id}&select=id,status,current_negotiation_file_id",
+            headers=gateway.headers,
+        )
+        groups = grp_resp.json()
+        if groups and isinstance(groups, list):
+            grp = groups[0]
+            if grp.get("status") in ("queued", "processing"):
+                raise HTTPException(status_code=400, detail="No se puede eliminar un archivo mientras el grupo se analiza.")
+
+        # 3. Soft-delete / retire file
+        patch_resp = await gateway.client.patch(
+            f"{settings.supabase_url}/rest/v1/expediente_document_files?id=eq.{file_id}",
+            headers=gateway.headers,
+            json={"is_active": False, "is_current": False},
+        )
+        if patch_resp.status_code >= 400:
+            err_msg = "Error al marcar archivo como retirado en la base de datos."
+            with suppress(Exception):
+                err_json = patch_resp.json()
+                if "message" in err_json:
+                    err_msg = f"{err_msg} ({err_json['message']})"
+            logger.error(f"Failed to retire file {file_id}: {patch_resp.status_code} {patch_resp.text}")
+            raise HTTPException(status_code=500, detail=err_msg)
+
+        # 4. Optional Storage cleanup
+        if storage_path:
+            with suppress(Exception):
+                await gateway.client.post(
+                    f"{settings.supabase_url}/storage/v1/object/source-documents",
+                    headers=gateway.headers,
+                    json={"prefixes": [storage_path]},
+                )
+
+        # 5. Count remaining active files
+        rem_resp = await gateway.client.get(
+            f"{settings.supabase_url}/rest/v1/expediente_document_files?group_id=eq.{group_id}&is_active=eq.true&is_current=eq.true&select=id",
+            headers=gateway.headers,
+        )
+        remaining = rem_resp.json() if rem_resp.status_code == 200 else []
+        remaining_count = len(remaining) if isinstance(remaining, list) else 0
+
+        # 6. Update group status and negotiation pointer
+        if groups and isinstance(groups, list):
+            grp = groups[0]
+            updates: dict[str, Any] = {}
+            if grp.get("current_negotiation_file_id") == file_id:
+                updates["current_negotiation_file_id"] = remaining[0]["id"] if remaining_count > 0 else None
+
+            if remaining_count == 0:
+                updates["status"] = "empty"
+            elif grp.get("status") in ("review_ready", "approved"):
+                updates["status"] = "stale"
+
+            if updates:
+                await gateway.client.patch(
+                    f"{settings.supabase_url}/rest/v1/expediente_document_groups?id=eq.{group_id}",
+                    headers=gateway.headers,
+                    json=updates,
+                )
+
+        logger.info(f"File {file_id} ({file_row.get('original_name')}) successfully retired from group {group_id}.")
+        return {
+            "status": "ok",
+            "deleted_file_id": file_id,
+            "file_name": file_row.get("original_name"),
+            "remaining_files": remaining_count,
+        }
+    finally:
+        await gateway.close()
+

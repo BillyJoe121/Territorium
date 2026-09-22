@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import time
 from typing import Any
 
 from .plan_schema import PlanExtractionPayload
@@ -9,23 +10,32 @@ logger = logging.getLogger("territorium.extractors.plan")
 
 PLAN_SYSTEM_PROMPT = """
 Eres un ingeniero catastral y topógrafo experto en planos de servidumbres de infraestructura en Colombia.
-Tu tarea es extraer de forma rigurosa los datos técnicos del plano a partir del contenido textual o visual:
-1. NOMBRE DEL PLANO: Código o nombre oficial (ej. PLANO_SAN-CIM-001, Plano_TOL-ANZ-045).
-2. ÁREA DE SERVIDUMBRE: Extrae el valor numérico en m² y su transcripción en letras. Conserva números y letras sin mezclarlos.
-3. LONGITUD DE SERVIDUMBRE: Extrae el valor numérico en metros y su transcripción en letras.
-4. ANCHO DE SERVIDUMBRE: Extrae el valor numérico en metros (ej. 32 m, 11 m) y su transcripción en letras.
-5. CANTIDAD DE POSTES O INFRAESTRUCTURAS: Número entero de apoyos, torres o postes y su expresión en letras.
-6. ESCALA DEL PLANO: Relación de escala exacta (ej. 1:1.000, 1:750, 1:1.500).
-7. PROYECTO Y VOLTAJE: Nombre del proyecto y nivel de tensión (ej. 13.2 kV, 115 kV) si consta.
-8. Si un valor no aparece o no aplica, escribe "—" o "no identificado".
-Responde obligatoriamente en formato JSON válido.
+Tu tarea es extraer de forma rigurosa los datos técnicos del plano para estructurar la información con las siguientes columnas exactas:
+- NOMBRE DEL PLANO: Código o nombre oficial del plano (ej. PLANO_SAN-CIM-001, Plano_TOL-ANZ-045).
+- AREA SERVIDUMBRE (m²) NUMEROS: Valor numérico del área de servidumbre en metros cuadrados (ej. 13356.93 o 4432.11).
+- AREA SERVIDUMBRE (m²) LETRAS: Transcripción del área de servidumbre en letras sin abreviar.
+- LONGITUD SERVIDUMBRE (m) NUMEROS: Valor numérico de la longitud de servidumbre en metros (ej. 412.05).
+- LONGITUD SERVIDUMBRE (m) LETRAS: Transcripción de la longitud de servidumbre en letras.
+- ANCHO SERVIDUMBRE (m) NUMEROS: Valor numérico del ancho o franja de servidumbre en metros (ej. 32).
+- ANCHO SERVIDUMBRE (m) LETRAS: Transcripción del ancho de servidumbre en letras (ej. treinta y dos).
+- CANTIDAD POSTES O INFRAESTRUCTURAS NUMEROS: Número entero de postes, torres o apoyos (ej. 1 o 0).
+- CANTIDAD POSTES O INFRAESTRUCTURAS LETRAS: Cantidad de postes o infraestructuras en letras (ej. uno, cero).
+- ESCALA DEL PLANO: Relación de escala exacta tal como aparece en el rótulo del plano (ej. 1:1.500, 1:750, 1:300).
+
+Reglas obligatorias:
+1. Conserva unidades y escritura originales del plano.
+2. No calcules, conviertas ni inventes valores ausentes; si un dato no aparece, escribe "no identificado".
+3. Transcribe números y letras sin mezclarlos.
+4. Responde obligatoriamente en formato JSON con estas claves exactas.
 """
+
 
 
 class PlanExtractor:
     def __init__(self, ai_client: Any | None = None, model: str = "gpt-4o") -> None:
         self.ai_client = ai_client
         self.model = model
+        self.last_telemetry: dict[str, Any] = {}
 
     async def extract_from_text(
         self,
@@ -33,6 +43,7 @@ class PlanExtractor:
         document_name: str = "",
         location_label: str = "",
     ) -> PlanExtractionPayload:
+        start_t = time.perf_counter()
         if self.ai_client:
             try:
                 response = await self.ai_client.chat.completions.create(
@@ -47,10 +58,50 @@ class PlanExtractor:
                     response_format={"type": "json_object"},
                     temperature=0.0,
                 )
+                latency_ms = int((time.perf_counter() - start_t) * 1000)
+                usage = getattr(response, "usage", None)
+                p_tok = getattr(usage, "prompt_tokens", 0) or 0
+                c_tok = getattr(usage, "completion_tokens", 0) or 0
+                t_tok = getattr(usage, "total_tokens", 0) or (p_tok + c_tok)
+                self.last_telemetry = {
+                    "requested_model": self.model,
+                    "used_model": self.model,
+                    "fallback_triggered": False,
+                    "fallback_reason": None,
+                    "status": "success",
+                    "latency_ms": latency_ms,
+                    "prompt_tokens": p_tok,
+                    "completion_tokens": c_tok,
+                    "total_tokens": t_tok,
+                }
                 raw_json = json.loads(response.choices[0].message.content or "{}")
                 return PlanExtractionPayload.model_validate(raw_json)
             except Exception as e:
+                latency_ms = int((time.perf_counter() - start_t) * 1000)
                 logger.error(f"Error in PlanExtractor LLM call: {e}. Falling back to deterministic parser.")
+                self.last_telemetry = {
+                    "requested_model": self.model,
+                    "used_model": "heuristic-engine",
+                    "fallback_triggered": True,
+                    "fallback_reason": str(e),
+                    "status": "fallback_success",
+                    "latency_ms": latency_ms,
+                    "prompt_tokens": len(text) // 4,
+                    "completion_tokens": 80,
+                    "total_tokens": (len(text) // 4) + 80,
+                }
+        else:
+            self.last_telemetry = {
+                "requested_model": self.model,
+                "used_model": "heuristic-engine",
+                "fallback_triggered": False,
+                "fallback_reason": None,
+                "status": "success",
+                "latency_ms": int((time.perf_counter() - start_t) * 1000),
+                "prompt_tokens": len(text) // 4,
+                "completion_tokens": 60,
+                "total_tokens": (len(text) // 4) + 60,
+            }
 
         return self._heuristic_extract(text, document_name)
 

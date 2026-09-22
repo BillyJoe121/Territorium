@@ -73,7 +73,12 @@ EXTRACTION_SCHEMA = {
 
 class OpenAIExtractionProvider:
     def __init__(self, settings: Settings) -> None:
-        self.client = OpenAI(api_key=settings.openai_api_key, timeout=180, max_retries=1)
+        self.client = OpenAI(
+            api_key=settings.openai_api_key,
+            base_url=settings.ai_base_url,
+            timeout=180,
+            max_retries=1,
+        )
         self.model = settings.ai_model
 
     async def extract(

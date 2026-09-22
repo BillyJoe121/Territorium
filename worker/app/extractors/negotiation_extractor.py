@@ -52,7 +52,18 @@ class NegotiationExtractor:
         if row.third_offer_number and not m3:
             discrepancies.append(f"Oferta 3: {exp3}")
 
-        overall_match_label = "Sí, coinciden" if not discrepancies else f"Discrepancia detectada ({len(discrepancies)})"
+        has_any_offers = any([
+            row.first_offer_number is not None,
+            row.first_offer_letters is not None,
+            row.second_offer_number is not None,
+            row.second_offer_letters is not None,
+            row.third_offer_number is not None,
+            row.third_offer_letters is not None,
+        ])
+        if not has_any_offers:
+            overall_match_label = "Sin ofertas registradas"
+        else:
+            overall_match_label = "Sí, coinciden" if not discrepancies else f"Discrepancia detectada ({len(discrepancies)})"
 
         cell_refs = {}
         if row.first_offer_number_cell:
@@ -65,6 +76,8 @@ class NegotiationExtractor:
             cell_refs["second_offer_letters"] = row.second_offer_letters_cell
         if row.third_offer_number_cell:
             cell_refs["third_offer_numbers"] = row.third_offer_number_cell
+        if row.third_offer_letters_cell:
+            cell_refs["third_offer_letters"] = row.third_offer_letters_cell
 
         return NegotiationExtractionPayload(
             property_code=row.property_code or target_property_code or "no identificado",

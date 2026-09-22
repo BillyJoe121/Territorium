@@ -9,10 +9,13 @@ interface AuthContextValue {
   user: User | null
   loading: boolean
   status: SessionStatus
+  isRecovery: boolean
+  clearRecovery(): void
   clearSessionExpired(): void
   signIn(email: string, password: string): Promise<void>
   signUp(email: string, password: string): Promise<'authenticated' | 'confirmation_required'>
   requestPasswordReset(email: string): Promise<void>
+  updatePassword(password: string): Promise<void>
   signOut(): Promise<void>
 }
 
@@ -40,27 +43,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(dataMode === 'supabase')
   const [isExpired, setIsExpired] = useState(false)
+  const [isRecovery, setIsRecovery] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.location.hash.includes('type=recovery')
+  })
   const [localAuthenticated, setLocalAuthenticated] = useState(() => dataMode === 'local' && getLocalAuthenticationState())
 
   useEffect(() => {
     if (dataMode !== 'supabase' || !supabase) { setLoading(false); return }
     let mounted = true
+
+    // Si la URL contiene access_token y refresh_token (o code de PKCE), establecer la sesión explícitamente
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.replace(/^#/, '')
+      const hashParams = new URLSearchParams(hash)
+      const accessToken = hashParams.get('access_token')
+      const refreshToken = hashParams.get('refresh_token')
+      const isRec = hashParams.get('type') === 'recovery' || hash.includes('type=recovery')
+
+      if (accessToken && refreshToken) {
+        supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+          .then(({ data }) => {
+            if (mounted && data.session) {
+              setSession(data.session)
+              if (isRec) setIsRecovery(true)
+            }
+          })
+          .catch(() => {})
+      }
+
+      const queryParams = new URLSearchParams(window.location.search)
+      const code = queryParams.get('code')
+      if (code) {
+        supabase.auth.exchangeCodeForSession(code)
+          .then(({ data }) => {
+            if (mounted && data.session) {
+              setSession(data.session)
+            }
+          })
+          .catch(() => {})
+      }
+    }
+
     supabase.auth.getSession().then(({ data, error }) => {
       if (!mounted) return
       if (error) {
         console.warn('No se pudo recuperar la sesión de Supabase:', error.message)
         setIsExpired(true)
       }
-      setSession(data.session)
+      if (data.session) {
+        setSession(data.session)
+      }
       setLoading(false)
     })
     const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      if (event === 'TOKEN_REFRESHED' && !nextSession) {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecovery(true)
+      } else if (event === 'TOKEN_REFRESHED' && !nextSession) {
         setIsExpired(true)
       } else if (event === 'SIGNED_OUT') {
         setIsExpired(false)
+        setIsRecovery(false)
       }
-      setSession(nextSession)
+      if (nextSession) {
+        setSession(nextSession)
+      }
       setLoading(false)
     })
     return () => { mounted = false; listener.subscription.unsubscribe() }
@@ -79,6 +126,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? null,
     loading,
     status,
+    isRecovery,
+    clearRecovery() {
+      setIsRecovery(false)
+    },
     clearSessionExpired() {
       setIsExpired(false)
     },
@@ -91,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
       const { error } = await requireSupabase().auth.signInWithPassword({ email: email.trim(), password })
-      if (error) throw new Error('No fue posible iniciar sesión. Verifica tus credenciales.')
+      if (error) throw new Error(error.message || 'No fue posible iniciar sesión. Verifica tus credenciales.')
     },
     async signUp(email, password) {
       if (dataMode === 'local') {
@@ -111,10 +162,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
       const { error } = await requireSupabase().auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/` })
-      if (error) throw new Error('No fue posible enviar el enlace de recuperación.')
+      if (error) throw new Error(error.message || 'No fue posible enviar el enlace de recuperación.')
+    },
+    async updatePassword(password) {
+      if (dataMode === 'local') return
+      const client = requireSupabase()
+      let currentSession = (await client.auth.getSession()).data.session
+
+      // Si no hay sesión activa en memoria/storage, intentar rescatarla del hash o de la URL
+      if (!currentSession && typeof window !== 'undefined') {
+        const hash = window.location.hash.replace(/^#/, '')
+        const hashParams = new URLSearchParams(hash)
+        const accessToken = hashParams.get('access_token')
+        const refreshToken = hashParams.get('refresh_token')
+
+        if (accessToken && refreshToken) {
+          const { data: setRes, error: setErr } = await client.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          })
+          if (!setErr && setRes.session) {
+            currentSession = setRes.session
+            setSession(setRes.session)
+          }
+        }
+
+        const queryParams = new URLSearchParams(window.location.search)
+        const code = queryParams.get('code')
+        if (!currentSession && code) {
+          const { data: exRes, error: exErr } = await client.auth.exchangeCodeForSession(code)
+          if (!exErr && exRes.session) {
+            currentSession = exRes.session
+            setSession(exRes.session)
+          }
+        }
+      }
+
+      if (!currentSession) {
+        throw new Error(
+          'La sesión de recuperación ha caducado o el enlace ya fue utilizado. Solicita un nuevo enlace desde "Olvidé mi contraseña" o cambia tu contraseña directamente en el panel de Supabase.'
+        )
+      }
+
+      const { error } = await client.auth.updateUser({ password })
+      if (error) throw new Error(error.message || 'No fue posible actualizar la contraseña.')
+      setIsRecovery(false)
+      try {
+        window.history.replaceState(null, '', window.location.pathname)
+      } catch {
+        // no-op
+      }
     },
     async signOut() {
       setIsExpired(false)
+      setIsRecovery(false)
       if (dataMode !== 'supabase' || !supabase) {
         setSession(null)
         setLocalAuthenticated(false)
@@ -124,7 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await requireSupabase().auth.signOut({ scope: 'local' })
       if (error) throw new Error('No fue posible cerrar la sesión.')
     },
-  }), [loading, localAuthenticated, session, status])
+  }), [isRecovery, loading, localAuthenticated, session, status])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

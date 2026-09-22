@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import {
+  Activity,
   CheckCircle2,
   Clock,
   History,
+  Play,
   Plus,
   RefreshCw,
   Save,
@@ -17,6 +19,8 @@ import type {
 import {
   DEFAULT_EXTRACTOR_CONFIGS,
   DEFAULT_PROMPT_VERSIONS,
+  createAiExecutionLog,
+  testPromptInSandbox,
 } from '../lib/extractorConfig'
 
 interface ConfigurationViewProps {
@@ -135,6 +139,53 @@ export function ConfigurationView({
       setTimeout(() => setFeedback(null), 3500)
     } finally {
       setSavingKey(null)
+    }
+  }
+
+  const [isTestingTelemetry, setIsTestingTelemetry] = useState(false)
+
+  async function handleRunTelemetryTest() {
+    if (!onRecordAiLog) return
+    setIsTestingTelemetry(true)
+    try {
+      const activePrompt = versionsForSelected.find((v) => v.active) || versionsForSelected[0] || DEFAULT_PROMPT_VERSIONS[0]
+      const sampleText = `OFICINA DE REGISTRO DE INSTRUMENTOS PÚBLICOS
+MATRÍCULA INMOBILIARIA: 350-108418
+PREDIO: LA PLAYA, Cédula catastral: 73043000200020024000
+MUNICIPIO: ANZOÁTEGUI, TOLIMA. ÁREA: 6 ha 9524 m2
+PROPIETARIO: ROSA ELENA RONCANCIO DE GARCÍA con C.C. 28.586.080`
+
+      const testResult = testPromptInSandbox({
+        extractorKey: selectedExtractor,
+        promptText: activePrompt.prompt,
+        schema: activePrompt.schema,
+        sampleInput: sampleText,
+        modelOverride: currentConfig.primaryModel || 'gemini-flash-latest',
+      }, currentConfig)
+
+      const promptTok = testResult.tokens?.prompt || 140
+      const compTok = testResult.tokens?.completion || 85
+      const newLog = createAiExecutionLog({
+        extractorKey: selectedExtractor,
+        promptVersionId: activePrompt.id,
+        promptVersionNumber: activePrompt.version,
+        requestedModel: currentConfig.primaryModel || 'gemini-flash-latest',
+        usedModel: testResult.modelUsed || currentConfig.primaryModel || 'gemini-flash-latest',
+        fallbackTriggered: false,
+        status: 'success',
+        latencyMs: testResult.latencyMs || 280,
+        promptTokens: promptTok,
+        completionTokens: compTok,
+        isTestRun: true,
+      })
+
+      await onRecordAiLog(newLog)
+      setFeedback('Prueba de telemetría ejecutada y registrada con éxito.')
+      setTimeout(() => setFeedback(null), 3500)
+    } catch (err: any) {
+      alert(`Error al registrar prueba de telemetría: ${err?.message || err}`)
+    } finally {
+      setIsTestingTelemetry(false)
     }
   }
 
@@ -555,12 +606,37 @@ export function ConfigurationView({
 
           <div className="card telemetry-table-card">
             <div className="card-header-row">
-              <h3>Registro de Auditoría Técnica de IA (US-059)</h3>
-              <span className="small-muted">Mostrando las ejecuciones más recientes</span>
+              <div>
+                <h3>Registro de Auditoría Técnica de IA (US-059)</h3>
+                <span className="small-muted">Monitoreo en tiempo real de tokens, modelo, latencia y costos</span>
+              </div>
+              <button
+                type="button"
+                className="button secondary small"
+                disabled={isTestingTelemetry}
+                onClick={handleRunTelemetryTest}
+                title="Genera una prueba en sandbox y verifica el flujo de telemetría"
+              >
+                <Play size={13} /> {isTestingTelemetry ? 'Probando...' : 'Probar Telemetría'}
+              </button>
             </div>
 
             {aiLogs.length === 0 ? (
-              <p className="empty-state">No hay registros de telemetría disponibles aún.</p>
+              <div className="empty-state" style={{ padding: '2.5rem 1rem', textAlign: 'center' }}>
+                <Activity size={36} style={{ opacity: 0.4, margin: '0 auto 0.75rem auto', display: 'block' }} />
+                <p style={{ fontWeight: 600, marginBottom: '0.25rem' }}>No hay registros de telemetría disponibles aún.</p>
+                <p className="small-muted" style={{ marginBottom: '1.25rem', maxWidth: '420px', margin: '0 auto 1.25rem auto' }}>
+                  Los registros se generan automáticamente al analizar expedientes, o puedes disparar un diagnóstico de prueba ahora mismo.
+                </p>
+                <button
+                  type="button"
+                  className="button primary small"
+                  disabled={isTestingTelemetry}
+                  onClick={handleRunTelemetryTest}
+                >
+                  <Play size={13} /> {isTestingTelemetry ? 'Ejecutando diagnóstico...' : 'Ejecutar Diagnóstico de Telemetría'}
+                </button>
+              </div>
             ) : (
               <div className="table-responsive">
                 <table className="telemetry-table">

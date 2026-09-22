@@ -29,9 +29,9 @@ import {
   type RemoteExpedienteGroup,
 } from '../../data/expedienteProcessing'
 import {
+  deleteExpedienteFile,
   requestExpedienteAnalysis,
   uploadExpedienteFiles,
-  type DuplicateDecision,
   type ExpedienteUploadProgress,
 } from '../../data/expedienteUpload'
 import {
@@ -129,8 +129,19 @@ const initialDocumentContent: JSONContent = {
 }
 
 function progressFor(group: RemoteExpedienteGroup): number {
+  if (group.status === 'review_ready' || group.status === 'approved') return 100
+  if (group.status === 'queued') return 15
+  if (group.status === 'error') return 0
   if (!group.execution || group.execution.totalUnits === 0) return 0
-  return Math.round((group.execution.completedUnits / group.execution.totalUnits) * 100)
+
+  const stage = group.execution.stage
+  if (stage === 'extracting') return 80
+  if (stage === 'ready_for_extraction') return 60
+
+  const validationRatio = group.execution.totalUnits > 0
+    ? group.execution.completedUnits / group.execution.totalUnits
+    : 0
+  return Math.min(50, Math.round(validationRatio * 50))
 }
 
 function statusText(group: RemoteExpedienteGroup): string {
@@ -175,7 +186,6 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
   const [notice, setNotice] = useState('')
   const [busyGroup, setBusyGroup] = useState<ExpedienteGroupKey | null>(null)
   const [progress, setProgress] = useState<ExpedienteUploadProgress | null>(null)
-  const [decision, setDecision] = useState<DuplicateDecision>('keep_version')
 
   // Review Dialog state for individual groups
   const [activeGroupKey, setActiveGroupKey] = useState<ExpedienteGroupKey | null>(null)
@@ -211,6 +221,7 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
   const [proposalModalOpen, setProposalModalOpen] = useState(false)
   const [lastUserComment, setLastUserComment] = useState('')
   const [activeAiRevisionId, setActiveAiRevisionId] = useState<string | null>(null)
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null)
 
   const mounted = useRef(true)
   const repo: ExpedienteV2Repository = useMemo(() => createExpedienteV2Repository({ mode: 'supabase' }), [])
@@ -271,6 +282,21 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
       unsubscribe()
     }
   }, [project.id, refresh])
+
+  // Polling fallback: ensures the UI refreshes when background analysis finishes even without websocket realtime
+  useEffect(() => {
+    if (!groups) return
+    const isAnyGroupBusy = Object.values(groups).some(
+      (g) => g.status === 'queued' || g.status === 'processing' || g.execution?.status === 'queued' || g.execution?.status === 'processing'
+    )
+    if (!isAnyGroupBusy) return
+
+    const interval = setInterval(() => {
+      void refresh()
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [groups, refresh])
 
   useEffect(() => {
     if (!activeAiRevisionId) return
@@ -338,13 +364,39 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
     setBusyGroup(group.key)
     setProgress(null)
     try {
-      await uploadExpedienteFiles(group.id, group.key, Array.from(files), decision, setProgress)
+      await uploadExpedienteFiles(group.id, group.key, Array.from(files), 'keep_version', setProgress)
       setNotice(`Archivos subidos exitosamente para ${groupInfo[group.key].title}.`)
       await refresh()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'La carga no pudo completarse.')
     } finally {
       setBusyGroup(null)
+      setTimeout(() => {
+        if (mounted.current) {
+          setProgress(null)
+        }
+      }, 500)
+    }
+  }
+
+  async function handleRemoveFile(group: RemoteExpedienteGroup, fileId: string, fileName: string) {
+    if (group.status === 'queued' || group.status === 'processing') {
+      setError('No es posible eliminar archivos mientras el grupo se encuentra en análisis.')
+      return
+    }
+    const confirmed = window.confirm(`¿Deseas retirar el archivo "${fileName}" de este grupo?`)
+    if (!confirmed) return
+
+    setDeletingFileId(fileId)
+    setError(null)
+    try {
+      await deleteExpedienteFile(fileId)
+      setNotice(`Archivo "${fileName}" retirado exitosamente.`)
+      await refresh()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No fue posible eliminar el archivo.')
+    } finally {
+      if (mounted.current) setDeletingFileId(null)
     }
   }
 
@@ -370,23 +422,28 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
   async function openReviewForGroup(group: RemoteExpedienteGroup) {
     setBusyGroup(group.key)
     try {
-      const snap = await repo.getResultVersion(group.id)
-      const payload = snap?.payload ?? {}
+      let snap = await repo.getResultVersion(group.id)
+
+      // Reintentar brevemente si la versión aún se está sincronizando o el payload está vacío
+      let attempts = 0
+      while (
+        attempts < 4 &&
+        (!snap || !snap.payload || Object.keys(snap.payload).length === 0)
+      ) {
+        attempts++
+        await new Promise((resolve) => setTimeout(resolve, 600))
+        snap = await repo.getResultVersion(group.id)
+      }
+
+      if (!snap || !snap.payload || Object.keys(snap.payload).length === 0) {
+        setError('Los resultados del análisis aún se están sincronizando con el servidor. Por favor espera unos momentos y vuelve a hacer clic en "Analizar resultados".')
+        return
+      }
+
+      const payload = snap.payload
       const adapted = adaptCanonicalPayloadToTable(group.key, payload)
       setGroupResult({
-        version: snap ?? {
-          id: '',
-          projectId: project.id,
-          scope: 'group',
-          groupId: group.id,
-          versionNumber: 1,
-          editRevision: 1,
-          status: 'draft',
-          payload,
-          changeSummary: null,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
+        version: snap,
         rows: adapted.rows,
         columns: adapted.columns,
         validationNotices: adapted.validationNotices,
@@ -812,18 +869,6 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
         <section className="expediente-extraction-view" aria-label="Extracción y consolidación">
           <div className="expediente-remote-summary" style={{ marginBottom: '16px' }}>
             <span>{approvedGroupsCount} de 3 subconjuntos aprobados para consolidar</span>
-            <label>
-              Al detectar duplicados
-              <select
-                value={decision}
-                onChange={(event) => setDecision(event.target.value as DuplicateDecision)}
-                disabled={busyGroup !== null}
-              >
-                <option value="keep_version">Conservar como versión</option>
-                <option value="replace">Reemplazar vigente</option>
-                <option value="omit">Omitir</option>
-              </select>
-            </label>
           </div>
 
           <div className="extraction-card-grid">
@@ -833,7 +878,7 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
               const Icon = info.icon
               const active = group.status === 'queued' || group.status === 'processing'
               const canEnqueue = group.files.length > 0 && !active && group.status !== 'review_ready' && group.status !== 'approved'
-              const canReview = group.status === 'review_ready' || group.status === 'approved'
+              const canReview = !active && (group.status === 'review_ready' || group.status === 'approved')
               const uploadProgress = progress?.groupKey === key ? progress.percent : null
               const remoteProgress = progressFor(group)
               const groupBusy = busyGroup === key
@@ -874,7 +919,6 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
                       {groupBusy ? <LoaderCircle size={17} className="spin" /> : <Upload size={17} />}
                       <span>{groupBusy ? 'Cargando…' : 'Agregar archivos'}</span>
                     </label>
-                    <span className="extraction-file-format">{info.accepted}</span>
                   </div>
 
                   <div className="extraction-file-list" aria-label={`Archivos de ${info.title}`}>
@@ -885,52 +929,40 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
                       </div>
                     ) : (
                       <ul>
-                        {group.files.map((file) => (
-                          <li key={file.id}>
-                            <FileText size={15} aria-hidden="true" />
-                            <span className="extraction-file-name" title={file.name}>
-                              {file.name}
-                            </span>
-                            <span className="extraction-file-meta">
-                              {formatFileSize(file.sizeBytes)} ·{' '}
-                              {file.validationStatus === 'validated'
-                                ? 'validado'
-                                : file.validationStatus === 'rejected'
-                                ? 'requiere atención'
-                                : 'pendiente'}
-                            </span>
-                          </li>
-                        ))}
+                        {group.files.map((file) => {
+                          const isDeleting = deletingFileId === file.id
+                          return (
+                            <li key={file.id}>
+                              <FileText size={15} aria-hidden="true" />
+                              <span className="extraction-file-name" title={file.name}>
+                                {file.name}
+                              </span>
+                              <span className="extraction-file-meta">
+                                {formatFileSize(file.sizeBytes)} ·{' '}
+                                {file.validationStatus === 'validated'
+                                  ? 'validado'
+                                  : file.validationStatus === 'rejected'
+                                  ? 'requiere atención'
+                                  : 'pendiente'}
+                              </span>
+                              <button
+                                type="button"
+                                className="extraction-file-remove"
+                                title={`Eliminar ${file.name}`}
+                                aria-label={`Eliminar ${file.name}`}
+                                disabled={groupBusy || active || isDeleting}
+                                onClick={() => void handleRemoveFile(group, file.id, file.name)}
+                              >
+                                {isDeleting ? (
+                                  <LoaderCircle size={14} className="spin" />
+                                ) : (
+                                  <Trash2 size={14} />
+                                )}
+                              </button>
+                            </li>
+                          )
+                        })}
                       </ul>
-                    )}
-                  </div>
-
-                  <div className="extraction-card-actions">
-                    <button
-                      type="button"
-                      className="expediente-primary-action"
-                      disabled={!canEnqueue || groupBusy}
-                      onClick={() => void enqueue(group)}
-                    >
-                      {active || groupBusy ? (
-                        <LoaderCircle size={16} className="spin" />
-                      ) : group.status === 'error' ? (
-                        <RefreshCcw size={16} />
-                      ) : (
-                        <Upload size={16} />
-                      )}
-                      {active ? 'Procesando…' : group.status === 'error' ? 'Reintentar análisis' : 'Enviar para análisis'}
-                    </button>
-                    {canReview && (
-                      <button
-                        type="button"
-                        className="expediente-secondary-action"
-                        disabled={groupBusy}
-                        onClick={() => void openReviewForGroup(group)}
-                      >
-                        <PencilLine size={16} />
-                        {group.status === 'approved' ? 'Ver resultados' : 'Analizar resultados'}
-                      </button>
                     )}
                   </div>
 
@@ -966,6 +998,35 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
                       {group.lastErrorMessage ?? 'No fue posible preparar este grupo. Revisa los archivos y reintenta.'}
                     </p>
                   )}
+
+                  <div className="extraction-card-actions">
+                    <button
+                      type="button"
+                      className="expediente-primary-action"
+                      disabled={!canEnqueue || groupBusy}
+                      onClick={() => void enqueue(group)}
+                    >
+                      {active || groupBusy ? (
+                        <LoaderCircle size={16} className="spin" />
+                      ) : group.status === 'error' ? (
+                        <RefreshCcw size={16} />
+                      ) : (
+                        <Upload size={16} />
+                      )}
+                      {active ? 'Procesando…' : group.status === 'error' ? 'Reintentar análisis' : 'Enviar para análisis'}
+                    </button>
+                    {canReview && (
+                      <button
+                        type="button"
+                        className="expediente-secondary-action"
+                        disabled={groupBusy || active}
+                        onClick={() => void openReviewForGroup(group)}
+                      >
+                        <PencilLine size={16} />
+                        {group.status === 'approved' ? 'Ver resultados' : 'Analizar resultados'}
+                      </button>
+                    )}
+                  </div>
                 </article>
               )
             })}

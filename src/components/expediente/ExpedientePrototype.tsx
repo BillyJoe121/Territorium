@@ -204,9 +204,8 @@ function GroupCard({
         />
         <label className="extraction-upload-button" htmlFor={inputId}>
           <FilePlus2 size={17} />
-          <span>Agregar archivos</span>
+          <span>{isDraggingFiles ? 'Suelta los archivos aquí' : 'Agregar archivos'}</span>
         </label>
-        <span className="extraction-file-format">{isDraggingFiles ? 'Suelta los archivos aquí' : group.acceptedTypes}</span>
       </div>
 
       <p className="extraction-helper">{group.helper}</p>
@@ -233,6 +232,17 @@ function GroupCard({
         )}
       </div>
 
+      {isWorking && (
+        <div className="extraction-progress" aria-live="polite">
+          <div className="extraction-progress-label"><span>{group.status === 'queued' ? `Enviando ${group.singularLabel} a la cola` : `Analizando ${group.singularLabel}`}</span><strong>{group.progress}%</strong></div>
+          <div className="extraction-progress-track"><span style={{ width: `${group.progress}%` }} /></div>
+        </div>
+      )}
+
+      {group.status === 'approved' && <p className="extraction-approved-note"><CheckCircle2 size={15} />Versión {group.resultVersion} aprobada {group.updatedAt ? `· ${group.updatedAt}` : ''}</p>}
+      {group.status === 'stale' && <p className="extraction-stale-note"><CircleAlert size={15} />Los archivos cambiaron; se requiere una nueva aprobación.</p>}
+      {group.status === 'error' && <p className="extraction-error-note"><AlertTriangle size={15} />{group.error ?? 'No fue posible completar el análisis.'}</p>}
+
       <div className="extraction-card-actions">
         <button type="button" className="expediente-primary-action" disabled={!canStart} onClick={() => onStart(group.key)}>
           {isWorking ? <LoaderCircle size={16} className="spin" /> : <Sparkles size={16} />}
@@ -245,17 +255,6 @@ function GroupCard({
           </button>
         )}
       </div>
-
-      {isWorking && (
-        <div className="extraction-progress" aria-live="polite">
-          <div className="extraction-progress-label"><span>{group.status === 'queued' ? `Enviando ${group.singularLabel} a la cola` : `Analizando ${group.singularLabel}`}</span><strong>{group.progress}%</strong></div>
-          <div className="extraction-progress-track"><span style={{ width: `${group.progress}%` }} /></div>
-        </div>
-      )}
-
-      {group.status === 'approved' && <p className="extraction-approved-note"><CheckCircle2 size={15} />Versión {group.resultVersion} aprobada {group.updatedAt ? `· ${group.updatedAt}` : ''}</p>}
-      {group.status === 'stale' && <p className="extraction-stale-note"><CircleAlert size={15} />Los archivos cambiaron; se requiere una nueva aprobación.</p>}
-      {group.status === 'error' && <p className="extraction-error-note"><AlertTriangle size={15} />{group.error ?? 'No fue posible completar el análisis.'}</p>}
     </article>
   )
 }

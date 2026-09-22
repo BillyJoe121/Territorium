@@ -150,23 +150,50 @@ export function adaptCanonicalPayloadToTable(
     return { columns: NEGOTIATION_COLUMNS_CONTRACT, rows: [row], validationNotices: notices }
   }
 
-  // Consolidated
+  // Consolidated: comprehensive mapping of all fields without omitting or summarizing
   const consolidatedFields = [
+    // 1. Identidad y antecedentes jurídicos (Títulos)
     { key: 'folio', label: 'Matrícula inmobiliaria', source: 'Títulos' },
     { key: 'cadastral_id', label: 'Cédula catastral', source: 'Títulos' },
     { key: 'property_name', label: 'Nombre del predio', source: 'Títulos' },
     { key: 'municipality', label: 'Municipio del predio', source: 'Títulos' },
     { key: 'department', label: 'Departamento del predio', source: 'Títulos' },
+    { key: 'village', label: 'Vereda del predio', source: 'Títulos' },
     { key: 'owners', label: 'Propietario(s) actual(es)', source: 'Títulos' },
+    { key: 'area_numbers', label: 'Área del predio (números)', source: 'Títulos' },
+    { key: 'area_letters', label: 'Área del predio (letras)', source: 'Títulos' },
+    { key: 'registry_office', label: 'Oficina de registro', source: 'Títulos' },
     { key: 'acquisition_mode', label: 'Modo de adquisición', source: 'Títulos' },
     { key: 'boundaries', label: 'Linderos del predio', source: 'Títulos' },
+    { key: 'boundaries_document', label: 'Documento que contiene los linderos', source: 'Títulos' },
     { key: 'legal_conditions', label: 'Condiciones jurídicas vigentes', source: 'Títulos' },
+    { key: 'justice_ministry_case', label: 'Radicado Ministerio de Justicia', source: 'Títulos' },
+    { key: 'urt_case', label: 'Radicado consulta URT', source: 'Títulos' },
+    { key: 'urt_territorial_direction', label: 'Dirección territorial URT', source: 'Títulos' },
+
+    // 2. Información técnica y geográfica (Planos)
+    { key: 'plan_name', label: 'Nombre del plano', source: 'Planos' },
+    { key: 'plan_scale', label: 'Escala del plano', source: 'Planos' },
+    { key: 'voltage_level', label: 'Nivel de tensión', source: 'Planos' },
     { key: 'easement_area', label: 'Área de servidumbre', source: 'Planos' },
+    { key: 'easement_area_letters', label: 'Área de servidumbre (letras)', source: 'Planos' },
     { key: 'easement_length', label: 'Longitud de servidumbre', source: 'Planos' },
+    { key: 'easement_length_letters', label: 'Longitud de servidumbre (letras)', source: 'Planos' },
     { key: 'easement_width', label: 'Ancho de servidumbre', source: 'Planos' },
+    { key: 'easement_width_letters', label: 'Ancho de servidumbre (letras)', source: 'Planos' },
     { key: 'infrastructure_count', label: 'Cantidad de postes / apoyos', source: 'Planos' },
+    { key: 'infrastructure_count_letters', label: 'Cantidad de postes / apoyos (letras)', source: 'Planos' },
+
+    // 3. Negociación y ofertas económicas (Negociación)
+    { key: 'property_code', label: 'Código carpeta / predio', source: 'Negociación' },
     { key: 'first_offer', label: 'Primera oferta económica', source: 'Negociación' },
+    { key: 'first_offer_letters', label: 'Primera oferta (letras)', source: 'Negociación' },
     { key: 'second_offer', label: 'Segunda oferta económica', source: 'Negociación' },
+    { key: 'second_offer_letters', label: 'Segunda oferta (letras)', source: 'Negociación' },
+    { key: 'third_offer', label: 'Tercera oferta económica', source: 'Negociación' },
+    { key: 'third_offer_letters', label: 'Tercera oferta (letras)', source: 'Negociación' },
+    { key: 'values_match', label: '¿Coinciden números y letras?', source: 'Negociación' },
+    { key: 'appraisal_value', label: 'Valor del avalúo comercial', source: 'Negociación' },
   ]
 
   const rows: EditableResultRow[] = consolidatedFields.map(({ key, label, source }) => ({

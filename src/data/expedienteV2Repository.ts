@@ -301,10 +301,23 @@ export class SupabaseExpedienteV2Repository implements ExpedienteV2Repository {
   }
 
   async reprocessGroup(groupId: string): Promise<string> {
+    const client = requireSupabase()
+    try {
+      await client
+        .from('expediente_document_groups')
+        .update({ status: 'stale' })
+        .eq('id', groupId)
+        .in('status', ['review_ready', 'approved'])
+    } catch {
+      // Direct update may be restricted by RLS; the RPC handles re-processing transition
+    }
+
     return this.queueGroupAnalysis({
       groupId,
-      idempotencyKey: `reprocess-${groupId}-${crypto.randomUUID()}`,
-      extractorSnapshot: { action: 'reprocess', requestedAt: new Date().toISOString() },
+      idempotencyKey: `expediente-v2:${groupId}:${crypto.randomUUID()}`,
+      extractorSnapshot: { phase: '3-and-4', validation: 'binary-integrity-v1' },
+      promptSnapshot: { schema: { phase: '4-orchestrated' } },
+      modelSnapshot: { provider: 'default', model: 'pipeline-phase4' },
     })
   }
 
@@ -361,7 +374,21 @@ export class SupabaseExpedienteV2Repository implements ExpedienteV2Repository {
 
     const nextVer = existingCons && existingCons.length > 0 ? existingCons[0].version_number + 1 : 1
 
-    // 4. Insert consolidated draft
+    const userRes = await client.auth.getUser()
+    const currentUserId = userId || userRes.data?.user?.id
+
+    // 4. Try save_expediente_consolidation_version RPC, fallback to direct insert with created_by
+    const rpcRes = await client.rpc('save_expediente_consolidation_version', {
+      p_project_id: projectId,
+      p_payload: masterRecord as unknown as Record<string, unknown>,
+      p_change_summary: `Consolidación automática v${nextVer}`,
+    })
+
+    if (!rpcRes.error && rpcRes.data) {
+      return String(rpcRes.data)
+    }
+
+    // Direct insert fallback
     const { data: created, error: insertErr } = await client
       .from('expediente_result_versions')
       .insert({
@@ -372,6 +399,7 @@ export class SupabaseExpedienteV2Repository implements ExpedienteV2Repository {
         status: 'draft',
         payload: masterRecord as unknown as Record<string, unknown>,
         change_summary: `Consolidación automática v${nextVer}`,
+        created_by: currentUserId,
       })
       .select('id')
       .single()

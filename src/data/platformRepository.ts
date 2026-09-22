@@ -119,7 +119,7 @@ export async function loadPlatformState(): Promise<PlatformState> {
     client.from('batches').select('*').in('project_id', projectIds).order('created_at', { ascending: false }),
     client.from('source_documents').select('*').in('project_id', projectIds).order('created_at', { ascending: false }),
     client.from('jobs').select('*').in('project_id', projectIds).order('created_at', { ascending: false }),
-    client.from('property_records').select('*,extracted_attributes(attribute_key,value_json,confidence,evidence),source_documents(original_name)').in('project_id', projectIds).order('updated_at', { ascending: false }),
+    client.from('property_records').select('*,extracted_attributes(attribute_key,value_json,confidence,evidence)').in('project_id', projectIds).order('updated_at', { ascending: false }),
     client.from('review_tasks').select('*').in('project_id', projectIds).order('created_at', { ascending: false }),
     client.from('audit_events').select('*').in('project_id', projectIds).order('created_at', { ascending: false }).limit(500),
     client.from('document_tasks').select('*').in('project_id', projectIds).order('created_at', { ascending: false }),
@@ -196,7 +196,28 @@ export async function loadPlatformState(): Promise<PlatformState> {
       tasks: tasks.filter((task) => task.batchId === row.id),
     }
   })
-  const records: PropertyRecord[] = (recordsResult.data ?? []).map((row: any) => ({ id: row.id, projectId: row.project_id, sourceDocumentId: row.source_document_id, name: row.canonical_name, folio: row.folio ?? 'POR VALIDAR', municipality: row.municipality ?? 'Por definir', reviewState: row.review_status === 'approved' ? 'aprobado' : row.review_status === 'returned' ? 'devuelto' : 'pendiente', confidence: Number(row.confidence ?? 0), updatedAt: row.updated_at, sourceName: row.source_documents?.original_name, fields: Object.fromEntries((row.extracted_attributes ?? []).map((attribute: any) => [attribute.attribute_key, typeof attribute.value_json === 'string' ? attribute.value_json : attribute.value_json?.value ?? JSON.stringify(attribute.value_json)])) }))
+  const docNameMap = new Map<string, string>()
+  for (const doc of documentsResult.data ?? []) {
+    if (doc.id) docNameMap.set(doc.id, doc.original_name)
+  }
+  const records: PropertyRecord[] = (recordsResult.data ?? []).map((row: any) => ({
+    id: row.id,
+    projectId: row.project_id,
+    sourceDocumentId: row.source_document_id,
+    name: row.canonical_name,
+    folio: row.folio ?? 'POR VALIDAR',
+    municipality: row.municipality ?? 'Por definir',
+    reviewState: row.review_status === 'approved' ? 'aprobado' : row.review_status === 'returned' ? 'devuelto' : 'pendiente',
+    confidence: Number(row.confidence ?? 0),
+    updatedAt: row.updated_at,
+    sourceName: row.source_document_id ? docNameMap.get(row.source_document_id) ?? row.source_documents?.original_name : row.source_documents?.original_name,
+    fields: Object.fromEntries(
+      (row.extracted_attributes ?? []).map((attribute: any) => [
+        attribute.attribute_key,
+        typeof attribute.value_json === 'string' ? attribute.value_json : attribute.value_json?.value ?? JSON.stringify(attribute.value_json),
+      ])
+    ),
+  }))
   const reviews: ReviewTask[] = (reviewsResult.data ?? []).map((row: any) => ({ id: row.id, recordId: row.property_record_id, title: row.title, reason: row.reason, severity: row.severity === 'high' ? 'alta' : row.severity === 'low' ? 'baja' : 'media', state: row.status === 'approved' ? 'aprobado' : row.status === 'returned' ? 'devuelto' : 'pendiente', createdAt: row.created_at, resolvedAt: row.resolved_at }))
   const audit: AuditEvent[] = (auditResult.data ?? []).map((row: any) => ({ id: String(row.id), projectId: row.project_id, at: row.created_at, action: row.action, detail: String(row.metadata?.detail ?? row.entity_type), actorId: row.actor_id }))
 
@@ -262,7 +283,11 @@ export async function createRemoteProject(input: {
   department: string
   powerLine?: string
 }) {
-  const client = requireSupabase(); const { data: { user }, error: authError } = await client.auth.getUser()
+  const client = requireSupabase()
+  const { data: { user }, error: authError } = await client.auth.getUser()
+  if (authError || !user) {
+    throw new Error('Debes iniciar sesión para crear un proyecto.')
+  }
   const projectId = crypto.randomUUID()
   const payload: Record<string, any> = {
     id: projectId,
@@ -801,15 +826,17 @@ export async function activateRemotePromptVersion(versionId: string, extractorKe
 
 export async function recordRemoteAiExecutionLog(log: AiExecutionLog): Promise<void> {
   const client = requireSupabase()
+  const isUuid = (val?: string | null) =>
+    Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
 
-  const { error } = await client.from('ai_execution_logs').insert({
-    id: log.id.startsWith('ailog-') ? undefined : log.id,
-    project_id: log.projectId ?? null,
-    batch_id: log.batchId ?? null,
-    task_id: log.taskId ?? null,
-    document_id: log.documentId ?? null,
+  const payload = {
+    id: isUuid(log.id) ? log.id : undefined,
+    project_id: isUuid(log.projectId) ? log.projectId : null,
+    batch_id: isUuid(log.batchId) ? log.batchId : null,
+    task_id: isUuid(log.taskId) ? log.taskId : null,
+    document_id: isUuid(log.documentId) ? log.documentId : null,
     extractor_key: log.extractorKey,
-    prompt_version_id: log.promptVersionId ?? null,
+    prompt_version_id: isUuid(log.promptVersionId) ? log.promptVersionId : null,
     prompt_version_number: log.promptVersionNumber ?? null,
     requested_model: log.requestedModel,
     used_model: log.usedModel,
@@ -823,7 +850,13 @@ export async function recordRemoteAiExecutionLog(log: AiExecutionLog): Promise<v
     estimated_cost_usd: log.estimatedCostUsd,
     error_message: log.errorMessage ?? null,
     is_test_run: log.isTestRun,
-  })
+  }
+
+  let { error } = await client.from('ai_execution_logs').insert(payload)
+  if (error && (error.code === '23503' || error.message?.includes('foreign key')) && payload.document_id) {
+    const retryResult = await client.from('ai_execution_logs').insert({ ...payload, document_id: null })
+    error = retryResult.error
+  }
 
   if (error) throw new Error(error.message)
 }

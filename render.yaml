@@ -62,11 +62,17 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: AI_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai/
       - key: AI_MODEL
-        value: gpt-5.5
+        value: gemini-2.0-flash
       - key: POLL_SECONDS
         value: 5
       - key: LEASE_SECONDS
         value: 300
       - key: WORKER_ENABLED
         value: true
+      - key: EXPEDIENTE_V2_WORKER_ENABLED
+        value: true
+      - key: EXPEDIENTE_V2_POLL_SECONDS
+        value: 2

@@ -3,11 +3,32 @@ import socket
 from dataclasses import dataclass
 
 
+def _load_env_file_if_present() -> None:
+    candidates = [
+        os.path.join(os.getcwd(), ".env"),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"),
+    ]
+    for env_path in candidates:
+        if os.path.isfile(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, val = line.split("=", 1)
+                    key = key.strip()
+                    val = val.strip().strip("'\"")
+                    if key and key not in os.environ:
+                        os.environ[key] = val
+            break
+
+
 @dataclass(frozen=True)
 class Settings:
     supabase_url: str
     supabase_secret_key: str
     openai_api_key: str
+    ai_base_url: str | None
     ai_model: str
     poll_seconds: float
     lease_seconds: int
@@ -18,11 +39,23 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        _load_env_file_if_present()
+        api_key = os.getenv("GEMINI_API_KEY", os.getenv("OPENAI_API_KEY", "")).strip()
+        base_url = os.getenv("AI_BASE_URL", os.getenv("OPENAI_BASE_URL", "")).strip() or None
+
+        # Si se provee GEMINI_API_KEY y no se especificó AI_BASE_URL, default a la API oficial OpenAI de Google
+        if os.getenv("GEMINI_API_KEY") and not base_url:
+            base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+
+        default_model = "gemini-flash-latest" if (os.getenv("GEMINI_API_KEY") or (base_url and "googleapis.com" in base_url)) else "gpt-5.5"
+        ai_model = os.getenv("AI_MODEL", default_model)
+
         return cls(
             supabase_url=os.getenv("SUPABASE_URL", "").rstrip("/"),
             supabase_secret_key=os.getenv("SUPABASE_SECRET_KEY", os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")),
-            openai_api_key=os.getenv("OPENAI_API_KEY", ""),
-            ai_model=os.getenv("AI_MODEL", "gpt-5.5"),
+            openai_api_key=api_key,
+            ai_base_url=base_url,
+            ai_model=ai_model,
             poll_seconds=max(2.0, float(os.getenv("POLL_SECONDS", "5"))),
             lease_seconds=max(60, int(os.getenv("LEASE_SECONDS", "300"))),
             worker_name=os.getenv("WORKER_NAME", socket.gethostname()),

@@ -59,71 +59,66 @@ class NegotiationBookResult(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-# Controlled dictionary of header patterns
-HEADER_SYNONYMS = {
-    "property_code": ["carpeta", "predio", "codigo", "id predio", "referencia", "identificador"],
-    "first_offer_number": [
-        "valor oferta no. 1 (numeros)",
-        "valor oferta no. 1 (numero)",
-        "valor oferta no 1 (numeros)",
-        "primera oferta (numeros)",
-        "primera oferta numeros",
-        "oferta 1 numeros",
-        "oferta 1 (numeros)",
-        "oferta no. 1 (numeros)",
-        "oferta 1",
-    ],
-    "first_offer_letters": [
-        "valor oferta no. 1 (letras)",
-        "valor oferta no 1 (letras)",
-        "primera oferta (letras)",
-        "primera oferta letras",
-        "oferta 1 letras",
-        "oferta 1 (letras)",
-        "oferta no. 1 (letras)",
-    ],
-    "second_offer_number": [
-        "valor oferta no. 2 (numeros)",
-        "valor oferta no. 2 (numero)",
-        "valor oferta no 2 (numeros)",
-        "segunda oferta (numeros)",
-        "segunda oferta numeros",
-        "oferta 2 numeros",
-        "oferta 2 (numeros)",
-        "oferta no. 2 (numeros)",
-        "oferta 2",
-    ],
-    "second_offer_letters": [
-        "valor oferta no. 2 (letras)",
-        "valor oferta no 2 (letras)",
-        "segunda oferta (letras)",
-        "segunda oferta letras",
-        "oferta 2 letras",
-        "oferta 2 (letras)",
-        "oferta no. 2 (letras)",
-    ],
-    "third_offer_number": [
-        "valor oferta no. 3 (numeros)",
-        "valor oferta no. 3 (numero)",
-        "valor oferta no 3 (numeros)",
-        "tercera oferta (numeros)",
-        "tercera oferta numeros",
-        "oferta 3 numeros",
-        "oferta 3 (numeros)",
-        "oferta no. 3 (numeros)",
-        "oferta 3",
-    ],
-    "third_offer_letters": [
-        "valor oferta no. 3 (letras)",
-        "valor oferta no 3 (letras)",
-        "tercera oferta (letras)",
-        "tercera oferta letras",
-        "oferta 3 letras",
-        "oferta 3 (letras)",
-        "oferta no. 3 (letras)",
-    ],
-    "appraisal_value": ["avaluo", "avaluo comercial", "valor comercial", "valor del predio"],
+SPANISH_NUMBER_WORDS = {
+    "pesos", "peso", "millon", "millones", "mil", "ciento", "cientos",
+    "doscientos", "trescientos", "cuatrocientos", "quinientos", "seiscientos",
+    "setecientos", "ochocientos", "novecientos", "veinti", "veinticinco",
+    "treinta", "cuarenta", "cincuenta", "sesenta", "setenta", "ochenta", "noventa",
+    "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez",
 }
+
+
+def _is_spanish_words(val: Any) -> bool:
+    if not val or not isinstance(val, str):
+        return False
+    norm = _normalize_text(val)
+    tokens = set(re.findall(r"[a-z]+", norm))
+    return bool(tokens & SPANISH_NUMBER_WORDS)
+
+
+def _is_property_code_header(norm: str) -> bool:
+    if norm in ("carpeta", "codigo", "codigo carpeta", "cod carpeta", "id predio", "codigo predio", "cod predio", "id carpeta", "predio"):
+        return True
+    if norm.startswith(("carpeta", "codigo carpeta", "cod carpeta")):
+        return True
+    if norm.startswith(("codigo predio", "id predio", "cod predio")):
+        return True
+    return False
+
+
+def _classify_header(norm: str) -> str | None:
+    if _is_property_code_header(norm):
+        return "property_code"
+
+    # Offer 1
+    if any(k in norm for k in ["oferta 1", "oferta no. 1", "oferta no 1", "primera oferta", "valor oferta 1"]):
+        if any(w in norm for w in ["letras", "letra", "texto", "escrita"]):
+            return "first_offer_letters"
+        if any(w in norm for w in ["numeros", "numero", "cifra", "(num)"]):
+            return "first_offer_number"
+        return "first_offer_number"
+
+    # Offer 2
+    if any(k in norm for k in ["oferta 2", "oferta no. 2", "oferta no 2", "segunda oferta", "valor oferta 2"]):
+        if any(w in norm for w in ["letras", "letra", "texto", "escrita"]):
+            return "second_offer_letters"
+        if any(w in norm for w in ["numeros", "numero", "cifra", "(num)"]):
+            return "second_offer_number"
+        return "second_offer_number"
+
+    # Offer 3
+    if any(k in norm for k in ["oferta 3", "oferta no. 3", "oferta no 3", "tercera oferta", "valor oferta 3"]):
+        if any(w in norm for w in ["letras", "letra", "texto", "escrita"]):
+            return "third_offer_letters"
+        if any(w in norm for w in ["numeros", "numero", "cifra", "(num)"]):
+            return "third_offer_number"
+        return "third_offer_number"
+
+    # Appraisal
+    if any(k in norm for k in ["avaluo", "avaluo comercial", "valor comercial"]):
+        return "appraisal_value"
+
+    return None
 
 
 def _clean_numeric_value(val: Any) -> float | None:
@@ -175,7 +170,7 @@ def read_negotiation_xlsx(
         ws_formulas = wb_formulas[sheet_name]
         ws_values = wb_values[sheet_name]
 
-        # Locate header row: scan first 10 rows
+        # Locate header row: scan first 15 rows
         header_map: dict[int, str] = {}  # col_idx -> canonical field
         header_row_idx = None
 
@@ -186,11 +181,21 @@ def read_negotiation_xlsx(
                 cell_val = ws_values.cell(row=r_idx, column=c_idx).value
                 if cell_val and isinstance(cell_val, str):
                     norm = _normalize_text(cell_val)
-                    for canon_field, synonyms in HEADER_SYNONYMS.items():
-                        if any(syn in norm for syn in synonyms):
-                            row_map[c_idx] = canon_field
-                            matches += 1
-                            break
+                    canon = _classify_header(norm)
+                    if canon:
+                        # Check duplicate mappings
+                        existing = [col for col, f in row_map.items() if f == canon]
+                        if existing and canon.endswith("_number"):
+                            prefix = canon.replace("_number", "")
+                            # Check next row to see if this duplicate column has letters
+                            sample_val = ws_values.cell(row=r_idx + 1, column=c_idx).value
+                            if _is_spanish_words(sample_val):
+                                canon = f"{prefix}_letters"
+                        elif canon == "property_code" and existing:
+                            # Keep primary property code column (e.g. CARPETA)
+                            continue
+                        row_map[c_idx] = canon
+                        matches += 1
             if matches >= 2:  # found header row
                 header_map = row_map
                 header_row_idx = r_idx
@@ -238,14 +243,27 @@ def read_negotiation_xlsx(
             prop_code = str(row_data.get("property_code") or "").strip() or None
             offer1_num = _clean_numeric_value(row_data.get("first_offer_number"))
             offer1_let = str(row_data.get("first_offer_letters") or "").strip() or None
+            if offer1_num is None and _is_spanish_words(row_data.get("first_offer_number")):
+                if not offer1_let:
+                    offer1_let = str(row_data.get("first_offer_number")).strip()
 
             offer2_num = _clean_numeric_value(row_data.get("second_offer_number"))
             offer2_let = str(row_data.get("second_offer_letters") or "").strip() or None
+            if offer2_num is None and _is_spanish_words(row_data.get("second_offer_number")):
+                if not offer2_let:
+                    offer2_let = str(row_data.get("second_offer_number")).strip()
 
             offer3_num = _clean_numeric_value(row_data.get("third_offer_number"))
             offer3_let = str(row_data.get("third_offer_letters") or "").strip() or None
+            if offer3_num is None and _is_spanish_words(row_data.get("third_offer_number")):
+                if not offer3_let:
+                    offer3_let = str(row_data.get("third_offer_number")).strip()
 
             appraisal = _clean_numeric_value(row_data.get("appraisal_value"))
+
+            # Skip metadata/notes rows with no property code and no offer values
+            if not prop_code and offer1_num is None and offer2_num is None and offer3_num is None and not offer1_let:
+                continue
 
             row_obj = NegotiationOfferRow(
                 property_code=prop_code,
@@ -276,7 +294,13 @@ def read_negotiation_xlsx(
                 active_row = r
                 break
     if not active_row and all_rows:
-        active_row = all_rows[0]
+        # Prioritize rows that contain valid offer amounts or property code
+        for r in all_rows:
+            if r.first_offer_number is not None or r.second_offer_number is not None or r.third_offer_number is not None:
+                active_row = r
+                break
+        if not active_row:
+            active_row = all_rows[0]
 
     return NegotiationBookResult(
         document_id=document_id,

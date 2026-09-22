@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useState } from 'react'
-import { Activity, AlertTriangle, Archive, ArrowRight, CheckCircle, CheckCircle2, ClipboardCheck, Cloud, Download, FilePlus2, FileSpreadsheet, FileText, FolderKanban, Landmark, LayoutDashboard, LoaderCircle, LogOut, Plus, RefreshCw, RotateCcw, Settings2, Shield, ShieldCheck, SlidersHorizontal, Trash2, UploadCloud, Users, WifiOff, X, XCircle } from 'lucide-react'
+import { Activity, AlertTriangle, Archive, ArrowRight, CheckCircle, CheckCircle2, ClipboardCheck, Cloud, Download, FilePlus2, FileSpreadsheet, FileText, FolderKanban, Landmark, LayoutDashboard, LoaderCircle, LogOut, Plus, RotateCcw, Settings2, Shield, ShieldCheck, SlidersHorizontal, Trash2, UploadCloud, Users, WifiOff, X, XCircle } from 'lucide-react'
 import { Toaster, toast as sonnerToast } from 'sonner'
 import { BentoGridKpis, type KpiMetric } from './components/ui/BentoGridKpis'
 import { DashboardCharts, type PropertyStatusData, type DiscrepancyCategoryData } from './components/ui/DashboardCharts'
@@ -198,7 +198,7 @@ function Brand() {
 }
 
 function App() {
-  const { user, loading: authLoading, status: authStatus, signOut } = useAuth()
+  const { user, loading: authLoading, status: authStatus, signOut, isRecovery } = useAuth()
   const remote = dataMode === 'supabase'
   const [screen, setScreen] = useState<Screen>('inicio')
   const [state, setState] = useState<PlatformState>(() =>
@@ -758,18 +758,21 @@ function App() {
   }
 
   async function handleRecordAiLog(log: AiExecutionLog) {
-    if (remote) {
-      try {
-        await recordRemoteAiExecutionLog(log)
-      } catch {
-        // Silently ignore telemetry transmission error
-      }
-      return
+    const enrichedLog: AiExecutionLog = {
+      ...log,
+      projectId: log.projectId || activeProjectId || null,
     }
     update({
       ...state,
-      aiLogs: [log, ...(state.aiLogs || [])],
+      aiLogs: [enrichedLog, ...(state.aiLogs || [])],
     })
+    if (remote) {
+      try {
+        await recordRemoteAiExecutionLog(enrichedLog)
+      } catch (err) {
+        console.error('Error al registrar telemetría de IA en Supabase:', err)
+      }
+    }
   }
 
   async function handleReprocessTask(taskId: string) {
@@ -1185,7 +1188,9 @@ function App() {
   }
 
   return <SessionGuard currentRole={activeProject?.role}>
-    {authStatus === 'unauthenticated' ? <AuthScreen /> : (
+    {authStatus === 'unauthenticated' || isRecovery ? (
+      <AuthScreen initialMode={isRecovery ? 'update_password' : 'signin'} />
+    ) : (
       <div className={`app-shell ${density === 'compact' ? 'density-compact' : 'density-comfortable'}`}>
         <aside className="sidebar">
           <Brand />
@@ -1256,18 +1261,7 @@ function App() {
           <div className="sidebar-footer">
             <div className="sidebar-footer-top">
               <div className="sidebar-footer-tools">
-                {remote && (
-                  <button
-                    type="button"
-                    className="sidebar-tool-icon-btn"
-                    onClick={() => void refresh()}
-                    aria-label="Sincronizar datos"
-                    title={lastSync ? `Última sincronización: ${lastSync.toLocaleTimeString('es-CO')}` : 'Sincronizar'}
-                  >
-                    <RefreshCw size={13} className={loading ? 'spin' : ''} />
-                  </button>
-                )}
-                <ThemeToggle />
+                <ThemeToggle className="sidebar-theme-toggle" />
               </div>
             </div>
 

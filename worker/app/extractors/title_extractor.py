@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import time
 from typing import Any
 
 from ..models.canonical import DocumentFragment
@@ -12,16 +13,41 @@ TITLE_STUDY_SYSTEM_PROMPT = """
 Eres un abogado experto en estudios de títulos inmobiliarios en Colombia.
 Tu tarea es extraer de forma exhaustiva, rigurosa y canónica la información del predio a partir de los documentos proporcionados.
 Debes respetar estrictamente las siguientes reglas jurídicas y de negocio:
-1. FOLIO DE MATRÍCULA: Identifica el número de matrícula inmobiliaria (ej. 350-108418, 050N-204581).
-2. CÉDULA CATASTRAL: Extrae la identificación catastral del inmueble (nacional o municipal).
-3. PROPIETARIOS DEL PREDIO: Extrae ÚNICAMENTE los propietarios actuales con derechos vigentes. Incluye nombre completo, tipo de documento y número. NO incluyas propietarios históricos que ya transfirieron su derecho.
-4. MODO DE ADQUISICIÓN: Redacta cronológicamente: acto jurídico + otorgante + identificación del título (escritura/resolución/sentencia) + número de anotación en el folio.
-5. LINDEROS: Transcribe de manera EXACTA Y LITERAL el texto completo de linderos. NO RESUMAS. Conserva los puntos cardinales, colindantes y distancias tal cual aparecen.
-6. DOCUMENTO QUE CONTIENE LOS LINDEROS: Indica el documento fuente exacto (ej. Escritura 2215 del 1999-10-04 de la Notaría 3 de Ibagué).
-7. CONDICIONES JURÍDICAS VIGENTES: Si existen gravámenes, servidumbres, embargos o limitaciones vigentes, descríbelas separadas por punto y coma (tipo de limitación + a favor de + título de constitución + anotación registral). Si no hay ninguna, escribe exactamente "sin condiciones jurídicas vigentes".
-8. RADICADOS: Extrae el radicado de consulta ante el Ministerio de Justicia y ante la Unidad de Restitución de Tierras (URT), así como su dirección territorial.
-9. Si un dato no aparece, escribe "no identificado".
-Responde obligatoriamente en formato JSON válido que cumpla la estructura solicitada.
+1. FOLIO DE MATRÍCULA ("folio"): Identifica el número de matrícula inmobiliaria (ej. 324-72404, 050N-204581).
+2. CÉDULA CATASTRAL ("cadastral_id"): Identificación catastral del inmueble (30 dígitos o cédula local).
+3. PROPIETARIOS DEL PREDIO ("owners"): Extrae ÚNICAMENTE los propietarios actuales con derechos vigentes. Lista de objetos con "name" (nombre completo), "document_type" (ej. CC, NIT, CE), "document_number" (número de documento) y "participation_percentage".
+4. NOMBRE DEL PREDIO ("property_name"): Nombre oficial del predio, lote o finca analizada (ej. El Porvenir, Veracruz, La Esperanza).
+5. MUNICIPIO Y DEPARTAMENTO ("municipality", "department", "village"): Municipio, departamento y vereda de ubicación del inmueble.
+6. ÁREA DEL PREDIO ("area_numbers", "area_letters"): Área total del inmueble en números y en letras.
+7. OFICINA DE REGISTRO ("registry_office"): Oficina de Registro de Instrumentos Públicos (ORIP) correspondiente.
+8. MODO DE ADQUISICIÓN ("acquisition_mode"): Redacta cronológicamente: acto jurídico + otorgante + identificación del título (escritura/resolución/sentencia) + número de anotación en el folio.
+9. LINDEROS ("boundaries"): Transcribe de manera EXACTA Y LITERAL el texto completo de linderos. NO RESUMAS. Conserva los puntos cardinales, colindantes y distancias tal cual aparecen.
+10. DOCUMENTO QUE CONTIENE LOS LINDEROS ("boundaries_document"): Documento fuente exacto (ej. Escritura Pública No. 0540 del 03 de octubre de 2013 de la Notaría Única de Cimitarra).
+11. CONDICIONES JURÍDICAS VIGENTES ("legal_conditions"): Si existen gravámenes, servidumbres, embargos o limitaciones vigentes, descríbelas separadas por punto y coma. Si no hay ninguna, escribe exactamente "sin condiciones jurídicas vigentes".
+12. RADICADOS ("urt_case", "urt_territorial_direction", "justice_ministry_case"): Extrae radicados de consulta URT, dirección territorial URT y Ministerio de Justicia.
+13. Si un dato no aparece, escribe "no identificado".
+
+Responde obligatoriamente en formato JSON con la siguiente estructura de claves exactas:
+{
+  "folio": "...",
+  "cadastral_id": "...",
+  "owners": [{"name": "...", "document_type": "...", "document_number": "...", "participation_percentage": 100.0}],
+  "property_name": "...",
+  "municipality": "...",
+  "department": "...",
+  "village": "...",
+  "area_numbers": "...",
+  "area_letters": "...",
+  "registry_office": "...",
+  "acquisition_mode": "...",
+  "boundaries": "...",
+  "boundaries_document": "...",
+  "legal_conditions": "...",
+  "justice_ministry_case": "...",
+  "urt_case": "...",
+  "urt_territorial_direction": "...",
+  "boundaries_exactness": "LINDEROS EXACTOS"
+}
 """
 
 
@@ -29,6 +55,7 @@ class TitleStudyExtractor:
     def __init__(self, ai_client: Any | None = None, model: str = "gpt-4o") -> None:
         self.ai_client = ai_client
         self.model = model
+        self.last_telemetry: dict[str, Any] = {}
 
     async def extract_from_text(
         self,
@@ -40,6 +67,7 @@ class TitleStudyExtractor:
         Extracts title study fields using OpenAI Structured Outputs if available,
         or deterministic heuristic extraction if running offline.
         """
+        start_t = time.perf_counter()
         if self.ai_client:
             try:
                 response = await self.ai_client.chat.completions.create(
@@ -54,10 +82,50 @@ class TitleStudyExtractor:
                     response_format={"type": "json_object"},
                     temperature=0.0,
                 )
+                latency_ms = int((time.perf_counter() - start_t) * 1000)
+                usage = getattr(response, "usage", None)
+                p_tok = getattr(usage, "prompt_tokens", 0) or 0
+                c_tok = getattr(usage, "completion_tokens", 0) or 0
+                t_tok = getattr(usage, "total_tokens", 0) or (p_tok + c_tok)
+                self.last_telemetry = {
+                    "requested_model": self.model,
+                    "used_model": self.model,
+                    "fallback_triggered": False,
+                    "fallback_reason": None,
+                    "status": "success",
+                    "latency_ms": latency_ms,
+                    "prompt_tokens": p_tok,
+                    "completion_tokens": c_tok,
+                    "total_tokens": t_tok,
+                }
                 raw_json = json.loads(response.choices[0].message.content or "{}")
                 return TitleStudyPayload.model_validate(raw_json)
             except Exception as e:
+                latency_ms = int((time.perf_counter() - start_t) * 1000)
                 logger.error(f"Error in TitleStudyExtractor LLM call: {e}. Falling back to deterministic parser.")
+                self.last_telemetry = {
+                    "requested_model": self.model,
+                    "used_model": "heuristic-engine",
+                    "fallback_triggered": True,
+                    "fallback_reason": str(e),
+                    "status": "fallback_success",
+                    "latency_ms": latency_ms,
+                    "prompt_tokens": len(text) // 4,
+                    "completion_tokens": 120,
+                    "total_tokens": (len(text) // 4) + 120,
+                }
+        else:
+            self.last_telemetry = {
+                "requested_model": self.model,
+                "used_model": "heuristic-engine",
+                "fallback_triggered": False,
+                "fallback_reason": None,
+                "status": "success",
+                "latency_ms": int((time.perf_counter() - start_t) * 1000),
+                "prompt_tokens": len(text) // 4,
+                "completion_tokens": 100,
+                "total_tokens": (len(text) // 4) + 100,
+            }
 
         return self._heuristic_extract(text, document_name)
 

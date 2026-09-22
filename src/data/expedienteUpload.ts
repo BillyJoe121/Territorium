@@ -172,10 +172,58 @@ export async function requestExpedienteAnalysis(input: {
   promptSnapshot?: Record<string, unknown>
   modelSnapshot?: Record<string, unknown>
 }): Promise<string> {
-  const { data, error } = await requireSupabase().functions.invoke('expediente-analysis-request', {
-    body: input,
+  const client = requireSupabase()
+
+  // 1. Intento por Edge Function (si está desplegada en Supabase)
+  try {
+    const { data, error } = await client.functions.invoke('expediente-analysis-request', {
+      body: input,
+    })
+    if (!error && data?.executionId) {
+      return String(data.executionId)
+    }
+  } catch {
+    // La Edge Function no está desplegada en el proyecto; recurrir al RPC directo
+  }
+
+  // 2. Ejecución directa por RPC en PostgreSQL (seguro e idempotente)
+  const { data, error } = await client.rpc('queue_expediente_group_execution', {
+    p_group_id: input.groupId,
+    p_idempotency_key: input.idempotencyKey.trim(),
+    p_extractor_snapshot: input.extractorSnapshot ?? {},
+    p_prompt_snapshot: input.promptSnapshot ?? {},
+    p_model_snapshot: input.modelSnapshot ?? {},
   })
   if (error) throw new Error(error.message)
-  if (!data?.executionId) throw new Error('La cola no devolvió un identificador de ejecución.')
-  return String(data.executionId)
+  return String(data)
 }
+
+export async function deleteExpedienteFile(fileId: string): Promise<void> {
+  const client = requireSupabase()
+
+  // 1. Intentar primero por RPC directo en Supabase
+  try {
+    const { data, error } = await client.rpc('delete_expediente_document_file', {
+      p_file_id: fileId,
+    })
+    if (!error && data !== false) {
+      return
+    }
+  } catch {
+    // Continuar al fallback del worker si el RPC no existe
+  }
+
+  // 2. Fallback mediante el worker local que cuenta con clave de servicio
+  const workerUrl = 'http://127.0.0.1:8080/api/expediente/delete-file'
+  const resp = await fetch(workerUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_id: fileId }),
+  })
+  if (resp.ok) {
+    return
+  }
+  const errData = await resp.json().catch(() => ({}))
+  throw new Error(errData.detail || 'Error al eliminar el archivo.')
+}
+
