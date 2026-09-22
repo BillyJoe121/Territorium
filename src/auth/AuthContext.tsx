@@ -104,10 +104,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (event === 'SIGNED_OUT') {
         setIsExpired(false)
         setIsRecovery(false)
+        setSession(null)
       }
-      if (nextSession) {
-        setSession(nextSession)
-      }
+      setSession(nextSession)
       setLoading(false)
     })
     return () => { mounted = false; listener.subscription.unsubscribe() }
@@ -216,14 +215,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async signOut() {
       setIsExpired(false)
       setIsRecovery(false)
+      setSession(null)
+      setLocalAuthenticated(false)
+      saveLocalAuthenticationState(false)
       if (dataMode !== 'supabase' || !supabase) {
-        setSession(null)
-        setLocalAuthenticated(false)
-        saveLocalAuthenticationState(false)
         return
       }
-      const { error } = await requireSupabase().auth.signOut({ scope: 'local' })
-      if (error) throw new Error('No fue posible cerrar la sesión.')
+      try {
+        await requireSupabase().auth.signOut({ scope: 'local' })
+      } catch (err) {
+        console.warn('Error al invocar signOut en Supabase:', err)
+      }
     },
   }), [isRecovery, loading, localAuthenticated, session, status])
 
