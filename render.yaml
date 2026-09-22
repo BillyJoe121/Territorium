@@ -14,6 +14,8 @@ services:
         sync: false
       - key: VITE_APP_ORIGIN
         sync: false
+      - key: VITE_WORKER_URL
+        sync: false
       - key: VITE_MAX_UPLOAD_MB
         value: 50
     routes:
@@ -65,7 +67,7 @@ services:
       - key: AI_BASE_URL
         value: https://generativelanguage.googleapis.com/v1beta/openai/
       - key: AI_MODEL
-        value: gemini-2.0-flash
+        value: gemini-3.8-flash
       - key: POLL_SECONDS
         value: 5
       - key: LEASE_SECONDS
