@@ -46,11 +46,22 @@ class SupabaseGateway:
         return Job.model_validate(rows[0]) if rows else None
 
     async def claim_document_ai_revision(self) -> Any | None:
-        response = await self._request(
-            "POST",
-            "/rest/v1/rpc/claim_next_expediente_document_ai_revision",
-            json={"p_worker_name": self.settings.worker_name},
-        )
+        try:
+            response = await self._request(
+                "POST",
+                "/rest/v1/rpc/claim_next_expediente_document_ai_revision",
+                json={"p_worker_name": self.settings.worker_name},
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 400:
+                # La función SQL no existe aún en la BD (script APLICAR_EN_SUPABASE_EXPEDIENTE_V2.sql
+                # pendiente de ejecutar en el dashboard de Supabase). Se omite sin traceback.
+                logger.warning(
+                    "claim_next_expediente_document_ai_revision → 400 (función SQL no disponible). "
+                    "Ejecuta APLICAR_EN_SUPABASE_EXPEDIENTE_V2.sql en el dashboard de Supabase."
+                )
+                return None
+            raise
         rows = response.json()
         if not rows:
             return None
