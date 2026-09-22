@@ -271,13 +271,21 @@ export function activatePromptVersion(
 export function calculateEstimatedCost(
   model: string,
   promptTokens: number,
-  completionTokens: number
+  completionTokens: number,
+  date: Date = new Date()
 ): number {
   const lower = model.toLowerCase()
   let promptRatePerMillion = 2.5
   let completionRatePerMillion = 10.0
 
-  if (lower.includes('gpt-4o-mini')) {
+  if (lower.includes('gemini')) {
+    // Tarifas oficiales Gemini 3.8 Flash (Estándar):
+    // Hasta 31 dic 2026: Entrada USD 0.75 / 1M tokens, Salida USD 3.75 / 1M tokens
+    // A partir de 1 ene 2027: Entrada USD 1.50 / 1M tokens, Salida USD 7.50 / 1M tokens
+    const is2027OrLater = date.getFullYear() >= 2027
+    promptRatePerMillion = is2027OrLater ? 1.50 : 0.75
+    completionRatePerMillion = is2027OrLater ? 7.50 : 3.75
+  } else if (lower.includes('gpt-4o-mini')) {
     promptRatePerMillion = 0.15
     completionRatePerMillion = 0.6
   } else if (lower.includes('gpt-4o')) {

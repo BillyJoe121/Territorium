@@ -256,7 +256,16 @@ class SupabaseGateway:
                 eff_cost = float(estimated_cost_usd)
             else:
                 m = eff_used_model.lower()
-                if "mini" in m or "flash" in m:
+                year = datetime.now(UTC).year
+                if "gemini" in m:
+                    # Tarifas oficiales Gemini 3.8 Flash (Estándar):
+                    # Hasta 31 dic 2026: Entrada USD 0.75 / 1M tokens, Salida USD 3.75 / 1M tokens
+                    # A partir de 1 ene 2027: Entrada USD 1.50 / 1M tokens, Salida USD 7.50 / 1M tokens
+                    if year >= 2027:
+                        p_rate, c_rate = 1.50, 7.50
+                    else:
+                        p_rate, c_rate = 0.75, 3.75
+                elif "mini" in m:
                     p_rate, c_rate = 0.15, 0.60
                 elif "claude-3-5" in m:
                     p_rate, c_rate = 3.0, 15.0

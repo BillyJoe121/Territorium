@@ -162,6 +162,18 @@ describe('Épica E06: Configuración de extractores, prompts y modelos (P0)', ()
       const costMini = calculateEstimatedCost('gpt-4o-mini', 1000, 500)
       // 1000 * 0.15/1M = 0.00015; 500 * 0.6/1M = 0.0003 => 0.00045
       expect(costMini).toBeCloseTo(0.00045, 5)
+
+      // Gemini 3.8 Flash (hasta 31 dic 2026: 0.75 in / 3.75 out por 1M)
+      const date2026 = new Date('2026-09-22T00:00:00Z')
+      const costGemini2026 = calculateEstimatedCost('gemini-3.8-flash', 1000, 500, date2026)
+      // 1000 * 0.75/1M = 0.00075; 500 * 3.75/1M = 0.001875 => 0.002625
+      expect(costGemini2026).toBeCloseTo(0.002625, 6)
+
+      // Gemini 3.8 Flash (a partir de 2027: 1.50 in / 7.50 out por 1M)
+      const date2027 = new Date('2027-01-15T00:00:00Z')
+      const costGemini2027 = calculateEstimatedCost('gemini-3.8-flash', 1000, 500, date2027)
+      // 1000 * 1.50/1M = 0.0015; 500 * 7.50/1M = 0.00375 => 0.00525
+      expect(costGemini2027).toBeCloseTo(0.00525, 6)
     })
 
     it('construye un log de ejecución estructurado con modelo solicitado vs usado y tokens', () => {
