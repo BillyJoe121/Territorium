@@ -67,6 +67,9 @@ export function ConfigurationView({
   onUpdateConfig,
   onCreatePromptVersion,
   onActivatePromptVersion,
+  onRecordAiLog,
+  onResetDemo,
+  isLocalMode,
 }: ConfigurationViewProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('extractores')
   const [selectedExtractor, setSelectedExtractor] = useState<'title_study' | 'plan' | 'negotiation'>('title_study')
