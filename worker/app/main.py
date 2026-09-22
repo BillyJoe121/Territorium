@@ -66,6 +66,12 @@ async def expediente_v2_worker_loop(stop: asyncio.Event) -> None:
                     if cleanup_counter % 25 == 0:
                         await gateway.cleanup_expired_expediente_uploads()
                     continue
+                pending_extractions = await gateway.get_pending_v2_extractions()
+                if pending_extractions:
+                    for pending_exec in pending_extractions:
+                        from .expediente_v2 import trigger_phase4_extraction_if_ready
+                        await trigger_phase4_extraction_if_ready(gateway, pending_exec, orchestrator)
+                    continue
                 revision = await gateway.claim_document_ai_revision()
                 if revision:
                     await process_document_ai_revision(gateway, revision, ai_client, settings.ai_model)

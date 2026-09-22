@@ -435,12 +435,57 @@ class SupabaseGateway:
         response = await self._request(
             "GET",
             "/rest/v1/expediente_executions",
-            params={"id": f"eq.{execution_id}", "select": "stage,status", "limit": "1"},
+            params={"id": f"eq.{execution_id}", "select": "stage,status,completed_units,total_units", "limit": "1"},
         )
         rows = response.json()
         if not rows:
             return False
-        return rows[0].get("stage") == "ready_for_extraction"
+        row = rows[0]
+        if row.get("status") in ("completed", "review_ready", "failed", "cancelled"):
+            return False
+        stage = row.get("stage")
+        if stage in ("ready_for_extraction", "extracting"):
+            return True
+        c = row.get("completed_units", 0)
+        t = row.get("total_units", 0)
+        return t > 0 and c >= t
+
+    async def get_pending_v2_extractions(self) -> list[Any]:
+        """Finds executions that have validated inputs but haven't completed Phase 4 extraction."""
+        from .expediente_v2 import V2Execution
+
+        response = await self._request(
+            "GET",
+            "/rest/v1/expediente_executions",
+            params={
+                "status": "in.(queued,processing)",
+                "stage": "in.(ready_for_extraction,extracting,queued)",
+                "select": "id,project_id,group_id,input_version,extractor_key,extractor_snapshot,prompt_snapshot,model_snapshot,completed_units,total_units",
+                "order": "created_at.asc",
+                "limit": "5",
+            },
+        )
+        rows = response.json()
+        if not rows or not isinstance(rows, list):
+            return []
+        pending = []
+        for r in rows:
+            t = r.get("total_units", 0)
+            c = r.get("completed_units", 0)
+            if t > 0 and c >= t:
+                pending.append(
+                    V2Execution(
+                        id=r["id"],
+                        project_id=r["project_id"],
+                        group_id=r["group_id"],
+                        extractor_key=r["extractor_key"],
+                        extractor_snapshot=r.get("extractor_snapshot") or {},
+                        prompt_snapshot=r.get("prompt_snapshot") or {},
+                        model_snapshot=r.get("model_snapshot") or {},
+                        input_version=int(r.get("input_version") or 1),
+                    )
+                )
+        return pending
 
     async def get_v2_group_info(self, group_id: str) -> dict[str, Any]:
         response = await self._request(

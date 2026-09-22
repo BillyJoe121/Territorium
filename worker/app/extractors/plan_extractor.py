@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import re
@@ -46,17 +47,20 @@ class PlanExtractor:
         start_t = time.perf_counter()
         if self.ai_client:
             try:
-                response = await self.ai_client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": PLAN_SYSTEM_PROMPT},
-                        {
-                            "role": "user",
-                            "content": f"Archivo: {document_name}\nUbicación: {location_label}\n\nContenido técnico:\n{text}",
-                        },
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0.0,
+                response = await asyncio.wait_for(
+                    self.ai_client.chat.completions.create(
+                        model=self.model,
+                        messages=[
+                            {"role": "system", "content": PLAN_SYSTEM_PROMPT},
+                            {
+                                "role": "user",
+                                "content": f"Archivo: {document_name}\nUbicación: {location_label}\n\nContenido técnico:\n{text}",
+                            },
+                        ],
+                        response_format={"type": "json_object"},
+                        temperature=0.0,
+                    ),
+                    timeout=60.0,
                 )
                 latency_ms = int((time.perf_counter() - start_t) * 1000)
                 usage = getattr(response, "usage", None)
