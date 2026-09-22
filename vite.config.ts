@@ -16,5 +16,16 @@ export default defineConfig({
       },
     },
   },
-  server: { strictPort: true, port: 5173 },
+  server: {
+    strictPort: true,
+    port: 5173,
+    proxy: {
+      // En desarrollo local: redirige /api/* al worker en el puerto 8080.
+      // En producción VITE_WORKER_URL se define, por lo que este proxy no aplica.
+      '/api': {
+        target: 'http://127.0.0.1:8080',
+        changeOrigin: true,
+      },
+    },
+  },
 })

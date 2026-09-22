@@ -213,8 +213,8 @@ export async function deleteExpedienteFile(fileId: string): Promise<void> {
     // Continuar al fallback del worker si el RPC no existe
   }
 
-  // 2. Fallback mediante el worker local que cuenta con clave de servicio
-  const workerUrl = 'http://127.0.0.1:8080/api/expediente/delete-file'
+  // 2. Fallback mediante el worker (en producción apunta a VITE_WORKER_URL; en local usa el proxy de Vite).
+  const workerUrl = `${config.workerUrl}/api/expediente/delete-file`
   const resp = await fetch(workerUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -226,4 +226,5 @@ export async function deleteExpedienteFile(fileId: string): Promise<void> {
   const errData = await resp.json().catch(() => ({}))
   throw new Error(errData.detail || 'Error al eliminar el archivo.')
 }
+
 

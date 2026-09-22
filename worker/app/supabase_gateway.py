@@ -1,6 +1,8 @@
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
+
 
 import httpx
 
@@ -15,6 +17,9 @@ from .contracts import (
     SourceDocument,
 )
 from .settings import Settings
+
+
+logger = logging.getLogger(__name__)
 
 
 class SupabaseGateway:
@@ -576,7 +581,16 @@ class SupabaseGateway:
         response = await self._request("POST", "/rest/v1/rpc/expire_expediente_upload_reservations", json={"p_limit": 100})
         for row in response.json():
             try:
-                await self._request("DELETE", f"/storage/v1/object/source-documents/{quote(row['storage_path'], safe='/')}")
-            except Exception:
-                # The reservation remains expired; a later cleanup can retry deletion.
-                pass
+                del_resp = await self._request(
+                    "POST",
+                    f"/storage/v1/object/remove/source-documents",
+                    json={"prefixes": [row["storage_path"]]},
+                )
+                if del_resp.status_code >= 400:
+                    logger.warning(
+                        f"Storage cleanup failed for expired upload {row.get('storage_path')}: "
+                        f"HTTP {del_resp.status_code}"
+                    )
+            except Exception as exc:
+                # La reserva permanece expirada; una limpieza posterior puede reintentar el borrado.
+                logger.warning(f"Storage cleanup exception for expired upload {row.get('storage_path')}: {exc}")

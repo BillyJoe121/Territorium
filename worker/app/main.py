@@ -185,14 +185,22 @@ async def _execute_file_deletion(file_id: str) -> dict[str, Any]:
             logger.error(f"Failed to retire file {file_id}: {patch_resp.status_code} {patch_resp.text}")
             raise HTTPException(status_code=500, detail=err_msg)
 
-        # 4. Optional Storage cleanup
+        # 4. Optional Storage cleanup — usa el endpoint "remove" recomendado por Supabase.
         if storage_path:
-            with suppress(Exception):
-                await gateway.client.post(
-                    f"{settings.supabase_url}/storage/v1/object/source-documents",
+            try:
+                del_resp = await gateway.client.post(
+                    f"{settings.supabase_url}/storage/v1/object/remove/source-documents",
                     headers=gateway.headers,
                     json={"prefixes": [storage_path]},
                 )
+                if del_resp.status_code >= 400:
+                    logger.warning(
+                        f"Storage cleanup failed for {storage_path}: "
+                        f"HTTP {del_resp.status_code} — {del_resp.text[:200]}"
+                    )
+            except Exception as exc:
+                # No bloqueamos el flujo pero registramos para evitar objetos huérfanos.
+                logger.warning(f"Storage cleanup exception for {storage_path}: {exc}")
 
         # 5. Count remaining active files
         rem_resp = await gateway.client.get(
