@@ -1,0 +1,256 @@
+// ================================================================
+// SIDEBAR – Territorium Dark Premium
+// Paleta: Verde profundo oscuro + active naranja + hover suave
+// ================================================================
+
+// ─── Variables del sidebar ──────────────────────────────────────
+$sidebar-bg-start: #18302A;
+$sidebar-bg-end:   #1F3D32;
+$sidebar-text:     rgba(255, 255, 255, 0.82);
+$sidebar-muted:    rgba(255, 255, 255, 0.45);
+$sidebar-active-bg: #E97025;         // Naranja de la paleta Territorium
+$sidebar-active-text: #ffffff;
+$sidebar-hover-bg: rgba(255, 255, 255, 0.08);
+$sidebar-border:   rgba(255, 255, 255, 0.06);
+$sidebar-width: 256px;
+
+// ─── Drawer principal ───────────────────────────────────────────
+.leftSidebar {
+    background: linear-gradient(180deg, $sidebar-bg-start 0%, $sidebar-bg-end 100%) !important;
+    border-right: 1px solid $sidebar-border !important;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25) !important;
+
+    .mini-icon { display: none; }
+    .mini-text  { display: block; }
+}
+
+// ─── Logo ───────────────────────────────────────────────────────
+.verticalLayout {
+    .logo {
+        padding-left: 4px;
+        display: flex;
+        align-items: center;
+    }
+}
+
+// ─── Scrollbar area ─────────────────────────────────────────────
+.scrollnavbar {
+    height: 100%;
+
+    .userbottom {
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+    }
+
+    // Sub-header de sección (ej: "Inicio")
+    .smallCap {
+        padding: 3px 12px 10px 0 !important;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-top: 20px;
+        color: $sidebar-muted;
+
+        &:first-child { margin-top: 0 !important; }
+    }
+
+    // ─── Items de navegación ────────────────────────────────────
+    .v-list-group__items .v-list-item,
+    .v-list-item {
+        border-radius: 10px;
+        padding-inline-start: calc(12px + var(--indent-padding) / 10) !important;
+        margin: 0 0 2px;
+        color: $sidebar-text;
+        transition: background 0.18s ease, color 0.18s ease;
+
+        // Ícono
+        .v-list-item__prepend {
+            margin-inline-end: 12px;
+            color: #ffffff !important;
+            transition: color 0.18s ease;
+
+            .iconClass,
+            svg,
+            i {
+                color: #ffffff !important;
+                stroke: #ffffff !important;
+            }
+        }
+
+        // Texto
+        .v-list-item-title {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: $sidebar-text;
+        }
+
+        .v-list-item__append {
+            font-size: 0.875rem;
+            .v-icon { 
+                margin-inline-start: 10px; 
+                color: #ffffff !important; 
+            }
+        }
+
+        // Hover
+        &:hover {
+            background: $sidebar-hover-bg !important;
+            color: #fff;
+            .v-list-item__prepend { 
+                color: #fff !important;
+                .iconClass,
+                svg,
+                i {
+                    color: #ffffff !important;
+                    stroke: #ffffff !important;
+                }
+            }
+            .v-list-item-title { color: #fff; }
+            > .v-list-item__overlay { display: none; }
+        }
+    }
+
+    // ─── Lista principal ────────────────────────────────────────
+    .v-list {
+        color: $sidebar-text;
+        background: transparent !important;
+
+        // Item activo (leaf navItem)
+        > .v-list-item.v-list-item--active {
+            background: $sidebar-active-bg !important;
+            border-radius: 10px;
+            color: $sidebar-active-text !important;
+            box-shadow: 0 4px 14px rgba(233, 112, 37, 0.35);
+
+            .v-list-item__prepend { 
+                color: $sidebar-active-text !important; 
+                .iconClass,
+                svg,
+                i {
+                    color: $sidebar-active-text !important;
+                    stroke: $sidebar-active-text !important;
+                }
+            }
+            .v-list-item-title { color: $sidebar-active-text !important; font-weight: 600; }
+            > .v-list-item__overlay { display: none; }
+        }
+
+        // Ripple overlay oculto siempre en activo
+        .v-list-item--active > .v-list-item__overlay { display: none; }
+
+        // Grupo con hijos
+        > .v-list-group {
+            position: relative;
+
+            // Activador del grupo activo (padre)
+            > .v-list-item--active,
+            > .v-list-item--active:hover {
+                background: rgba($sidebar-active-bg, 0.15) !important;
+                border-radius: 10px;
+                color: #fff !important;
+                .v-list-item__prepend { 
+                    color: #fff !important; 
+                    .iconClass,
+                    svg,
+                    i {
+                        color: #fff !important;
+                        stroke: #fff !important;
+                    }
+                }
+                .v-list-item-title { color: #fff !important; font-weight: 600; }
+                > .v-list-item__overlay { display: none; }
+            }
+
+            // Sub-ítems activos (hijos)
+            .v-list-group__items .v-list-item.v-list-item--active {
+                background: $sidebar-active-bg !important;
+                border-radius: 10px;
+                color: $sidebar-active-text !important;
+                box-shadow: 0 4px 14px rgba(233, 112, 37, 0.35);
+                > .v-list-item__overlay { display: none; }
+
+                .v-list-item__prepend { 
+                    color: $sidebar-active-text !important; 
+                    .iconClass,
+                    svg,
+                    i {
+                        color: $sidebar-active-text !important;
+                        stroke: $sidebar-active-text !important;
+                    }
+                }
+                .v-list-item-title { color: $sidebar-active-text !important; font-weight: 600; }
+            }
+        }
+    }
+}
+
+// ─── Rail (mini) mode ───────────────────────────────────────────
+.v-navigation-drawer--rail:not(.v-navigation-drawer--is-hovering),
+.mini-sidebar .leftSidebar:not(:hover) {
+    .scrollnavbar .v-list .v-list-group__items {
+        display: none !important;
+        height: 0 !important;
+        max-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+    }
+
+    .v-list-group__header .v-list-item__append,
+    .hide-menu {
+        display: none !important;
+        opacity: 0 !important;
+    }
+
+    .leftPadding { margin-left: 0; }
+}
+
+// ─── Mini sidebar (collapsed en desktop) ────────────────────────
+@media only screen and (min-width: 1170px) {
+    .mini-sidebar {
+        .profile-logout { opacity: 0; width: 0; }
+
+        .scrollnavbar .smallCap {
+            padding: 3px 12px 12px 12px !important;
+        }
+
+        .mini-icon { display: block; }
+        .mini-text  { display: none; }
+
+        .v-list { padding: 14px !important; }
+
+        .leftSidebar:hover {
+            box-shadow: $box-shadow !important;
+            .mini-icon { display: none; }
+            .mini-text  { display: block; }
+            .profile-logout { opacity: 1; width: auto; }
+            .scrollnavbar .smallCap { padding: 3px 12px 12px 0 !important; }
+        }
+
+        .leftSidebar:hover,
+        .v-navigation-drawer--expand-on-hover:hover {
+            .scrollnavbar .v-list .v-list-group__items {
+                display: block !important;
+                height: auto !important;
+                max-height: none !important;
+                overflow: visible !important;
+                opacity: 1 !important;
+                pointer-events: auto !important;
+            }
+
+            .v-list-group__header .v-list-item__append,
+            .hide-menu {
+                display: flex !important;
+                opacity: 1 !important;
+            }
+        }
+    }
+}
+
+// ─── Scrollbar ──────────────────────────────────────────────────
+.ps__rail-y { z-index: 9; }
+.ps__thumb-y { background: rgba(255,255,255,0.2) !important; }
+

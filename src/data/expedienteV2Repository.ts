@@ -1,4 +1,5 @@
 import { requireSupabase } from '../lib/supabase'
+import { requestExpedienteAnalysis } from './expedienteUpload'
 import {
   expedienteGroupKeys,
   type ExpedienteConsolidationStatus,
@@ -188,16 +189,13 @@ export class SupabaseExpedienteV2Repository implements ExpedienteV2Repository {
   }
 
   async queueGroupAnalysis(input: QueueGroupAnalysisInput): Promise<string> {
-    const client = requireSupabase()
-    const { data, error } = await client.rpc('queue_expediente_group_execution', {
-      p_group_id: input.groupId,
-      p_idempotency_key: input.idempotencyKey,
-      p_extractor_snapshot: input.extractorSnapshot ?? {},
-      p_prompt_snapshot: input.promptSnapshot ?? {},
-      p_model_snapshot: input.modelSnapshot ?? {},
+    return requestExpedienteAnalysis({
+      groupId: input.groupId,
+      idempotencyKey: input.idempotencyKey,
+      extractorSnapshot: input.extractorSnapshot,
+      promptSnapshot: input.promptSnapshot,
+      modelSnapshot: input.modelSnapshot,
     })
-    if (error) throw new Error(error.message)
-    return String(data)
   }
 
   async saveDraft(

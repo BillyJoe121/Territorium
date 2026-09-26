@@ -33,6 +33,7 @@ class Settings:
     poll_seconds: float
     lease_seconds: int
     worker_name: str
+    worker_wake_token: str
     enabled: bool
     expediente_v2_enabled: bool
     expediente_v2_poll_seconds: float
@@ -61,6 +62,7 @@ class Settings:
             poll_seconds=max(2.0, float(os.getenv("POLL_SECONDS", "5"))),
             lease_seconds=max(60, int(os.getenv("LEASE_SECONDS", "300"))),
             worker_name=os.getenv("WORKER_NAME", socket.gethostname()),
+            worker_wake_token=os.getenv("WORKER_WAKE_TOKEN", "").strip(),
             enabled=os.getenv("WORKER_ENABLED", "true").lower() in {"1", "true", "yes"},
             expediente_v2_enabled=os.getenv("EXPEDIENTE_V2_WORKER_ENABLED", "true").lower() in {"1", "true", "yes"},
             expediente_v2_poll_seconds=max(1.0, float(os.getenv("EXPEDIENTE_V2_POLL_SECONDS", "2"))),

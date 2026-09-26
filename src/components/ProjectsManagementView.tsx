@@ -1,5 +1,5 @@
 import { FormEvent, useMemo, useState } from 'react'
-import { Archive, ArchiveRestore, Building2, Calendar, CheckCircle2, Edit3, Filter, FolderKanban, MapPin, Plus, Search, Shield, Users, Zap } from 'lucide-react'
+import { Archive, ArchiveRestore, Building2, Calendar, CheckCircle2, Edit3, Filter, FolderKanban, MapPin, Plus, Search, Shield, Zap } from 'lucide-react'
 import type { Project } from '../types'
 
 interface ProjectsManagementViewProps {
@@ -9,7 +9,6 @@ interface ProjectsManagementViewProps {
   onCreate: (input: { name: string; clientName: string; municipality: string; department: string; powerLine: string }) => Promise<void>
   onUpdateMetadata: (projectId: string, input: { name: string; clientName: string; municipality: string; department: string; powerLine: string }) => Promise<void>
   onToggleArchive: (projectId: string, isArchived: boolean) => Promise<void>
-  onNavigateToUsers: (projectId: string) => void
   busyAction: string | null
 }
 
@@ -22,7 +21,6 @@ export function ProjectsManagementView({
   onCreate,
   onUpdateMetadata,
   onToggleArchive,
-  onNavigateToUsers,
   busyAction,
 }: ProjectsManagementViewProps) {
   const [search, setSearch] = useState('')
@@ -199,17 +197,6 @@ export function ProjectsManagementView({
                               <Edit3 size={15} />
                             </button>
                           )}
-                          <button
-                            type="button"
-                            className="icon-button small"
-                            title="Gestionar participantes y roles (US-014)"
-                            onClick={() => {
-                              onSelect(project.id)
-                              onNavigateToUsers(project.id)
-                            }}
-                          >
-                            <Users size={15} />
-                          </button>
                           {canManage && (
                             <button
                               type="button"

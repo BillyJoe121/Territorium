@@ -19,10 +19,16 @@ export function ProjectDetailView({
   records: _records,
   reviews: _reviews,
   documents: _documents,
-  onNavigate: _onNavigate,
+  onNavigate,
   onEditMetadata: _onEditMetadata,
 }: ProjectDetailViewProps) {
-  return dataMode === 'supabase'
-    ? <RemoteExpedienteWorkspace project={project} />
-    : <ExpedientePrototype project={project} />
+  const handleBack = () => onNavigate('expedientes')
+
+  return (
+    <div className="project-detail-layout" style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+      {dataMode === 'supabase'
+        ? <RemoteExpedienteWorkspace project={project} onBack={handleBack} />
+        : <ExpedientePrototype project={project} onBack={handleBack} />}
+    </div>
+  )
 }

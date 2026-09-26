@@ -1,14 +1,16 @@
 import asyncio
+import hmac
 import logging
 from contextlib import asynccontextmanager, suppress
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, status
 
 from openai import AsyncOpenAI
 
 from .ai_provider import OpenAIExtractionProvider
 from .document_ai_revision import process_document_ai_revision
+from .document_comparison import process_comparison_job
 from .expediente_v2 import process_expediente_v2_task
 from .pipeline import process_job
 from .pipeline_v2 import Phase4PipelineOrchestrator
@@ -76,6 +78,10 @@ async def expediente_v2_worker_loop(stop: asyncio.Event) -> None:
                 if revision:
                     await process_document_ai_revision(gateway, revision, ai_client, settings.ai_model)
                     continue
+                comparison = await gateway.claim_comparison_job()
+                if comparison:
+                    await process_comparison_job(gateway, comparison, ai_client, settings.ai_model)
+                    continue
                 if cleanup_counter % 30 == 0:
                     await gateway.cleanup_expired_expediente_uploads()
                 cleanup_counter += 1
@@ -127,13 +133,28 @@ async def health() -> dict[str, str]:
 
 @app.get("/ready")
 async def ready() -> dict[str, str]:
-    if not settings.expediente_v2_ready:
+    if not settings.expediente_v2_enabled or not settings.expediente_v2_ready:
         raise HTTPException(status_code=503, detail="worker configuration incomplete")
     return {
         "status": "ready",
         "phase3": "ingestion-ready",
         "phase4": "ai-ready" if settings.ready else "deterministic-ready",
     }
+
+
+def wake_request_authorized(provided_token: str | None) -> bool:
+    expected_token = settings.worker_wake_token
+    return bool(expected_token and provided_token and hmac.compare_digest(expected_token, provided_token))
+
+
+@app.post("/internal/wake", status_code=status.HTTP_202_ACCEPTED)
+async def wake_worker(request: Request) -> dict[str, str]:
+    if not wake_request_authorized(request.headers.get("x-territorium-wake-token")):
+        # Do not reveal whether this internal route exists or is misconfigured.
+        raise HTTPException(status_code=404, detail="Not found")
+    if not settings.expediente_v2_enabled or not settings.expediente_v2_ready:
+        raise HTTPException(status_code=503, detail="worker configuration incomplete")
+    return {"status": "accepted"}
 
 
 class DeleteFileBody(BaseModel):
@@ -244,4 +265,3 @@ async def _execute_file_deletion(file_id: str) -> dict[str, Any]:
         }
     finally:
         await gateway.close()
-

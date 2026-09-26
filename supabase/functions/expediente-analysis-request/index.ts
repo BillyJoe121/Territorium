@@ -30,6 +30,42 @@ interface AnalysisRequest {
   modelSnapshot?: Record<string, unknown>
 }
 
+interface WorkerWakeConfig {
+  url: string
+  token: string
+}
+
+function workerWakeConfig(): WorkerWakeConfig | null {
+  const rawUrl = Deno.env.get('WORKER_WAKE_URL')?.trim()
+  const token = Deno.env.get('WORKER_WAKE_TOKEN')?.trim()
+  if (!rawUrl || !token) return null
+
+  try {
+    const url = new URL(rawUrl)
+    if (url.protocol !== 'https:' || url.username || url.password) return null
+    return { url: url.toString(), token }
+  } catch {
+    return null
+  }
+}
+
+async function signalWorker(config: WorkerWakeConfig): Promise<void> {
+  try {
+    const response = await fetch(config.url, {
+      method: 'POST',
+      headers: { 'x-territorium-wake-token': config.token },
+      signal: AbortSignal.timeout(15_000),
+    })
+    const event = response.ok ? 'expediente_worker_wake_accepted' : 'expediente_worker_wake_rejected'
+    console.info(JSON.stringify({ event, status: response.status }))
+  } catch (error) {
+    console.warn(JSON.stringify({
+      event: 'expediente_worker_wake_failed',
+      errorType: error instanceof Error ? error.name : 'unknown',
+    }))
+  }
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: cors(request) })
   if (request.method !== 'POST') return json(request, { error: 'method_not_allowed' }, 405)
@@ -61,6 +97,9 @@ Deno.serve(async (request) => {
   const { data: { user }, error: authError } = await client.auth.getUser(token)
   if (authError || !user) return json(request, { error: 'invalid_token' }, 401)
 
+  const wakeConfig = workerWakeConfig()
+  if (!wakeConfig) return json(request, { error: 'processing_not_configured' }, 503)
+
   const { data: executionId, error } = await client.rpc('queue_expediente_group_execution', {
     p_group_id: payload.groupId,
     p_idempotency_key: payload.idempotencyKey.trim(),
@@ -69,5 +108,9 @@ Deno.serve(async (request) => {
     p_model_snapshot: payload.modelSnapshot ?? {},
   })
   if (error) return json(request, { error: 'analysis_not_accepted', detail: error.message }, 422)
+
+  // The execution is already durable. Waking the worker is best-effort and must not
+  // turn a successful enqueue into a user-visible failure during a cold start.
+  EdgeRuntime.waitUntil(signalWorker(wakeConfig))
   return json(request, { executionId, status: 'queued' }, 202)
 })

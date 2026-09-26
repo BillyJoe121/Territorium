@@ -24,12 +24,16 @@ modifica datos por sí sola.
    `expediente_executions` y `expediente_execution_tasks` (la migración las
    agrega a la publicación `supabase_realtime`).
 3. Desplegar `expediente-analysis-request` con `APP_ORIGINS` igual a la lista
-   exacta de orígenes de la aplicación. No usar el valor por defecto en
-   producción.
+   exacta de orígenes de la aplicación. Configurar además
+   `WORKER_WAKE_URL=https://<worker>/internal/wake` y `WORKER_WAKE_TOKEN`.
+   La URL debe usar HTTPS y el token debe ser un secreto aleatorio compartido
+   únicamente con el worker. No usar el valor por defecto en producción.
 4. Desplegar por separado el worker con `SUPABASE_URL`,
    `SUPABASE_SECRET_KEY`, `EXPEDIENTE_V2_WORKER_ENABLED=true` y un
-   `WORKER_NAME` identificable. Mantener esos secretos fuera del frontend y de
-   Edge Functions.
+   `WORKER_NAME` identificable. Configurar el mismo `WORKER_WAKE_TOKEN` que
+   en la Edge Function. Mantener las claves de Supabase, IA y todos los
+   secretos fuera del frontend; el token de wake-up solo vive en los dos
+   servicios de servidor.
 5. Ajustar `expediente_worker_limits` por combinación extractor/proveedor
    antes de incrementar réplicas del worker. El límite se aplica al reclamar
    tareas, no en el navegador.
@@ -47,6 +51,14 @@ modifica datos por sí sola.
 - El progreso visible se calcula desde `completed_units/total_units` y se
   rehidrata desde la base de datos al recargar; Realtime solo acelera la
   actualización.
+- Al encolar, la Edge Function conserva la ejecución y envía una señal de
+  activación no bloqueante al worker. Si el servicio está arrancando o no
+  responde, la tarea permanece durable en `queued`; revisar el evento
+  `expediente_worker_wake_failed` y la antigüedad de cola, no crear una nueva
+  ejecución manualmente.
+- Si faltan `WORKER_WAKE_URL` o `WORKER_WAKE_TOKEN`, la función rechaza la
+  solicitud con `503 processing_not_configured`; así evita aceptar una tarea
+  que no tiene un mecanismo configurado para despertar al consumidor.
 
 ## Evidencia mínima antes de habilitar usuarios
 

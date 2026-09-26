@@ -105,6 +105,26 @@ class SupabaseGateway:
         response = await self._request("GET", f"/storage/v1/object/authenticated/source-documents/{quote(storage_path, safe='/')}")
         return response.content
 
+    async def claim_comparison_job(self) -> dict[str, Any] | None:
+        response = await self._request("POST", "/rest/v1/rpc/claim_next_comparison_job", json={})
+        rows = response.json()
+        return rows[0] if rows else None
+
+    async def get_comparison_document(self, document_id: str, project_id: str) -> dict[str, Any] | None:
+        response = await self._request("GET", "/rest/v1/comparison_documents", params={
+            "id": f"eq.{document_id}", "project_id": f"eq.{project_id}",
+            "select": "id,original_name,storage_path", "limit": "1",
+        })
+        rows = response.json()
+        return rows[0] if rows else None
+
+    async def finish_comparison_job(self, job_id: str, lease_token: str, result: dict[str, Any] | None, error_code: str | None) -> bool:
+        response = await self._request("POST", "/rest/v1/rpc/finish_comparison_job", json={
+            "p_job_id": job_id, "p_lease_token": lease_token,
+            "p_result": result, "p_error_code": error_code,
+        })
+        return bool(response.json())
+
     async def prompt(self, extractor: ExtractorKey) -> PromptVersion:
         response = await self._request("GET", "/rest/v1/prompt_versions", params={"extractor_key": f"eq.{extractor.value}", "is_active": "eq.true", "select": "*", "limit": "1"})
         rows = response.json()

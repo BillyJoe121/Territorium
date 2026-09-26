@@ -78,3 +78,5 @@ services:
         value: true
       - key: EXPEDIENTE_V2_POLL_SECONDS
         value: 2
+      - key: WORKER_WAKE_TOKEN
+        sync: false

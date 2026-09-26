@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import type { JSONContent } from '@tiptap/react'
 import {
   AlertTriangle,
+  ArrowLeft,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -23,7 +24,6 @@ import {
   X,
 } from 'lucide-react'
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { PageHeader } from '../common/PageHeader'
 import { DocumentPrototypeEditor } from './DocumentPrototypeEditor'
 import { ResultDataTable } from './ResultDataTable'
 import { ReviewDialog } from './ReviewDialog'
@@ -259,7 +259,7 @@ function GroupCard({
   )
 }
 
-export function ExpedientePrototype({ project }: { project: Project }) {
+export function ExpedientePrototype({ project, onBack }: { project: Project; onBack?: () => void }) {
   const [view, setView] = useState<DetailView>('summary')
   const [groups, setGroups] = useState(createDemoGroups)
   const [activeGroup, setActiveGroup] = useState<DocumentGroupKey | null>(null)
@@ -601,26 +601,37 @@ export function ExpedientePrototype({ project }: { project: Project }) {
 
   return (
     <div className="expediente-prototype">
-      <PageHeader
-        className="expediente-header-compact"
-        eyebrow="FICHA DE EXPEDIENTE · UN PREDIO"
-        title={undefined}
-        description={undefined}
-        meta={<div className="expediente-header-meta"><span><MapPin size={14} />{project.municipality}, {project.department}</span><span>Prototipo funcional</span></div>}
-        actions={<button type="button" className="expediente-header-reset" onClick={resetDemo}><RotateCcw size={15} />Reiniciar demo</button>}
-      />
-
-      <div className="expediente-flow-tabs" role="tablist" aria-label="Etapas de la ficha de expediente">
-        {[
-          { id: 'summary' as const, label: 'Resumen', icon: LayoutList },
-          { id: 'extraction' as const, label: 'Extracción y consolidación', icon: Sparkles },
-          { id: 'document' as const, label: 'Documento final', icon: FileText },
-        ].map(({ id, label, icon: Icon }) => (
-          <button key={id} type="button" role="tab" aria-selected={view === id} className={view === id ? 'active' : ''} onClick={() => setView(id)}>
-            <Icon size={16} />{label}
-            {id === 'extraction' && <span className="expediente-tab-counter">{approvedGroups}/3</span>}
+      <div className="expediente-nav-tabs-bar">
+        {onBack && (
+          <button
+            type="button"
+            className="expediente-back-icon-btn"
+            onClick={onBack}
+            aria-label="Volver a expedientes"
+            title="Volver a expedientes"
+          >
+            <ArrowLeft size={16} />
           </button>
-        ))}
+        )}
+
+        <div className="expediente-flow-tabs" role="tablist" aria-label="Etapas de la ficha de expediente">
+          {[
+            { id: 'summary' as const, label: 'Resumen', icon: LayoutList },
+            { id: 'extraction' as const, label: 'Extracción', icon: Sparkles },
+            { id: 'document' as const, label: 'Documento', icon: FileText },
+          ].map(({ id, label, icon: Icon }) => (
+            <button key={id} type="button" role="tab" aria-selected={view === id} className={view === id ? 'active' : ''} onClick={() => setView(id)}>
+              <Icon size={16} />{label}
+              {id === 'extraction' && <span className="expediente-tab-counter">{approvedGroups}/3</span>}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+          <button type="button" className="expediente-header-reset" onClick={resetDemo}>
+            <RotateCcw size={14} />Reiniciar demo
+          </button>
+        </div>
       </div>
 
       {notice && <div className="expediente-notice" role="status"><CheckCircle2 size={16} /><span>{notice}</span><button type="button" aria-label="Cerrar aviso" onClick={() => setNotice('')}><X size={15} /></button></div>}
@@ -655,35 +666,46 @@ export function ExpedientePrototype({ project }: { project: Project }) {
 
       {view === 'extraction' && (
         <section className="expediente-extraction" aria-label="Extracción y consolidación">
-          <div className="expediente-section-heading extraction-heading">
-            <div><p>Fuentes del expediente</p><h2>Extracción independiente por subconjunto</h2><span>Carga, analiza y aprueba cada fuente. Los resultados se consolidan solo cuando las tres versiones están aprobadas.</span></div>
-          </div>
           <div className="extraction-card-grid">
             {(Object.keys(groups) as DocumentGroupKey[]).map((key) => <GroupCard key={key} group={groups[key]} onFilesSelected={addFiles} onRemoveFile={removeFile} onStart={startAnalysis} onReview={setActiveGroup} />)}
           </div>
 
-          <section className={`consolidation-panel state-${consolidation.status}`} aria-label="Consolidación de resultados">
-            <div className="consolidation-panel-copy"><span className="consolidation-icon"><ClipboardCheck size={19} /></span><div><p>Registro maestro del predio</p><h3>Consolidar resultados aprobados</h3><span>{allGroupsApproved ? 'Las tres fuentes están aprobadas y pueden consolidarse.' : `Faltan ${3 - approvedGroups} aprobación(es) para habilitar la consolidación.`}</span></div></div>
-            <div className="consolidation-panel-actions">
-              {consolidation.status === 'processing' && <div className="consolidation-progress" aria-live="polite"><strong>{consolidation.progress}%</strong><div><span style={{ width: `${consolidation.progress}%` }} /></div></div>}
-              {consolidation.status === 'review_ready' || consolidation.status === 'approved' ? (
-                <div style={{ display: 'flex', gap: '8px' }}>
+          {/* Consolidation Section - Single Row */}
+          <section className="extraction-consolidation-bar" aria-label="Consolidación de resultados">
+            <div className="extraction-consolidation-left">
+              <button
+                type="button"
+                className="expediente-primary-action"
+                disabled={!allGroupsApproved || consolidation.status === 'processing'}
+                onClick={startConsolidation}
+                title={!allGroupsApproved ? 'Debes aprobar los 3 subconjuntos para consolidar' : 'Consolidar resultados aprobados'}
+              >
+                {consolidation.status === 'processing' ? <LoaderCircle size={16} className="spin" /> : <Play size={16} />}
+                {consolidation.status === 'stale' ? 'Actualizar consolidado' : 'Consolidar resultados'}
+              </button>
+            </div>
+
+            <div className="extraction-consolidation-right">
+              {consolidation.status === 'processing' && (
+                <div className="consolidation-progress" aria-live="polite">
+                  <strong>{consolidation.progress}%</strong>
+                  <div><span style={{ width: `${consolidation.progress}%` }} /></div>
+                </div>
+              )}
+              <StatusText status={consolidation.status} label={consolidationLabel(consolidation.status)} />
+              {(consolidation.status === 'review_ready' || consolidation.status === 'approved') && (
+                <div className="extraction-consolidation-actions">
                   {consolidation.status === 'approved' && (
                     <button type="button" className="expediente-secondary-action" onClick={() => void handleDownloadExcel()}>
                       <Download size={16} />
-                      Descargar Excel
+                      <span>Descargar Excel</span>
                     </button>
                   )}
                   <button type="button" className="expediente-secondary-action" onClick={() => setConsolidatedOpen(true)}>
                     <PencilLine size={16} />
-                    {consolidation.status === 'approved' ? 'Ver consolidado' : 'Analizar consolidado'}
+                    <span>{consolidation.status === 'approved' ? 'Ver consolidado' : 'Analizar consolidado'}</span>
                   </button>
                 </div>
-              ) : (
-                <button type="button" className="expediente-primary-action" disabled={!allGroupsApproved || consolidation.status === 'processing'} onClick={startConsolidation}>
-                  <Play size={16} />
-                  {consolidation.status === 'stale' ? 'Actualizar consolidado' : 'Consolidar resultados'}
-                </button>
               )}
             </div>
           </section>

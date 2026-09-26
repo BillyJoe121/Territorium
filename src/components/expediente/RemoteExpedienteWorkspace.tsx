@@ -1,6 +1,7 @@
 import type { JSONContent } from '@tiptap/react'
 import {
   AlertTriangle,
+  ArrowLeft,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -60,7 +61,6 @@ import {
 } from '../../lib/expedienteAiRevisionGuard'
 import { downloadExpedientePdf } from '../../lib/expedientePdfGenerator'
 import type { ExpedienteGroupKey } from '../../lib/expedienteWorkflow'
-import { PageHeader } from '../common/PageHeader'
 import { AiRevisionDialog } from './AiRevisionDialog'
 import { AiRevisionProposalModal } from './AiRevisionProposalModal'
 import { DocumentPrototypeEditor } from './DocumentPrototypeEditor'
@@ -178,7 +178,7 @@ const documentLabel = (status: PrototypeDocumentStatus): string =>
     stale: 'Requiere regeneración',
   })[status]
 
-export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
+export function RemoteExpedienteWorkspace({ project, onBack }: { project: Project; onBack?: () => void }) {
   const [view, setView] = useState<DetailView>('extraction')
   const [groups, setGroups] = useState<Record<ExpedienteGroupKey, RemoteExpedienteGroup> | null>(null)
   const [loading, setLoading] = useState(true)
@@ -709,40 +709,39 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
 
   return (
     <section className="expediente-prototype expediente-remote-workspace" aria-label="Gestión de expediente predial">
-      <PageHeader
-        eyebrow="EXPEDIENTE REMOTO · UN PREDIO"
-        title={project.name}
-        description={`Gestión jurídica predial de ${project.municipality}, ${project.department}. Datos sincronizados en tiempo real con Supabase y worker de procesamiento.`}
-        meta={
-          <div className="expediente-header-meta">
-            <span>
-              <MapPin size={14} />
-              {project.municipality}, {project.department}
-            </span>
-            <span>Producción Supabase</span>
-          </div>
-        }
-      />
-
-      <div className="expediente-flow-tabs" role="tablist" aria-label="Etapas del expediente">
-        {[
-          { id: 'summary' as const, label: 'Resumen', icon: LayoutList },
-          { id: 'extraction' as const, label: 'Extracción y consolidación', icon: Sparkles },
-          { id: 'document' as const, label: 'Documento final', icon: FileText },
-        ].map(({ id, label, icon: Icon }) => (
+      <div className="expediente-nav-tabs-bar">
+        {onBack && (
           <button
-            key={id}
             type="button"
-            role="tab"
-            aria-selected={view === id}
-            className={view === id ? 'active' : ''}
-            onClick={() => setView(id)}
+            className="expediente-back-icon-btn"
+            onClick={onBack}
+            aria-label="Volver a expedientes"
+            title="Volver a expedientes"
           >
-            <Icon size={16} />
-            {label}
-            {id === 'extraction' && <span className="expediente-tab-counter">{approvedGroupsCount}/3</span>}
+            <ArrowLeft size={16} />
           </button>
-        ))}
+        )}
+
+        <div className="expediente-flow-tabs" role="tablist" aria-label="Etapas del expediente">
+          {[
+            { id: 'summary' as const, label: 'Resumen', icon: LayoutList },
+            { id: 'extraction' as const, label: 'Extracción', icon: Sparkles },
+            { id: 'document' as const, label: 'Documento', icon: FileText },
+          ].map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={view === id}
+              className={view === id ? 'active' : ''}
+              onClick={() => setView(id)}
+            >
+              <Icon size={16} />
+              {label}
+              {id === 'extraction' && <span className="expediente-tab-counter">{approvedGroupsCount}/3</span>}
+            </button>
+          ))}
+        </div>
       </div>
 
       {notice && (
@@ -867,10 +866,6 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
       {/* 2. EXTRACTION & CONSOLIDATION VIEW */}
       {view === 'extraction' && (
         <section className="expediente-extraction-view" aria-label="Extracción y consolidación">
-          <div className="expediente-remote-summary" style={{ marginBottom: '16px' }}>
-            <span>{approvedGroupsCount} de 3 subconjuntos aprobados para consolidar</span>
-          </div>
-
           <div className="extraction-card-grid">
             {orderedKeys.map((key) => {
               const group = groups[key]
@@ -982,17 +977,6 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
                     </div>
                   )}
 
-                  {group.status === 'approved' && (
-                    <p className="extraction-approved-note">
-                      <CheckCircle2 size={15} />
-                      Aprobado para consolidación del predio.
-                    </p>
-                  )}
-                  {group.status === 'review_ready' && (
-                    <p className="extraction-approved-note">
-                      Insumos procesados. Haz clic en "Analizar resultados" para revisar y aprobar.
-                    </p>
-                  )}
                   {group.status === 'error' && (
                     <p className="extraction-error-note">
                       {group.lastErrorMessage ?? 'No fue posible preparar este grupo. Revisa los archivos y reintenta.'}
@@ -1032,26 +1016,41 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
             })}
           </div>
 
-          {/* Consolidation Section */}
-          <section className="extraction-consolidation" aria-label="Consolidación predial">
-            <div className="extraction-consolidation-header">
-              <div>
-                <p>Paso siguiente</p>
-                <h2>Consolidación determinística del predio</h2>
-                <span>
-                  Combina los 3 subconjuntos en una sola fuente de verdad protegida contra contradicciones.
-                </span>
-              </div>
-              <StatusText status={consolidationStatus} label={consolidationLabel(consolidationStatus)} />
+          {/* Consolidation Section - Single Row */}
+          <section className="extraction-consolidation-bar" aria-label="Consolidación predial">
+            <div className="extraction-consolidation-left">
+              <button
+                type="button"
+                className="expediente-primary-action"
+                disabled={!allGroupsApproved || consolidating}
+                onClick={() => void handleConsolidate()}
+                title={
+                  !allGroupsApproved
+                    ? 'Debes aprobar los 3 subconjuntos para consolidar'
+                    : 'Consolidar resultados de las fuentes aprobadas'
+                }
+              >
+                {consolidating ? <LoaderCircle size={16} className="spin" /> : <Play size={16} />}
+                {consolidating
+                  ? 'Consolidando…'
+                  : consolidationStatus === 'stale'
+                  ? 'Actualizar consolidado'
+                  : 'Consolidar resultados'}
+              </button>
             </div>
 
-            <div className="extraction-consolidation-actions">
-              {consolidationStatus === 'review_ready' || consolidationStatus === 'approved' ? (
-                <div style={{ display: 'flex', gap: '8px' }}>
+            <div className="extraction-consolidation-right">
+              <StatusText status={consolidationStatus} label={consolidationLabel(consolidationStatus)} />
+              {(consolidatedMasterRecord || consolidationStatus === 'approved' || consolidationStatus === 'review_ready') && (
+                <div className="extraction-consolidation-actions">
                   {consolidationStatus === 'approved' && (
-                    <button type="button" className="expediente-secondary-action" onClick={() => void handleDownloadExcel()}>
+                    <button
+                      type="button"
+                      className="expediente-secondary-action"
+                      onClick={() => void handleDownloadExcel()}
+                    >
                       <Download size={16} />
-                      Descargar Excel
+                      <span>Descargar Excel</span>
                     </button>
                   )}
                   <button
@@ -1060,23 +1059,9 @@ export function RemoteExpedienteWorkspace({ project }: { project: Project }) {
                     onClick={() => setConsolidatedOpen(true)}
                   >
                     <PencilLine size={16} />
-                    {consolidationStatus === 'approved' ? 'Ver consolidado' : 'Analizar consolidado'}
+                    <span>{consolidationStatus === 'approved' ? 'Ver consolidado' : 'Analizar consolidado'}</span>
                   </button>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  className="expediente-primary-action"
-                  disabled={!allGroupsApproved || consolidating}
-                  onClick={() => void handleConsolidate()}
-                >
-                  {consolidating ? <LoaderCircle size={16} className="spin" /> : <Play size={16} />}
-                  {consolidating
-                    ? 'Consolidando…'
-                    : consolidationStatus === 'stale'
-                    ? 'Actualizar consolidado'
-                    : 'Consolidar resultados'}
-                </button>
               )}
             </div>
           </section>

@@ -429,6 +429,12 @@ import_map = "./functions/expediente-analysis-request/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 entrypoint = "./functions/expediente-analysis-request/index.ts"
+
+[functions.document-comparison-request]
+enabled = true
+verify_jwt = false
+import_map = "./functions/document-comparison-request/deno.json"
+entrypoint = "./functions/document-comparison-request/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/expediente-analysis-request/*.html" ]

@@ -1,0 +1,39 @@
+// ================================================================
+// TOPBAR – Territorium White Header Premium
+// ================================================================
+
+.legalitica-topbar {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.07) !important;
+    background: #ffffff !important;
+
+    .v-toolbar__content {
+        padding: 0 12px;
+
+        > .v-btn:first-child {
+            margin-inline-start: 0;
+        }
+
+        .v-btn {
+            color: rgb(var(--v-theme-textPrimary)) !important;
+            opacity: 0.75;
+            transition: opacity 0.15s ease;
+
+            &:hover { opacity: 1; }
+        }
+    }
+}
+
+// Título de la sección en el header
+.topbar-page-title {
+    color: rgb(var(--v-theme-textPrimary));
+    font-family: 'Poppins', sans-serif;
+    font-size: 1.05rem !important;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.custom-text-primary {
+    &.v-list-item:hover > .v-list-item__overlay { display: none; }
+    .custom-title { color: rgb(var(--v-theme-textPrimary)) !important; }
+    &:hover .custom-title { color: rgb(var(--v-theme-primary)) !important; }
+}

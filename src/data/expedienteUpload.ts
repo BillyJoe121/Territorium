@@ -174,28 +174,13 @@ export async function requestExpedienteAnalysis(input: {
 }): Promise<string> {
   const client = requireSupabase()
 
-  // 1. Intento por Edge Function (si está desplegada en Supabase)
-  try {
-    const { data, error } = await client.functions.invoke('expediente-analysis-request', {
-      body: input,
-    })
-    if (!error && data?.executionId) {
-      return String(data.executionId)
-    }
-  } catch {
-    // La Edge Function no está desplegada en el proyecto; recurrir al RPC directo
-  }
-
-  // 2. Ejecución directa por RPC en PostgreSQL (seguro e idempotente)
-  const { data, error } = await client.rpc('queue_expediente_group_execution', {
-    p_group_id: input.groupId,
-    p_idempotency_key: input.idempotencyKey.trim(),
-    p_extractor_snapshot: input.extractorSnapshot ?? {},
-    p_prompt_snapshot: input.promptSnapshot ?? {},
-    p_model_snapshot: input.modelSnapshot ?? {},
+  const { data, error } = await client.functions.invoke('expediente-analysis-request', {
+    body: input,
   })
-  if (error) throw new Error(error.message)
-  return String(data)
+  if (error || !data?.executionId) {
+    throw new Error('No fue posible enviar la solicitud de procesamiento. Inténtalo nuevamente en unos instantes.')
+  }
+  return String(data.executionId)
 }
 
 export async function deleteExpedienteFile(fileId: string): Promise<void> {
@@ -226,5 +211,4 @@ export async function deleteExpedienteFile(fileId: string): Promise<void> {
   const errData = await resp.json().catch(() => ({}))
   throw new Error(errData.detail || 'Error al eliminar el archivo.')
 }
-
 

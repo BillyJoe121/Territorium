@@ -1,0 +1,86 @@
+html {
+    .bg-success {
+        color: white !important;
+    }
+
+    .bg-primary {
+        color: $white !important;
+    }
+
+    .bg-secondary {
+        color: $white !important;
+    }
+
+    .bg-warning {
+        color: $white !important;
+    }
+}
+
+.border,
+.v-divider {
+    border-color: rgba(var(--v-border-color), 1) !important;
+}
+.avtar-border {
+    border: 2px solid rgb(var(--v-theme-surface)) !important;
+}
+.subtext{
+    font-size: $font-size-root;
+    line-height: 1.75rem;
+}
+
+// ================================================================
+// OVERRIDES TERRITORIUM PREMIUM
+// ================================================================
+
+// ─── VCard ──────────────────────────────────────────────────────
+.v-card {
+    transition: box-shadow 0.25s ease !important;
+}
+
+// ─── VBtn ───────────────────────────────────────────────────────
+.v-btn {
+    font-family: 'Poppins', sans-serif !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.01em !important;
+}
+
+// ─── VTabs en contenido ─────────────────────────────────────────
+.v-tabs {
+    .v-tab--selected {
+        font-weight: 600;
+    }
+    .v-tab__slider {
+        height: 3px;
+        border-radius: 2px 2px 0 0;
+    }
+}
+
+// ─── VChip ──────────────────────────────────────────────────────
+.v-chip {
+    font-weight: 500 !important;
+    letter-spacing: 0.01em !important;
+}
+
+// ─── VNavigationDrawer: fondo oscuro en sidebar ─────────────────
+.v-navigation-drawer.leftSidebar {
+    .v-navigation-drawer__content {
+        display: flex;
+        flex-direction: column;
+    }
+}
+
+// ─── Scrollbar global (WebKit) ──────────────────────────────────
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+    background: rgba(var(--v-theme-primary), 0.25);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--v-theme-primary), 0.45);
+}
+
+// ─── VMain background más cálido ────────────────────────────────
+.v-main {
+    background: #F2F6F3 !important;
+}
