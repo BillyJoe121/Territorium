@@ -499,6 +499,7 @@
   flex-direction: column;
   height: 680px;
   max-height: 78vh;
+  touch-action: pan-x pan-y;
 }
 .comparison-original-header {
   display: flex;
@@ -657,6 +658,7 @@
   overflow: auto;
   padding: 14px;
   background: #ecefe8;
+  touch-action: pan-x pan-y;
 }
 .comparison-docx-zoom-wrapper {
   transition: transform .12s ease-out;

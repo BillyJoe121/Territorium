@@ -114,6 +114,70 @@ export function OriginalViewer({ document: source, evidence, status, side }: Pro
     return () => clearEvidence(side)
   }, [evidence, status, rendered, page, side, source.mime_type])
 
+  const containerRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    // 1. Wheel listener: on trackpads (Windows Precision, Mac trackpad), pinch-to-zoom emits wheel with ctrlKey=true
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        e.stopPropagation()
+        const zoomDelta = -e.deltaY * 0.003
+        setZoom((prev) => {
+          const next = Math.round((prev + zoomDelta) * 100) / 100
+          return Math.min(2.5, Math.max(0.3, next))
+        })
+      }
+    }
+
+    // 2. Touch gesture listener: for touchscreens / tablets / 2-in-1 laptops
+    let touchDistance = 0
+    let touchStartZoom = zoom
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        touchDistance = Math.hypot(dx, dy)
+        touchStartZoom = zoom
+      }
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && touchDistance > 0) {
+        e.preventDefault()
+        e.stopPropagation()
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        const currentDist = Math.hypot(dx, dy)
+        const factor = currentDist / touchDistance
+        const next = Math.round(touchStartZoom * factor * 100) / 100
+        setZoom(Math.min(2.5, Math.max(0.3, next)))
+      }
+    }
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        touchDistance = 0
+      }
+    }
+
+    container.addEventListener('wheel', onWheel, { passive: false })
+    container.addEventListener('touchstart', onTouchStart, { passive: true })
+    container.addEventListener('touchmove', onTouchMove, { passive: false })
+    container.addEventListener('touchend', onTouchEnd, { passive: true })
+
+    return () => {
+      container.removeEventListener('wheel', onWheel)
+      container.removeEventListener('touchstart', onTouchStart)
+      container.removeEventListener('touchmove', onTouchMove)
+      container.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [zoom])
+
   const download = () => {
     if (!blob) return
     const url = URL.createObjectURL(blob)
@@ -122,10 +186,10 @@ export function OriginalViewer({ document: source, evidence, status, side }: Pro
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
-  const zoomIn = () => setZoom((prev) => Math.min(1.8, Math.round((prev + 0.1) * 10) / 10))
-  const zoomOut = () => setZoom((prev) => Math.max(0.4, Math.round((prev - 0.1) * 10) / 10))
+  const zoomIn = () => setZoom((prev) => Math.min(2.5, Math.round((prev + 0.1) * 10) / 10))
+  const zoomOut = () => setZoom((prev) => Math.max(0.3, Math.round((prev - 0.1) * 10) / 10))
 
-  return <section className="comparison-original" aria-label={`Original ${side === 'left' ? 'A' : 'B'}: ${source.original_name}`}>
+  return <section className="comparison-original" ref={containerRef} aria-label={`Original ${side === 'left' ? 'A' : 'B'}: ${source.original_name}`}>
     <div className="comparison-original-header">
       <div className="comparison-doc-title">
         <span className="comparison-side-tag">DOCUMENTO {side === 'left' ? 'A' : 'B'}</span>
@@ -133,11 +197,11 @@ export function OriginalViewer({ document: source, evidence, status, side }: Pro
       </div>
       <div className="comparison-header-actions">
         <div className="comparison-zoom-bar" role="group" aria-label="Controles de zoom">
-          <button type="button" onClick={zoomOut} disabled={zoom <= 0.4} title="Alejar (Zoom out)" aria-label="Alejar">
+          <button type="button" onClick={zoomOut} disabled={zoom <= 0.3} title="Alejar (Zoom out)" aria-label="Alejar">
             <ZoomOut size={14} />
           </button>
           <span className="comparison-zoom-label">{Math.round(zoom * 100)}%</span>
-          <button type="button" onClick={zoomIn} disabled={zoom >= 1.8} title="Acercar (Zoom in)" aria-label="Acercar">
+          <button type="button" onClick={zoomIn} disabled={zoom >= 2.5} title="Acercar (Zoom in)" aria-label="Acercar">
             <ZoomIn size={14} />
           </button>
         </div>
