@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Download, FileWarning, LoaderCircle, MapPin, ZoomIn, ZoomOut } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CircleSlash, Download, FileWarning, LoaderCircle, MapPin, ZoomIn, ZoomOut } from 'lucide-react'
 import * as pdfjs from 'pdfjs-dist'
 import { renderAsync } from 'docx-preview'
 import type { ComparisonDocument, Evidence, MatchStatus } from '../../data/documentComparison'
@@ -13,16 +13,17 @@ interface Props {
   evidence: Evidence | null
   status: MatchStatus | null
   side: 'left' | 'right'
+  activeFieldLabel?: string
 }
 
-export function OriginalViewer({ document: source, evidence, status, side }: Props) {
+export function OriginalViewer({ document: source, evidence, status, side, activeFieldLabel }: Props) {
   const [blob, setBlob] = useState<Blob | null>(null)
   const [pdf, setPdf] = useState<pdfjs.PDFDocumentProxy | null>(null)
   const [page, setPage] = useState(1)
   const [rendered, setRendered] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [located, setLocated] = useState<boolean | null>(null)
-  const [zoom, setZoom] = useState(0.75)
+  const [zoom, setZoom] = useState(1.0)
   const bodyRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -76,6 +77,8 @@ export function OriginalViewer({ document: source, evidence, status, side }: Pro
         canvas.style.height = `${viewport.height}px`
         const textLayer = document.createElement('div')
         textLayer.className = 'textLayer'
+        textLayer.style.setProperty('--scale-factor', String(viewport.scale))
+        textLayer.style.setProperty('--total-scale-factor', String(viewport.scale))
         sheet.append(canvas, textLayer)
         root.append(sheet)
         const context = canvas.getContext('2d')
@@ -212,10 +215,17 @@ export function OriginalViewer({ document: source, evidence, status, side }: Pro
     </div>
 
     <div className="comparison-sub-bar">
-      <div className="comparison-location-pill" title={evidence?.location ?? 'Vista general'}>
-        <MapPin size={12} aria-hidden="true" />
-        <span>{evidence?.location ?? 'Vista general'}{located === false ? ' · Cita verificada, no localizada' : ''}</span>
-      </div>
+      {activeFieldLabel && (!evidence || !evidence.value) ? (
+        <div className="comparison-location-pill is-absent" title={`No encontrado en ${side === 'left' ? 'Documento A' : 'Documento B'}`}>
+          <CircleSlash size={12} aria-hidden="true" />
+          <span>No encontrado en este documento</span>
+        </div>
+      ) : (
+        <div className="comparison-location-pill" title={evidence?.location ?? 'Vista general'}>
+          <MapPin size={12} aria-hidden="true" />
+          <span>{evidence?.location ?? 'Vista general'}{located === false ? ' · Cita verificada, no localizada' : ''}</span>
+        </div>
+      )}
       {pdf ? (
         <div className="comparison-page-controls">
           <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} title="Página anterior" aria-label="Página anterior">
@@ -232,6 +242,15 @@ export function OriginalViewer({ document: source, evidence, status, side }: Pro
         </div>
       )}
     </div>
+
+    {activeFieldLabel && (!evidence || !evidence.value) ? (
+      <div className="comparison-absent-notice" role="status">
+        <CircleSlash size={14} aria-hidden="true" />
+        <span>
+          El atributo <strong>{activeFieldLabel}</strong> no fue localizado en este documento (disponible en el otro).
+        </span>
+      </div>
+    ) : null}
 
     {error ? (
       <div className="comparison-preview-state" role="alert"><FileWarning size={22} />{error}</div>

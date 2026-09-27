@@ -9,7 +9,25 @@ import {
 import { OriginalViewer } from './OriginalViewer'
 import './document-comparison.css'
 
-const statusText = { exact: 'Coincide exactamente', near: 'Coincidencia cercana', different: 'No coincide' }
+export type VisualStatus = 'exact' | 'near' | 'different' | 'absent'
+
+export function getFieldVisualStatus(field: ComparedField): VisualStatus {
+  if (field.status === 'different') {
+    const hasLeft = Boolean(field.left?.value && field.left.value.trim())
+    const hasRight = Boolean(field.right?.value && field.right.value.trim())
+    if (!hasLeft || !hasRight) {
+      return 'absent'
+    }
+  }
+  return field.status
+}
+
+const statusText: Record<VisualStatus, string> = {
+  exact: 'Coincide exactamente',
+  near: 'Coincidencia cercana',
+  different: 'No coincide (valores distintos)',
+  absent: 'No coincide (no encontrado en un documento)',
+}
 const jobText = { queued: 'En cola', running: 'Analizando', completed: 'Terminado', failed: 'Falló' }
 const errorText: Record<string, string> = {
   NO_EXTRACTABLE_TEXT: 'No hay texto extraíble. Un PDF escaneado requiere OCR antes de compararse.',
@@ -93,6 +111,18 @@ export function DocumentComparisonView({
   const canCompare = leftId && rightId && leftId !== rightId && !busy && remote && !loadError
   const recentJobs = useMemo(() => jobs.slice(0, 8), [jobs])
 
+  const visualCounts = useMemo(() => {
+    let exact = 0, near = 0, different = 0, absent = 0
+    for (const f of fields) {
+      const s = getFieldVisualStatus(f)
+      if (s === 'exact') exact++
+      else if (s === 'near') near++
+      else if (s === 'different') different++
+      else if (s === 'absent') absent++
+    }
+    return { exact, near, different, absent }
+  }, [fields])
+
   const upload = async (files: FileList | null) => {
     if (!files?.length) return
     if (activeDocuments.length + files.length > 10) {
@@ -165,9 +195,10 @@ export function DocumentComparisonView({
 
             {activeJob.result && (
               <div className="comparison-counts">
-                <span className="is-exact">{activeJob.result.counts.exact} exactos</span>
-                <span className="is-near">{activeJob.result.counts.near} cercanos</span>
-                <span className="is-different">{activeJob.result.counts.different} distintos o ausentes</span>
+                <span className="is-exact">{visualCounts.exact} exactos</span>
+                <span className="is-near">{visualCounts.near} cercanos</span>
+                {visualCounts.different > 0 && <span className="is-different">{visualCounts.different} distintos</span>}
+                {visualCounts.absent > 0 && <span className="is-absent">{visualCounts.absent} no encontrados</span>}
               </div>
             )}
           </div>
@@ -187,6 +218,7 @@ export function DocumentComparisonView({
                   {fields.map((field: ComparedField) => {
                     const isSelected = field.key === activeFieldKey
                     const isExpanded = expandedKeys.has(field.key)
+                    const visualStatus = getFieldVisualStatus(field)
                     return (
                       <li key={field.key} className={`comparison-finding-item ${isSelected ? 'is-selected' : ''} ${isExpanded ? 'is-expanded' : ''}`}>
                         <div className={`comparison-finding-row ${isSelected ? 'is-selected' : ''}`}>
@@ -196,7 +228,7 @@ export function DocumentComparisonView({
                             onClick={() => setActiveFieldKey(field.key)}
                             aria-pressed={isSelected}
                           >
-                            <span className={`comparison-status-dot is-${field.status}`} aria-hidden="true" />
+                            <span className={`comparison-status-dot is-${visualStatus}`} aria-hidden="true" />
                             <span className="comparison-finding-title">{field.label}</span>
                           </button>
                           <button
@@ -221,20 +253,22 @@ export function DocumentComparisonView({
                         {isExpanded && (
                           <div className="comparison-finding-details">
                             <div className="comparison-detail-status">
-                              <span className={`comparison-status-tag is-${field.status}`}>
-                                {statusText[field.status]}
+                              <span className={`comparison-status-tag is-${visualStatus}`}>
+                                {visualStatus === 'absent'
+                                  ? (!field.left?.value ? 'No encontrado en Doc A' : !field.right?.value ? 'No encontrado en Doc B' : statusText.absent)
+                                  : statusText[visualStatus]}
                               </span>
                             </div>
                             <div className="comparison-values">
                               <div className="comparison-value-row">
                                 <span className="comparison-val-label">Doc A:</span>
-                                <span className="comparison-val-text" title={field.left?.value ?? 'No encontrado'}>
+                                <span className={`comparison-val-text ${!field.left?.value ? 'is-missing' : ''}`} title={field.left?.value ?? 'No encontrado'}>
                                   {field.left?.value ?? 'No encontrado'}
                                 </span>
                               </div>
                               <div className="comparison-value-row">
                                 <span className="comparison-val-label">Doc B:</span>
-                                <span className="comparison-val-text" title={field.right?.value ?? 'No encontrado'}>
+                                <span className={`comparison-val-text ${!field.right?.value ? 'is-missing' : ''}`} title={field.right?.value ?? 'No encontrado'}>
                                   {field.right?.value ?? 'No encontrado'}
                                 </span>
                               </div>
@@ -253,12 +287,12 @@ export function DocumentComparisonView({
 
             <div className="comparison-originals">
               {left ? (
-                <OriginalViewer key={left.id} document={left} evidence={activeField?.left ?? null} status={activeField?.status ?? null} side="left" />
+                <OriginalViewer key={left.id} document={left} evidence={activeField?.left ?? null} status={activeField?.status ?? null} side="left" activeFieldLabel={activeField?.label} />
               ) : (
                 <div className="comparison-missing">El documento A ya no está en la lista activa.</div>
               )}
               {right ? (
-                <OriginalViewer key={right.id} document={right} evidence={activeField?.right ?? null} status={activeField?.status ?? null} side="right" />
+                <OriginalViewer key={right.id} document={right} evidence={activeField?.right ?? null} status={activeField?.status ?? null} side="right" activeFieldLabel={activeField?.label} />
               ) : (
                 <div className="comparison-missing">El documento B ya no está en la lista activa.</div>
               )}

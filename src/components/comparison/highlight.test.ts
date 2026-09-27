@@ -164,3 +164,62 @@ describe('highlight matching and index resolution', () => {
     expect(matchedText).not.toContain('mayor de edad')
   })
 })
+
+describe('getFieldVisualStatus classification', () => {
+  it('correctly distinguishes exact, near, true different, and absent data', async () => {
+    const { getFieldVisualStatus } = await import('./DocumentComparisonView')
+
+    expect(
+      getFieldVisualStatus({
+        key: 'k1',
+        label: 'Matrícula',
+        status: 'exact',
+        left: { value: '050N-1234567', quote: '050N-1234567', fragment_id: '1', page: 1, location: 'P.1' },
+        right: { value: '050N-1234567', quote: '050N-1234567', fragment_id: '2', page: 1, location: 'P.1' },
+      }),
+    ).toBe('exact')
+
+    expect(
+      getFieldVisualStatus({
+        key: 'k2',
+        label: 'Vereda',
+        status: 'near',
+        left: { value: 'Vereda Fagua', quote: 'Vereda Fagua', fragment_id: '1', page: 1, location: 'P.1' },
+        right: { value: 'Fagua', quote: 'Fagua', fragment_id: '2', page: 1, location: 'P.1' },
+      }),
+    ).toBe('near')
+
+    // Both have values, but they contradict (e.g. Lote 7 vs Lote 8) -> different
+    expect(
+      getFieldVisualStatus({
+        key: 'k3',
+        label: 'Lote',
+        status: 'different',
+        left: { value: 'Lote 7', quote: 'Lote 7', fragment_id: '1', page: 1, location: 'P.1' },
+        right: { value: 'Lote 8', quote: 'Lote 8', fragment_id: '2', page: 1, location: 'P.1' },
+      }),
+    ).toBe('different')
+
+    // One has value, other is missing -> absent
+    expect(
+      getFieldVisualStatus({
+        key: 'k4',
+        label: 'Municipio y departamento',
+        status: 'different',
+        left: { value: 'Chía, Cundinamarca', quote: 'Chía', fragment_id: '1', page: 1, location: 'P.1' },
+        right: null,
+      }),
+    ).toBe('absent')
+
+    expect(
+      getFieldVisualStatus({
+        key: 'k5',
+        label: 'Servidumbres',
+        status: 'different',
+        left: null,
+        right: { value: 'Servidumbre de tránsito', quote: 'tránsito', fragment_id: '2', page: 1, location: 'P.1' },
+      }),
+    ).toBe('absent')
+  })
+})
+
