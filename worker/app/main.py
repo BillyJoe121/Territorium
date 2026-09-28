@@ -1,8 +1,11 @@
 import asyncio
+from datetime import datetime, timezone
 import hmac
 import logging
 from contextlib import asynccontextmanager, suppress
 from typing import Any
+
+UTC = timezone.utc
 
 from fastapi import FastAPI, HTTPException, Request, status
 
@@ -246,8 +249,9 @@ async def _execute_file_deletion(file_id: str) -> dict[str, Any]:
 
             if remaining_count == 0:
                 updates["status"] = "empty"
-            elif grp.get("status") in ("review_ready", "approved"):
-                updates["status"] = "stale"
+            elif grp.get("status") in ("review_ready", "approved", "stale"):
+                updates["status"] = "ready"
+                updates["input_version"] = int(grp.get("input_version") or 1) + 1
 
             if updates:
                 await gateway.client.patch(
@@ -255,6 +259,13 @@ async def _execute_file_deletion(file_id: str) -> dict[str, Any]:
                     headers=gateway.headers,
                     json=updates,
                 )
+
+        # 7. Cancel / supersede any active execution for this group so no unique index collisions occur
+        await gateway.client.patch(
+            f"{settings.supabase_url}/rest/v1/expediente_executions?group_id=eq.{group_id}&status=in.(queued,processing)",
+            headers=gateway.headers,
+            json={"status": "superseded", "updated_at": datetime.now(UTC).isoformat()},
+        )
 
         logger.info(f"File {file_id} ({file_row.get('original_name')}) successfully retired from group {group_id}.")
         return {
@@ -265,3 +276,159 @@ async def _execute_file_deletion(file_id: str) -> dict[str, Any]:
         }
     finally:
         await gateway.close()
+
+
+class QueueExecutionBody(BaseModel):
+    group_id: str
+    idempotency_key: str
+    extractor_snapshot: dict[str, Any] = {}
+    prompt_snapshot: dict[str, Any] = {}
+    model_snapshot: dict[str, Any] = {}
+
+
+@app.post("/api/expediente/queue-execution")
+async def queue_expediente_execution_endpoint(body: QueueExecutionBody) -> dict[str, Any]:
+    return await _execute_queue_execution(body)
+
+
+async def _execute_queue_execution(body: QueueExecutionBody) -> dict[str, Any]:
+    gateway = SupabaseGateway(settings)
+    try:
+        # 1. Fetch group info
+        grp_resp = await gateway.client.get(
+            f"{settings.supabase_url}/rest/v1/expediente_document_groups?id=eq.{body.group_id}&select=id,project_id,group_key,status,input_version",
+            headers=gateway.headers,
+        )
+        groups = grp_resp.json()
+        if not groups or not isinstance(groups, list):
+            raise HTTPException(status_code=404, detail="No existe el grupo documental.")
+        grp = groups[0]
+        project_id = grp["project_id"]
+        group_key = grp["group_key"]
+        input_version = int(grp.get("input_version") or 1)
+
+        # 2. Fetch current active files
+        files_resp = await gateway.client.get(
+            f"{settings.supabase_url}/rest/v1/expediente_document_files?group_id=eq.{body.group_id}&is_active=eq.true&is_current=eq.true&select=id,document_key,version_number,sha256,storage_path&order=created_at.asc",
+            headers=gateway.headers,
+        )
+        files = files_resp.json()
+        if not files or not isinstance(files, list) or len(files) == 0:
+            raise HTTPException(status_code=400, detail="El grupo no tiene documentos vigentes para analizar.")
+
+        extractor_key = (
+            "title_study" if group_key == "titles"
+            else "plan" if group_key == "plans"
+            else "negotiation"
+        )
+
+        # 3. Supersede any existing active execution for this group to avoid index constraint conflicts
+        await gateway.client.patch(
+            f"{settings.supabase_url}/rest/v1/expediente_executions?group_id=eq.{body.group_id}&status=in.(queued,processing)",
+            headers=gateway.headers,
+            json={"status": "superseded", "updated_at": datetime.now(UTC).isoformat()},
+        )
+
+        # 4. Insert new execution in expediente_executions
+        exec_payload = {
+            "project_id": project_id,
+            "group_id": body.group_id,
+            "input_version": input_version,
+            "status": "queued",
+            "idempotency_key": body.idempotency_key.strip(),
+            "extractor_key": extractor_key,
+            "extractor_snapshot": body.extractor_snapshot,
+            "prompt_snapshot": body.prompt_snapshot,
+            "model_snapshot": body.model_snapshot,
+            "input_snapshot": [
+                {
+                    "document_file_id": f["id"],
+                    "document_key": f.get("document_key"),
+                    "version_number": f.get("version_number", 1),
+                    "sha256": f.get("sha256"),
+                    "storage_path": f.get("storage_path"),
+                }
+                for f in files
+            ],
+            "total_units": len(files),
+            "completed_units": 0,
+        }
+        ins_resp = await gateway.client.post(
+            f"{settings.supabase_url}/rest/v1/expediente_executions",
+            headers={**gateway.headers, "Prefer": "return=representation"},
+            json=exec_payload,
+        )
+        if ins_resp.status_code >= 400:
+            logger.error("Failed to insert execution: %s %s", ins_resp.status_code, ins_resp.text)
+            raise HTTPException(status_code=500, detail="Error al registrar la ejecución en la base de datos.")
+
+        created_execs = ins_resp.json()
+        execution_id = created_execs[0]["id"]
+
+        # 5. Insert execution tasks
+        tasks_payload = [
+            {
+                "execution_id": execution_id,
+                "document_file_id": f["id"],
+                "idempotency_key": f"{execution_id}:{f['id']}:1",
+                "status": "queued",
+            }
+            for f in files
+        ]
+        await gateway.client.post(
+            f"{settings.supabase_url}/rest/v1/expediente_execution_tasks",
+            headers=gateway.headers,
+            json=tasks_payload,
+        )
+
+        # 6. Update document group to 'queued'
+        await gateway.client.patch(
+            f"{settings.supabase_url}/rest/v1/expediente_document_groups?id=eq.{body.group_id}",
+            headers=gateway.headers,
+            json={
+                "status": "queued",
+                "last_error_code": None,
+                "last_error_message": None,
+                "updated_at": datetime.now(UTC).isoformat(),
+            },
+        )
+
+        logger.info("Successfully queued execution %s for group %s with %d documents", execution_id, body.group_id, len(files))
+        return {
+            "status": "queued",
+            "execution_id": execution_id,
+            "group_id": body.group_id,
+            "documents_count": len(files),
+        }
+    finally:
+        await gateway.close()
+
+
+
+class ExportDocxRequest(BaseModel):
+    template_id: str
+    record: dict[str, Any]
+
+
+@app.post("/api/documents/export-docx")
+async def export_docx_endpoint(req: ExportDocxRequest):
+    from fastapi.responses import StreamingResponse
+    from .document_export import generate_populated_docx
+
+    try:
+        stream = generate_populated_docx(req.template_id, req.record)
+        name_map = {
+            "tpl-escritura-publica": "ESCRITURA_TOL_ANZ_045_CONSOLIDADA.docx",
+            "tpl-descripcion-linderos": "ID02_DESCRIPCION_LINDEROS_CONSOLIDADA.docx",
+            "tpl-minuta-tipo": "MINUTA_TIPO_TERRITORIUM_CONSOLIDADA.docx",
+        }
+        filename = name_map.get(req.template_id, "DOCUMENTO_CONSOLIDADO.docx")
+        return StreamingResponse(
+            stream,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as exc:
+        logger.exception("export_docx_failed")
+        raise HTTPException(status_code=500, detail=str(exc))
+

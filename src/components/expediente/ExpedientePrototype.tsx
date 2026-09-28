@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react'
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { DocumentPrototypeEditor } from './DocumentPrototypeEditor'
 import { ResultDataTable } from './ResultDataTable'
 import { ReviewDialog } from './ReviewDialog'
@@ -47,6 +48,12 @@ import {
   type AiRevisionProposal,
 } from '../../lib/expedienteAiRevisionGuard'
 import { AiRevisionProposalModal } from './AiRevisionProposalModal'
+import { ChooseDocumentTemplateModal } from './ChooseDocumentTemplateModal'
+import {
+  OFFICIAL_FINAL_DOCUMENT_TEMPLATES,
+  type ExpedienteDocumentTemplate,
+} from '../../lib/expedienteDocumentTemplates'
+import { downloadPopulatedDocx } from '../../lib/expedienteDocxExport'
 import { downloadExpedientePdf } from '../../lib/expedientePdfGenerator'
 import {
   consolidatedColumns,
@@ -270,14 +277,25 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
   const [documentState, setDocumentState] = useState<FinalDocumentState>({ status: 'blocked', progress: 0, version: 1 })
   const [documentContent, setDocumentContent] = useState<JSONContent>(initialDocumentContent)
   const [documentDirty, setDocumentDirty] = useState(false)
+  const [chooseTemplateOpen, setChooseTemplateOpen] = useState(false)
+  const [activeTemplate, setActiveTemplate] = useState<ExpedienteDocumentTemplate>(
+    OFFICIAL_FINAL_DOCUMENT_TEMPLATES[0],
+  )
+  const [isGeneratingDoc, setIsGeneratingDoc] = useState(false)
+  const [isExportingDocx, setIsExportingDocx] = useState(false)
   const [aiDialogOpen, setAiDialogOpen] = useState(false)
   const [currentProposal, setCurrentProposal] = useState<AiRevisionProposal | null>(null)
   const [proposalModalOpen, setProposalModalOpen] = useState(false)
   const [lastUserComment, setLastUserComment] = useState('')
-  const [notice, setNotice] = useState('')
+  const setNotice = (msg: string) => { if (msg) toast.success(msg) }
 
   const approvedGroups = useMemo(() => Object.values(groups).filter((group) => group.status === 'approved').length, [groups])
   const allGroupsApproved = approvedGroups === 3
+  const isConsolidatedReady = Boolean(
+    masterRecord ||
+    consolidation.status === 'approved' ||
+    consolidation.status === 'review_ready',
+  )
   const selectedGroup = activeGroup ? groups[activeGroup] : null
 
   useEffect(() => {
@@ -485,6 +503,7 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
 
     // Compile deterministic document from template
     const compiled = compileConsolidatedToTiptap(master, {
+      template: activeTemplate,
       projectCode: project.id,
       projectName: project.name,
       compiledBy: project.clientName,
@@ -494,7 +513,70 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
 
     setDocumentState({ status: 'generating', progress: 10, version: 1, updatedAt: now() })
     setView('document')
-    setNotice('Consolidado aprobado. Se compiló el documento final desde la plantilla oficial.')
+    setNotice(`Consolidado aprobado. Se compiló el documento final "${activeTemplate.name}".`)
+  }
+
+  const handleSelectDocumentTemplate = (template: ExpedienteDocumentTemplate) => {
+    let master = masterRecord
+    if (!master) {
+      const titlesPayload = adaptTableRowsToPayload('titles', groups.titles.rows)
+      const plansPayload = adaptTableRowsToPayload('plans', groups.plans.rows)
+      const negPayload = adaptTableRowsToPayload('negotiation', groups.negotiation.rows)
+      master = consolidateApprovedGroups({
+        titlesApprovedPayload: titlesPayload,
+        titlesVersionId: `titles-v${groups.titles.resultVersion}`,
+        plansApprovedPayload: plansPayload,
+        plansVersionId: `plans-v${groups.plans.resultVersion}`,
+        negotiationApprovedPayload: negPayload,
+        negotiationVersionId: `negotiation-v${groups.negotiation.resultVersion}`,
+      })
+      setMasterRecord(master)
+    }
+
+    const compiled = compileConsolidatedToTiptap(master, {
+      template,
+      projectCode: project.id,
+      projectName: project.name,
+      compiledBy: project.clientName,
+    })
+    setDocumentContent(compiled.content)
+    setDocumentDirty(false)
+    setActiveTemplate(template)
+    setDocumentState({ status: 'editable', progress: 100, version: 1, updatedAt: now() })
+    setView('document')
+    setChooseTemplateOpen(false)
+    setNotice(`Documento oficial generado exitosamente con la plantilla "${template.name}".`)
+  }
+
+  const handleDownloadDocx = async () => {
+    let master = masterRecord
+    if (!master) {
+      const titlesPayload = adaptTableRowsToPayload('titles', groups.titles.rows)
+      const plansPayload = adaptTableRowsToPayload('plans', groups.plans.rows)
+      const negPayload = adaptTableRowsToPayload('negotiation', groups.negotiation.rows)
+      master = consolidateApprovedGroups({
+        titlesApprovedPayload: titlesPayload,
+        titlesVersionId: `titles-v${groups.titles.resultVersion}`,
+        plansApprovedPayload: plansPayload,
+        plansVersionId: `plans-v${groups.plans.resultVersion}`,
+        negotiationApprovedPayload: negPayload,
+        negotiationVersionId: `negotiation-v${groups.negotiation.resultVersion}`,
+      })
+      setMasterRecord(master)
+    }
+    setIsExportingDocx(true)
+    try {
+      await downloadPopulatedDocx({
+        templateId: activeTemplate.id,
+        record: master,
+        fallbackFilename: `${activeTemplate.targetFilename.replace(/\.docx?$/i, '')}_CONSOLIDADO.docx`,
+      })
+      setNotice(`Archivo Word (${activeTemplate.targetFilename}) generado y descargado exitosamente.`)
+    } catch (caught: any) {
+      setNotice(`Error al exportar Word: ${caught?.message || caught}`)
+    } finally {
+      setIsExportingDocx(false)
+    }
   }
 
   const saveDocument = () => {
@@ -567,14 +649,15 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
       setMasterRecord(record)
     }
 
-    downloadExpedientePdf(record, {
+    void downloadExpedientePdf(record, {
       versionNumber: documentState.version,
       expedienteId: project.id,
       projectCode: project.id,
       projectName: project.name,
       generatedBy: project.clientName,
+      content: documentContent,
     })
-    setNotice(`Archivo PDF oficial generado y descargado (v${documentState.version} con código de verificación).`)
+    setNotice(`Archivo PDF oficial generado y descargado (v${documentState.version} con diseño idéntico al visualizador).`)
   }
 
   const finalizeDocument = () => {
@@ -634,8 +717,6 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
         </div>
       </div>
 
-      {notice && <div className="expediente-notice" role="status"><CheckCircle2 size={16} /><span>{notice}</span><button type="button" aria-label="Cerrar aviso" onClick={() => setNotice('')}><X size={15} /></button></div>}
-
       {view === 'summary' && (
         <section className="expediente-summary" aria-label="Resumen del expediente">
           <article className="expediente-identity-card">
@@ -683,6 +764,21 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
                 {consolidation.status === 'processing' ? <LoaderCircle size={16} className="spin" /> : <Play size={16} />}
                 {consolidation.status === 'stale' ? 'Actualizar consolidado' : 'Consolidar resultados'}
               </button>
+
+              <button
+                type="button"
+                className="expediente-secondary-action choose-document-btn"
+                disabled={!isConsolidatedReady}
+                onClick={() => setChooseTemplateOpen(true)}
+                title={
+                  !isConsolidatedReady
+                    ? 'Debes consolidar los resultados para habilitar la selección de plantilla'
+                    : 'Escoger documento oficial a generar con los datos consolidados'
+                }
+              >
+                <FileText size={16} />
+                <span>Escoger documento a generar</span>
+              </button>
             </div>
 
             <div className="extraction-consolidation-right">
@@ -714,11 +810,6 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
 
       {view === 'document' && (
         <section className="expediente-document" aria-label="Documento final">
-          <div className="expediente-section-heading document-heading">
-            <div><p>Documento final</p><h2>Plantilla consolidada y editable</h2><span>La versión del documento se genera únicamente después de aprobar el consolidado.</span></div>
-            <StatusText status={documentState.status} label={documentLabel(documentState.status)} />
-          </div>
-
           {documentState.status === 'blocked' ? (
             <div className="expediente-document-empty"><FileText size={28} /><div><h3>Aún no hay un documento para editar</h3><p>Aprueba el consolidado para habilitar la generación de la plantilla.</p><button type="button" className="expediente-primary-action" onClick={() => setView('extraction')}><ChevronRight size={16} />Ir a extracción y consolidación</button></div></div>
           ) : isDocumentWorking ? (
@@ -731,11 +822,38 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
                   <span>El consolidado aguas arriba fue modificado. El documento y los artefactos finales requieren regeneración para mantener la vigencia jurídica.</span>
                 </div>
               )}
-              <div className="document-workspace-meta"><div><span>Versión {documentState.version}</span><small>{documentState.updatedAt ? `Actualizada ${documentState.updatedAt}` : 'Versión oficial'}</small></div><span className={documentDirty ? 'document-dirty' : 'document-saved'}>{documentDirty ? 'Cambios sin guardar' : 'Guardado'}</span></div>
+              <div className="document-workspace-meta">
+                <div><span>Versión {documentState.version} • {activeTemplate.name}</span><small>{documentState.updatedAt ? `Actualizada ${documentState.updatedAt}` : 'Versión oficial'}</small></div>
+                <div className="document-workspace-meta-right">
+                  <StatusText status={documentState.status} label={documentLabel(documentState.status)} />
+                  <span className={documentDirty ? 'document-dirty' : 'document-saved'}>{documentDirty ? 'Cambios sin guardar' : 'Guardado'}</span>
+                </div>
+              </div>
               <DocumentPrototypeEditor content={documentContent} onChange={(next) => { setDocumentContent(next); setDocumentDirty(true); setDocumentState((current) => current.status === 'final' ? { ...current, status: 'editable' } : current) }} />
               <div className="document-workspace-actions">
-                <div><button type="button" className="expediente-secondary-action" disabled={!documentDirty} onClick={saveDocument}><Check size={16} />Guardar versión</button><button type="button" className="expediente-secondary-action" onClick={() => setAiDialogOpen(true)}><Sparkles size={16} />Solicitar cambios a IA</button></div>
-                <div><button type="button" className="expediente-secondary-action" disabled={documentDirty} onClick={finalizeDocument}><CheckCircle2 size={16} />Marcar como final</button><button type="button" className="expediente-primary-action" disabled={documentDirty} onClick={handleDownloadPdf}><Download size={16} />Descargar PDF</button><button type="button" className="expediente-primary-action" disabled={consolidation.status !== 'approved'} onClick={() => void handleDownloadExcel()}><Download size={16} />Descargar Excel</button></div>
+                <div>
+                  <button type="button" className="expediente-secondary-action" onClick={() => setChooseTemplateOpen(true)}>
+                    <RefreshCcw size={16} />
+                    <span>Cambiar plantilla</span>
+                  </button>
+                  <button type="button" className="expediente-secondary-action" disabled={!documentDirty} onClick={saveDocument}><Check size={16} />Guardar versión</button>
+                  <button type="button" className="expediente-secondary-action" onClick={() => setAiDialogOpen(true)}><Sparkles size={16} />Solicitar cambios a IA</button>
+                </div>
+                <div>
+                  <button type="button" className="expediente-secondary-action" disabled={documentDirty} onClick={finalizeDocument}><CheckCircle2 size={16} />Marcar como final</button>
+                  <button
+                    type="button"
+                    className="expediente-primary-action"
+                    disabled={!masterRecord || isExportingDocx}
+                    onClick={() => void handleDownloadDocx()}
+                    title="Descargar documento Word (.docx) exactamente igual a la plantilla oficial"
+                  >
+                    {isExportingDocx ? <LoaderCircle size={16} className="spin" /> : <FileText size={16} />}
+                    <span>Descargar Word (.docx)</span>
+                  </button>
+                  <button type="button" className="expediente-secondary-action" disabled={documentDirty} onClick={handleDownloadPdf}><Download size={16} />Descargar PDF</button>
+                  <button type="button" className="expediente-secondary-action" disabled={consolidation.status !== 'approved'} onClick={() => void handleDownloadExcel()}><Download size={16} />Descargar Excel</button>
+                </div>
               </div>
             </div>
           )}
@@ -784,6 +902,13 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
         onOpenChange={setProposalModalOpen}
         onAccept={acceptAiProposal}
         onDiscard={discardAiProposal}
+      />
+      <ChooseDocumentTemplateModal
+        open={chooseTemplateOpen}
+        onOpenChange={setChooseTemplateOpen}
+        initialTemplateId={activeTemplate.id}
+        isGenerating={isGeneratingDoc}
+        onSelectTemplate={handleSelectDocumentTemplate}
       />
     </div>
   )

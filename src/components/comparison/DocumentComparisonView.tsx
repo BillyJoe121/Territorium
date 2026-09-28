@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, CircleAlert, Eye, FilePlus2, Files, LoaderCircle, Scale, Trash2, UploadCloud } from 'lucide-react'
+import { toast } from 'sonner'
 import { dataMode } from '../../lib/supabase'
 import type { Project } from '../../types'
 import {
@@ -11,14 +12,110 @@ import './document-comparison.css'
 
 export type VisualStatus = 'exact' | 'near' | 'different' | 'absent'
 
-export function getFieldVisualStatus(field: ComparedField): VisualStatus {
-  if (field.status === 'different') {
-    const hasLeft = Boolean(field.left?.value && field.left.value.trim())
-    const hasRight = Boolean(field.right?.value && field.right.value.trim())
-    if (!hasLeft || !hasRight) {
-      return 'absent'
+const SPANISH_MONTHS: Record<string, number> = {
+  enero: 1, ene: 1,
+  febrero: 2, feb: 2,
+  marzo: 3, mar: 3,
+  abril: 4, abr: 4,
+  mayo: 5, may: 5,
+  junio: 6, jun: 6,
+  julio: 7, jul: 7,
+  agosto: 8, ago: 8,
+  septiembre: 9, setiembre: 9, sep: 9,
+  octubre: 10, oct: 10,
+  noviembre: 11, nov: 11,
+  diciembre: 12, dic: 12,
+}
+
+export function parseSpanishDate(str: string): { year: number; month: number; day: number } | null {
+  if (!str) return null
+  const clean = str.trim().toLowerCase().replace(/,/g, ' ').replace(/\s+/g, ' ')
+
+  // Format: "15 de marzo de 2024" or "15 de marzo del 2024" or "15 marzo 2024"
+  const textMatch = clean.match(/^(\d{1,2})\s+(?:de\s+)?([a-záéíóú]+)(?:\s+(?:de|del))?\s+(\d{4})$/i)
+  if (textMatch) {
+    const day = parseInt(textMatch[1], 10)
+    const monthName = textMatch[2].normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    const month = SPANISH_MONTHS[monthName]
+    const year = parseInt(textMatch[3], 10)
+    if (month && day >= 1 && day <= 31 && year >= 1900 && year <= 2100) {
+      return { year, month, day }
     }
   }
+
+  // Format: "15/03/2024" or "15-03-2024" (DD/MM/YYYY)
+  const slashMatch = clean.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+  if (slashMatch) {
+    const day = parseInt(slashMatch[1], 10)
+    const month = parseInt(slashMatch[2], 10)
+    const year = parseInt(slashMatch[3], 10)
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900 && year <= 2100) {
+      return { year, month, day }
+    }
+  }
+
+  // ISO Format: "2024-03-15" (YYYY-MM-DD)
+  const isoMatch = clean.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/)
+  if (isoMatch) {
+    const year = parseInt(isoMatch[1], 10)
+    const month = parseInt(isoMatch[2], 10)
+    const day = parseInt(isoMatch[3], 10)
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900 && year <= 2100) {
+      return { year, month, day }
+    }
+  }
+
+  return null
+}
+
+export function areValuesSemanticallyEqual(a: string, b: string): boolean {
+  if (a === b) return true
+
+  const normA = a.trim().replace(/\s+/g, ' ')
+  const normB = b.trim().replace(/\s+/g, ' ')
+
+  // 1. Case-insensitive equality (e.g. ALL CAPS vs Title Case)
+  if (normA.toLowerCase() === normB.toLowerCase()) {
+    return true
+  }
+
+  // 2. Date equality (e.g. "15 de marzo de 2024" vs "15/03/2024")
+  const dateA = parseSpanishDate(normA)
+  const dateB = parseSpanishDate(normB)
+  if (dateA && dateB) {
+    return dateA.year === dateB.year && dateA.month === dateB.month && dateA.day === dateB.day
+  }
+
+  // 3. Monetary / pure number format equality (e.g. "$ 10.000.000" vs "10.000.000")
+  const cleanDigitsA = normA.replace(/[$\s,.]/g, '')
+  const cleanDigitsB = normB.replace(/[$\s,.]/g, '')
+  if (cleanDigitsA && cleanDigitsB && cleanDigitsA === cleanDigitsB && /^\d+$/.test(cleanDigitsA)) {
+    return true
+  }
+
+  return false
+}
+
+export function getFieldVisualStatus(field: ComparedField): VisualStatus {
+  const leftVal = field.left?.value?.trim() ?? ''
+  const rightVal = field.right?.value?.trim() ?? ''
+
+  if (!leftVal || !rightVal) {
+    return 'absent'
+  }
+
+  // If semantically equal (case insensitivity, date equivalents, formatting) -> exact
+  if (areValuesSemanticallyEqual(leftVal, rightVal)) {
+    return 'exact'
+  }
+
+  // If both are dates but they differ in day/month/year -> different
+  const dateA = parseSpanishDate(leftVal)
+  const dateB = parseSpanishDate(rightVal)
+  if (dateA && dateB && (dateA.year !== dateB.year || dateA.month !== dateB.month || dateA.day !== dateB.day)) {
+    return 'different'
+  }
+
   return field.status
 }
 
@@ -87,6 +184,18 @@ export function DocumentComparisonView({
 
   const activeJob = jobs.find((job) => job.id === activeJobId) ?? null
 
+  const prevStatusRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (activeJob) {
+      if (prevStatusRef.current && (prevStatusRef.current === 'queued' || prevStatusRef.current === 'running') && activeJob.status === 'completed') {
+        toast.success('Cotejo completado exitosamente.')
+      }
+      prevStatusRef.current = activeJob.status
+    } else {
+      prevStatusRef.current = null
+    }
+  }, [activeJob])
+
   // Notificar al contenedor principal para contraer la sidebar al visualizar la comparación
   useEffect(() => {
     if (screen === 'results' && activeJob) {
@@ -135,6 +244,7 @@ export function DocumentComparisonView({
         await uploadComparisonDocument(project.id, file, '', (percent) => setUploadProgress(`${index + 1}/${files.length} · ${file.name} · ${percent}%`))
       }
       await refresh()
+      toast.success(files.length === 1 ? `Archivo "${files[0].name}" cargado exitosamente.` : `${files.length} archivos cargados exitosamente.`)
     } catch (caught) {
       await refresh()
       setError(describeComparisonError(caught, 'Falló la carga del archivo.'))
@@ -149,6 +259,7 @@ export function DocumentComparisonView({
       setActiveJobId(jobId)
       setScreen('results')
       await refresh()
+      toast.success('Cotejo iniciado en el worker.')
     } catch (caught) {
       setError(describeComparisonError(caught, 'No fue posible iniciar la comparación.'))
     } finally { setBusy(false) }
@@ -162,6 +273,7 @@ export function DocumentComparisonView({
       if (leftId === document.id) setLeftId('')
       if (rightId === document.id) setRightId('')
       await refresh()
+      toast.success(`Archivo "${document.original_name}" retirado exitosamente.`)
     } catch (caught) {
       setError(describeComparisonError(caught, 'No se pudo retirar el archivo.'))
     } finally { setBusy(false) }
@@ -204,7 +316,6 @@ export function DocumentComparisonView({
           </div>
 
           {activeJob.status === 'failed' && <div className="comparison-error" role="alert">{errorText[activeJob.error_code ?? ''] ?? 'No se pudo completar. Intente de nuevo o revise el worker.'}</div>}
-          {(activeJob.status === 'queued' || activeJob.status === 'running') && <div className="comparison-notice" role="status">El worker está procesando el par. Esta vista se actualizará automáticamente.</div>}
           {activeJob.result && Object.values(activeJob.result.documents).some((document) => document.scan_status !== 'textual') && <div className="comparison-notice" role="status"><CircleAlert size={17} />Algunas páginas pueden no tener texto extraíble. El cotejo solo cubre la evidencia que pudo leerse; revise también las páginas escaneadas.</div>}
 
           <div className="comparison-review-grid">
@@ -229,7 +340,7 @@ export function DocumentComparisonView({
                             aria-pressed={isSelected}
                           >
                             <span className={`comparison-status-dot is-${visualStatus}`} aria-hidden="true" />
-                            <span className="comparison-finding-title">{field.label}</span>
+                            <span className="comparison-finding-title" title={field.label}>{field.label}</span>
                           </button>
                           <button
                             type="button"
@@ -252,6 +363,10 @@ export function DocumentComparisonView({
 
                         {isExpanded && (
                           <div className="comparison-finding-details">
+                            <div className="comparison-detail-attribute">
+                              <span className="comparison-detail-attribute-label">Atributo completo</span>
+                              <strong className="comparison-detail-full-name">{field.label}</strong>
+                            </div>
                             <div className="comparison-detail-status">
                               <span className={`comparison-status-tag is-${visualStatus}`}>
                                 {visualStatus === 'absent'

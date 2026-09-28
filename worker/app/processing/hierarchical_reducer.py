@@ -131,17 +131,68 @@ class HierarchicalReducer:
                     )
                 )
 
+        # Group by source document to preserve per-document extractions
+        doc_groups: dict[str, dict[str, Any]] = {}
+        for res in partial_results:
+            source_doc = res.get("source_document") or "Documento principal"
+            if source_doc not in doc_groups:
+                doc_groups[source_doc] = {
+                    "source_document": source_doc,
+                    "folio": res.get("folio") or "",
+                    "cadastral_id": res.get("cadastral_id") or "",
+                    "owners": list(res.get("owners") or []),
+                    "document_number": "",
+                    "document_type": "Cédula de ciudadanía",
+                    "antecedents_consultation_date": res.get("antecedents_consultation_date") or "",
+                    "property_name": res.get("property_name") or "",
+                    "municipality": res.get("municipality") or "",
+                    "department": res.get("department") or "",
+                    "village": res.get("village") or "",
+                    "area_numbers": res.get("area_numbers") or "",
+                    "area_letters": res.get("area_letters") or "",
+                    "registry_office": res.get("registry_office") or "",
+                    "acquisition_mode": res.get("acquisition_mode") or "",
+                    "boundaries": res.get("boundaries") or "",
+                    "boundaries_document": res.get("boundaries_document") or source_doc,
+                    "legal_conditions": res.get("legal_conditions") or "",
+                    "justice_ministry_case": res.get("justice_ministry_case") or "",
+                    "urt_case": res.get("urt_case") or "",
+                    "urt_territorial_direction": res.get("urt_territorial_direction") or "",
+                }
+            else:
+                existing = doc_groups[source_doc]
+                for f in scalar_fields:
+                    if not existing.get(f) and res.get(f):
+                        existing[f] = res[f]
+                for o in res.get("owners") or []:
+                    if o not in existing["owners"]:
+                        existing["owners"].append(o)
+                if not existing.get("acquisition_mode") and res.get("acquisition_mode"):
+                    existing["acquisition_mode"] = res["acquisition_mode"]
+                if res.get("boundaries") and len(str(res["boundaries"])) > len(str(existing.get("boundaries", ""))):
+                    existing["boundaries"] = res["boundaries"]
+
+        titles_list: list[dict[str, Any]] = []
+        for d in doc_groups.values():
+            if d.get("owners"):
+                primary = d["owners"][0]
+                if isinstance(primary, dict):
+                    d["document_number"] = primary.get("document_number") or ""
+                    d["document_type"] = primary.get("document_type") or "Cédula de ciudadanía"
+            titles_list.append(d)
+
         canonical["owners"] = list(owners_map.values())
         canonical["acquisition_mode"] = " // ".join(acquisitions) if acquisitions else "no identificado"
         canonical["boundaries"] = longest_boundaries if longest_boundaries else "no identificado"
         canonical["boundaries_exactness"] = "LINDEROS EXACTOS" if len(longest_boundaries) > 50 else "LINDEROS RESUMIDOS"
         canonical["legal_conditions"] = "; ".join(conditions) if conditions else "sin condiciones jurídicas vigentes"
+        canonical["titles"] = titles_list
 
         return ReducedExtractionResult(
             group_key="titles",
             is_complete=bool(canonical.get("folio") and canonical.get("owners")),
             canonical_payload=canonical,
-            collections={"owners": list(owners_map.values())},
+            collections={"owners": list(owners_map.values()), "titles": titles_list},
             discrepancies=discrepancies,
             provenance=provenance,
             warnings=warnings,
@@ -159,24 +210,31 @@ class HierarchicalReducer:
         discrepancies: list[FieldDiscrepancy] = []
         warnings: list[str] = []
 
+        def _parse_num(val: Any) -> float:
+            if val is None:
+                return 0.0
+            clean = str(val).strip().replace("m²", "").replace("m2", "").replace("m", "").replace("M2", "").strip()
+            if not clean or clean.lower() in ("—", "-", "no identificado", "none", "n/a"):
+                return 0.0
+            if "." in clean and "," in clean:
+                clean = clean.replace(".", "").replace(",", ".")
+            elif "," in clean:
+                clean = clean.replace(",", ".")
+            try:
+                return float(clean)
+            except ValueError:
+                import re
+                found = re.findall(r"[-+]?\d*\.?\d+", clean)
+                return float(found[0]) if found else 0.0
+
         for p in plan_results:
             plans_list.append(p)
+            total_area += _parse_num(p.get("easement_area_numbers"))
+            total_length += _parse_num(p.get("easement_length_numbers"))
             try:
-                area_val = float(str(p.get("easement_area_numbers") or 0).replace(".", "").replace(",", "."))
-                total_area += area_val
-            except ValueError:
-                pass
-
-            try:
-                len_val = float(str(p.get("easement_length_numbers") or 0).replace(".", "").replace(",", "."))
-                total_length += len_val
-            except ValueError:
-                pass
-
-            try:
-                inf_val = int(p.get("infrastructure_count_numbers") or 0)
+                inf_val = int(_parse_num(p.get("infrastructure_count_numbers")))
                 total_infrastructure += inf_val
-            except ValueError:
+            except (ValueError, TypeError):
                 pass
 
         primary_plan = plans_list[0] if plans_list else {}

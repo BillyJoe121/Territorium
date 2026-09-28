@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { toast } from 'sonner'
 import type { Project } from '../../types'
 import {
   loadRemoteExpedienteProcessing,
@@ -63,8 +64,14 @@ import { downloadExpedientePdf } from '../../lib/expedientePdfGenerator'
 import type { ExpedienteGroupKey } from '../../lib/expedienteWorkflow'
 import { AiRevisionDialog } from './AiRevisionDialog'
 import { AiRevisionProposalModal } from './AiRevisionProposalModal'
+import { ChooseDocumentTemplateModal } from './ChooseDocumentTemplateModal'
 import { DocumentPrototypeEditor } from './DocumentPrototypeEditor'
 import { ReviewDialog } from './ReviewDialog'
+import {
+  OFFICIAL_FINAL_DOCUMENT_TEMPLATES,
+  type ExpedienteDocumentTemplate,
+} from '../../lib/expedienteDocumentTemplates'
+import { downloadPopulatedDocx } from '../../lib/expedienteDocxExport'
 import {
   consolidatedColumns,
   formatFileSize,
@@ -182,8 +189,11 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
   const [view, setView] = useState<DetailView>('extraction')
   const [groups, setGroups] = useState<Record<ExpedienteGroupKey, RemoteExpedienteGroup> | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState('')
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const setError = useCallback((msg: string | null) => {
+    if (msg) toast.error(msg)
+  }, [])
+  const setNotice = (msg: string) => { if (msg) toast.success(msg) }
   const [busyGroup, setBusyGroup] = useState<ExpedienteGroupKey | null>(null)
   const [progress, setProgress] = useState<ExpedienteUploadProgress | null>(null)
 
@@ -214,6 +224,13 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
   }>({ status: 'blocked', version: 1, id: null })
   const [documentContent, setDocumentContent] = useState<JSONContent>(initialDocumentContent)
   const [documentDirty, setDocumentDirty] = useState(false)
+  const [chooseTemplateOpen, setChooseTemplateOpen] = useState(false)
+  const [activeTemplate, setActiveTemplate] = useState<ExpedienteDocumentTemplate>(
+    OFFICIAL_FINAL_DOCUMENT_TEMPLATES[0],
+  )
+  const [isGeneratingDoc, setIsGeneratingDoc] = useState(false)
+  const [isExportingDocx, setIsExportingDocx] = useState(false)
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
 
   // AI revision modal state
   const [aiDialogOpen, setAiDialogOpen] = useState(false)
@@ -266,7 +283,11 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
       const document = await repo.getCurrentDocument(project.id)
       if (mounted.current && document) applyDocumentSnapshot(document)
     } catch (caught) {
-      if (mounted.current) setError(caught instanceof Error ? caught.message : 'No fue posible sincronizar el expediente.')
+      const msg = caught instanceof Error ? caught.message : 'No fue posible sincronizar el expediente.'
+      if (mounted.current) {
+        setLoadError(msg)
+        setError(msg)
+      }
     } finally {
       if (mounted.current) setLoading(false)
     }
@@ -349,6 +370,11 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
     [groups],
   )
   const allGroupsApproved = approvedGroupsCount === 3
+  const isConsolidatedReady = Boolean(
+    consolidatedMasterRecord ||
+    consolidationStatus === 'approved' ||
+    consolidationStatus === 'review_ready',
+  )
 
   useEffect(() => {
     setConsolidationStatus((curr) => {
@@ -560,24 +586,95 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
     setConsolidationStatus('approved')
     setConsolidatedOpen(false)
 
-    // Compile into official Tiptap document
+    // Store approved consolidated record and transition to mandatory template selection
     const master = updatedPayload as unknown as ConsolidatedMasterRecord
     setConsolidatedMasterRecord(master)
-    const compiled = compileConsolidatedToTiptap(master, {
-      projectCode: project.id,
-      projectName: project.name,
-      compiledBy: project.clientName,
-    })
-    const document = await repo.saveDocument(
-      project.id,
-      compiled.content as Record<string, unknown>,
-      documentState.id,
-      'Documento inicial desde consolidado aprobado',
-    )
-    applyDocumentSnapshot(document)
-    setView('document')
-    setNotice('Consolidado aprobado. Se compiló el documento oficial en el editor Tiptap.')
+    setNotice('Consolidado aprobado con éxito. Por favor, escoge el documento oficial que deseas generar.')
+    setChooseTemplateOpen(true)
     await refresh()
+  }
+
+  async function handleSelectDocumentTemplate(template: ExpedienteDocumentTemplate) {
+    setIsGeneratingDoc(true)
+    setError(null)
+    try {
+      let master = consolidatedMasterRecord
+      if (!master && groups) {
+        const titlesVersion = await repo.getResultVersion(groups.titles.id)
+        const plansVersion = await repo.getResultVersion(groups.plans.id)
+        const negVersion = await repo.getResultVersion(groups.negotiation.id)
+        master = consolidateApprovedGroups({
+          titlesApprovedPayload: titlesVersion?.payload ?? {},
+          titlesVersionId: titlesVersion?.id ?? 'v1',
+          plansApprovedPayload: plansVersion?.payload ?? {},
+          plansVersionId: plansVersion?.id ?? 'v1',
+          negotiationApprovedPayload: negVersion?.payload ?? {},
+          negotiationVersionId: negVersion?.id ?? 'v1',
+        })
+        setConsolidatedMasterRecord(master)
+      }
+      if (!master) {
+        throw new Error('Debes consolidar los resultados antes de generar el documento final.')
+      }
+
+      const compiled = compileConsolidatedToTiptap(master, {
+        template,
+        projectCode: project.id,
+        projectName: project.name,
+        compiledBy: project.clientName,
+      })
+
+      const document = await repo.saveDocument(
+        project.id,
+        compiled.content as Record<string, unknown>,
+        documentState.id,
+        `Documento generado con plantilla: ${template.name}`,
+      )
+      applyDocumentSnapshot(document)
+      setActiveTemplate(template)
+      setView('document')
+      setChooseTemplateOpen(false)
+      setNotice(`Documento oficial generado exitosamente con la plantilla "${template.name}".`)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No fue posible generar el documento con la plantilla seleccionada.')
+    } finally {
+      setIsGeneratingDoc(false)
+    }
+  }
+
+  async function handleDownloadDocx() {
+    let master = consolidatedMasterRecord
+    if (!master && groups) {
+      const titlesVersion = await repo.getResultVersion(groups.titles.id)
+      const plansVersion = await repo.getResultVersion(groups.plans.id)
+      const negVersion = await repo.getResultVersion(groups.negotiation.id)
+      master = consolidateApprovedGroups({
+        titlesApprovedPayload: titlesVersion?.payload ?? {},
+        titlesVersionId: titlesVersion?.id ?? 'v1',
+        plansApprovedPayload: plansVersion?.payload ?? {},
+        plansVersionId: plansVersion?.id ?? 'v1',
+        negotiationApprovedPayload: negVersion?.payload ?? {},
+        negotiationVersionId: negVersion?.id ?? 'v1',
+      })
+      setConsolidatedMasterRecord(master)
+    }
+    if (!master) {
+      setError('Debes consolidar los datos antes de exportar el archivo Word.')
+      return
+    }
+    setIsExportingDocx(true)
+    try {
+      await downloadPopulatedDocx({
+        templateId: activeTemplate.id,
+        record: master,
+        fallbackFilename: `${activeTemplate.targetFilename.replace(/\.docx?$/i, '')}_CONSOLIDADO.docx`,
+      })
+      setNotice(`Archivo Word (${activeTemplate.targetFilename}) generado y descargado exitosamente.`)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Error al exportar archivo Word.')
+    } finally {
+      setIsExportingDocx(false)
+    }
   }
 
   async function handleDownloadExcel() {
@@ -609,21 +706,28 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
     }
   }
 
-  function handleDownloadPdf() {
+  async function handleDownloadPdf() {
     try {
       if (!consolidatedMasterRecord) {
         throw new Error('Debes aprobar el consolidado antes de generar el PDF oficial.')
       }
-      downloadExpedientePdf(consolidatedMasterRecord, {
+      setIsExportingPdf(true)
+      await downloadExpedientePdf(consolidatedMasterRecord, {
         versionNumber: documentState.version,
         expedienteId: project.id,
         projectCode: project.id,
         projectName: project.name,
         generatedBy: project.clientName,
+        content: documentContent,
+        filename: activeTemplate.targetFilename
+          ? activeTemplate.targetFilename.replace(/\.docx$/i, '.pdf')
+          : undefined,
       })
-      setNotice(`Archivo PDF oficial generado y descargado (v${documentState.version} con código de verificación).`)
+      setNotice(`Archivo PDF oficial generado y descargado (v${documentState.version} con diseño idéntico al visualizador).`)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Error al generar el PDF.')
+    } finally {
+      setIsExportingPdf(false)
     }
   }
 
@@ -703,7 +807,7 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
   }
 
   if (loading && !groups) return <div className="expediente-remote-loading">Cargando expediente remoto…</div>
-  if (!groups) return <div className="expediente-remote-loading" role="alert">{error ?? 'No fue posible cargar el expediente.'}</div>
+  if (!groups) return <div className="expediente-remote-loading" role="alert">{loadError ?? 'No fue posible cargar el expediente.'}</div>
 
   const activeGroup = activeGroupKey ? groups[activeGroupKey] : null
 
@@ -743,22 +847,6 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
           ))}
         </div>
       </div>
-
-      {notice && (
-        <div className="expediente-notice" role="status">
-          <CheckCircle2 size={16} />
-          <span>{notice}</span>
-          <button type="button" aria-label="Cerrar aviso" onClick={() => setNotice('')}>
-            <X size={15} />
-          </button>
-        </div>
-      )}
-
-      {error && (
-        <p className="expediente-inline-error" role="alert" style={{ margin: '12px 0' }}>
-          {error}
-        </p>
-      )}
 
       {/* 1. SUMMARY VIEW */}
       {view === 'summary' && (
@@ -1037,6 +1125,21 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
                   ? 'Actualizar consolidado'
                   : 'Consolidar resultados'}
               </button>
+
+              <button
+                type="button"
+                className="expediente-secondary-action choose-document-btn"
+                disabled={!isConsolidatedReady}
+                onClick={() => setChooseTemplateOpen(true)}
+                title={
+                  !isConsolidatedReady
+                    ? 'Debes consolidar los resultados para habilitar la selección de plantilla'
+                    : 'Escoger documento oficial a generar con los datos consolidados'
+                }
+              >
+                <FileText size={16} />
+                <span>Escoger documento a generar</span>
+              </button>
             </div>
 
             <div className="extraction-consolidation-right">
@@ -1071,15 +1174,6 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
       {/* 3. DOCUMENT FINAL VIEW */}
       {view === 'document' && (
         <section className="expediente-document" aria-label="Documento final oficial">
-          <div className="expediente-section-heading document-heading">
-            <div>
-              <p>Documento final</p>
-              <h2>Plantilla oficial estructurada y editable</h2>
-              <span>La versión final se compila a partir del consolidado aprobado sin contradicciones.</span>
-            </div>
-            <StatusText status={documentState.status} label={documentLabel(documentState.status)} />
-          </div>
-
           {documentState.status === 'blocked' ? (
             <div className="expediente-document-empty">
               <FileText size={28} />
@@ -1092,16 +1186,31 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
                 </button>
               </div>
             </div>
+          ) : !documentState.id ? (
+            <div className="expediente-document-empty">
+              <FileText size={32} />
+              <div>
+                <h3>Paso pendiente: Escoger documento a generar</h3>
+                <p>El consolidado está aprobado. Escoge la plantilla oficial para compilar el documento final del predio.</p>
+                <button type="button" className="expediente-primary-action" onClick={() => setChooseTemplateOpen(true)}>
+                  <FileText size={16} />
+                  Escoger documento a generar
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="expediente-document-workspace">
               <div className="document-workspace-meta">
                 <div>
-                  <span>Versión {documentState.version}</span>
+                  <span>Versión {documentState.version} • {activeTemplate.name}</span>
                   <small>{documentState.updatedAt ? `Actualizada ${documentState.updatedAt}` : 'Versión oficial'}</small>
                 </div>
-                <span className={documentDirty ? 'document-dirty' : 'document-saved'}>
-                  {documentDirty ? 'Cambios sin guardar' : 'Guardado'}
-                </span>
+                <div className="document-workspace-meta-right">
+                  <StatusText status={documentState.status} label={documentLabel(documentState.status)} />
+                  <span className={documentDirty ? 'document-dirty' : 'document-saved'}>
+                    {documentDirty ? 'Cambios sin guardar' : 'Guardado'}
+                  </span>
+                </div>
               </div>
 
               <DocumentPrototypeEditor
@@ -1114,6 +1223,15 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
 
               <div className="document-workspace-actions">
                 <div>
+                  <button
+                    type="button"
+                    className="expediente-secondary-action"
+                    onClick={() => setChooseTemplateOpen(true)}
+                    title="Escoger otra de las 3 plantillas oficiales"
+                  >
+                    <RefreshCcw size={16} />
+                    <span>Cambiar plantilla</span>
+                  </button>
                   <button
                     type="button"
                     className="expediente-secondary-action"
@@ -1145,19 +1263,30 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
                   <button
                     type="button"
                     className="expediente-primary-action"
-                    disabled={documentDirty}
-                    onClick={handleDownloadPdf}
+                    disabled={!consolidatedMasterRecord || isExportingDocx}
+                    onClick={() => void handleDownloadDocx()}
+                    title="Descargar documento Word (.docx) idéntico a la plantilla oficial"
                   >
-                    <Download size={16} />
-                    Descargar PDF
+                    {isExportingDocx ? <LoaderCircle size={16} className="spin" /> : <FileText size={16} />}
+                    <span>Descargar Word (.docx)</span>
                   </button>
                   <button
                     type="button"
-                    className="expediente-primary-action"
+                    className="expediente-secondary-action"
+                    disabled={documentDirty || isExportingPdf}
+                    onClick={() => void handleDownloadPdf()}
+                    title="Descargar documento PDF idéntico al visualizado"
+                  >
+                    {isExportingPdf ? <LoaderCircle size={16} className="spin" /> : <Download size={16} />}
+                    <span>Descargar PDF</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="expediente-secondary-action"
                     disabled={consolidationStatus !== 'approved'}
                     onClick={() => void handleDownloadExcel()}
                   >
-                    <Download size={16} />
+                    <FileSpreadsheet size={16} />
                     Descargar Excel
                   </button>
                 </div>
@@ -1228,6 +1357,15 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
         onOpenChange={setProposalModalOpen}
         onAccept={handleAcceptAiProposal}
         onDiscard={handleDiscardAiProposal}
+      />
+
+      {/* Choose Document Template Modal */}
+      <ChooseDocumentTemplateModal
+        open={chooseTemplateOpen}
+        onOpenChange={setChooseTemplateOpen}
+        initialTemplateId={activeTemplate.id}
+        isGenerating={isGeneratingDoc}
+        onSelectTemplate={handleSelectDocumentTemplate}
       />
     </section>
   )

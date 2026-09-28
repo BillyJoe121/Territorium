@@ -1,0 +1,84 @@
+=== ID02 descripción de linderos.docx ===
+
+La franja o faja de servidumbre tiene un área de  	OCHO MIL QUINIENTOS OCHENTA Y CUATRO PUNTO SETECIENTOS NOVENTA Y NUEVE METROS CUADRADOS (8584.799 m2) aproximadamente, que corresponde a  DOSCIENTOS SETENTA Y CUATRO PUNTO CIENTO SETENTA Y CINCO METROS (274.175 m) de longitud y TREINTA Y DOS METROS (32 m) de ancho, y sus linderos son: -----------------------------------------------------------------------------------------------
+
+La descripción de vértices de servidumbre se define por tres tramos, a continuación, el Tramo 1 se define:
+
+NORTE: Inicia en el vértice 1 con coordenadas “N: 2124501.376 y E: 4789744.45”, en línea recta en sentido noreste, pasando por el vértice 2 con coordenadas “N: 2124588.774 y E: 4790022.826” y una distancia de 291.77 metros colindando con el predio denominado VILLA CLAUDIA.
+
+ESTE: Inicia en el vértice 2 con coordenadas “N: 2124588.774 y E: 4790022.826”, en línea recta en sentido sur, pasando por el vértice 3 con coordenadas “N: 2124555.414 y E: 4790023.403” y una distancia de 33.36 metros colindando con el predio denominado LOS OLIVOS.
+
+SUR: Inicia en el vértice 3 con coordenadas “N: 2124555.414 y E: 4790023.403”, en línea recta en sentido suroeste, pasando por el vértice 4 con coordenadas “N: 2124489.186 y E: 4789812.452” y una distancia de 221.10 metros colindando con el predio denominado VILLA CLAUDIA.
+
+Desde el vértice 4 con coordenadas “N: 2124489.186 y E: 4789812.452”, en línea recta en sentido oeste, pasando por el vértice 5 con coordenadas “N: 2124490.176 y E: 4789764.575” y una distancia de 47.89 metros colindando con el predio denominado VILLA JUDITH.
+
+Desde el vértice 5 con coordenadas “N: 2124490.176 y E: 4789764.575”, en línea recta en sentido oeste, pasando por el vértice 6 con coordenadas “N: 2124489.693 y E: 4789745.177” y una distancia de 19.40 metros colindando con el predio denominado VILLA JUDITH.
+
+OESTE: Inicia en el vértice 6 con coordenadas “N: 2124489.693 y E: 4789745.177”, en línea recta en sentido norte, pasando por el vértice 1 con coordenadas “N: 2124501.376 y E: 4789744.45” y una distancia de 11.71 metros colindando con Carretera Nacional Ibagué - Mariquita.
+
+La descripción de vértices de servidumbre se define por dos tramos, a continuación, el Tramo 2A se define:
+
+NORTE: Inicia en el vértice 7 con coordenadas “N: 2124561.951 y E: 4790737.16”, en línea recta en sentido sureste, pasando por el vértice 8 con coordenadas “N: 2124551.061 y E: 4790792.018” y una distancia de 55.93 metros colindando con el predio denominado LOS OLIVOS.
+
+ESTE: Inicia en el vértice 8 con coordenadas “N: 2124551.061 y E: 4790792.018”, en línea recta en sentido sureste, pasando por el vértice 9 con coordenadas “N: 2124537.403 y E: 4790813.957” y una distancia de 25.84 metros colindando con el predio denominado LOS OLIVOS.
+
+Desde el vértice 9 con coordenadas “N: 2124537.403 y E: 4790813.957”, en línea recta en sentido sureste, pasando por el vértice 10 con coordenadas “N: 2124535.627 y E: 4790810.702” y una distancia de 3.71 metros colindando con el predio denominado HACIENDA CARDONAL.
+
+Desde el vértice 10 con coordenadas “N: 2124535.627 y E: 4790810.702”, en línea recta en sentido suroeste, pasando por el vértice 11 con coordenadas “N: 2124523.454 y E: 4790806.746” y una distancia de 12.80 metros colindando con el predio denominado LOS OLIVOS.
+
+Desde el vértice 11 con coordenadas “N: 2124523.454 y E: 4790806.746”, en línea recta en sentido suroeste, pasando por el vértice 12 con coordenadas “N: 2124515.595 y E: 4790813.179” y una distancia de 10.16 metros colindando con el predio denominado LOS OLIVOS.
+
+SUROESTE:  Inicia en el vértice 12 con coordenadas “N: 2124515.595 y E: 4790813.179”, en línea recta en sentido noroeste, pasando por el vértice 7 con coordenadas “N: 2124561.951 y E: 4790737.16” y una distancia de 89.04 metros colindando con el predio denominado VILLA CLAUDIA.
+
+La descripción de vértices de servidumbre se define por dos tramos, a continuación, el Tramo 2B se define:
+
+NORTE: Inicia en el vértice 13 con coordenadas “N: 2124510.244 y E: 4790822.256”, en línea recta en sentido este, pasando por el vértice 14 con coordenadas “N: 2124506.41 y E: 4790841.833” y una distancia de 19.95 metros colindando con el predio denominado LA LORENA.
+
+Desde el vértice 14 con coordenadas “N: 2124506.41 y E: 4790841.833”, en línea recta en sentido sureste, pasando por el vértice 15 con coordenadas “N: 2124503.395 y E: 4790859.357” y una distancia de 17.78 metros colindando con el predio denominado LA LORENA.
+
+ESTE: Inicia el vértice 15 con coordenadas “N: 2124503.395 y E: 4790859.357”, en línea recta en sentido sureste, pasando por el vértice 16 con coordenadas “N: 2124492.519 y E: 4790869.085” y una distancia de 14.59 metros colindando con el predio denominado LA LORENA.
+
+Desde el vértice 16 con coordenadas “N: 2124492.519 y E: 4790869.085”, en línea recta en sentido suroeste, pasando por el vértice 17 con coordenadas “N: 2124475.887 y E: 4790880.545” y una distancia de 20.20 metros colindando con el predio denominado LOS OLIVOS. 
+
+SUROESTE:  Inicia en el vértice 17 con coordenadas “N: 2124475.887 y E: 4790880.545”, en línea recta en sentido noroeste, pasando por el vértice 13 con coordenadas “N: 2124510.244 y E: 4790822.256” y una distancia de 67.66 metros colindando con el predio denominado VILLA CLAUDIA.
+
+Los anteriores linderos de los tramos 1, tramo 2A y tramo 2B del área de la servidumbre se enmarcan en el siguiente cuadro de coordenadas y distancias, bajo el sistema de referencia de coordenadas nacional CTM12 ---------------------------------------
+
+PARÁGRAFO PRIMERO: Lo anterior de conformidad con el Plano denominado TOL-ARM-02-T1, elaborado por TERRITORIUM S.A.S. a escala de 1 cm: 1700 m., adicional el Plano denominado TOL-ARM-02-T2, elaborado por TERRITORIUM S.A.S. a escala de 1 cm: 1400 m., ambos elaborados en fecha de marzo de 2024, y que se protocoliza con esta escritura (Anexo 4). ---------------------------------------
+
+PARÁGRAFO SEGUNDO: Sobre la franja de servidumbre descrita, no hay infraestructura de apoyo tipo Torre. --------------------------------------------------
+
+
+=== TABLES ===
+
+--- Table 0 ---
+TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 1 | TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 1 | TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 1 | TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 1 | TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 1
+VÉRTICE | NORTE (m) | ESTE (m) | SEGMENTO | DISTANCIA (m)
+1 | 2124501.376 | 4789744.45 |  | 
+2 | 2124588.774 | 4790022.826 | 1-2 | 291.77
+3 | 2124555.414 | 4790023.403 | 2-3 | 33.36
+4 | 2124489.186 | 4789812.452 | 3-4 | 221.10
+5 | 2124490.176 | 4789764.575 | 4-5 | 47.89
+6 | 2124489.693 | 4789745.177 | 5-6 | 19.40
+1 | 2124501.376 | 4789744.45 | 6-1 | 11.71
+
+--- Table 1 ---
+TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 2A | TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 2A | TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 2A | TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 2A | TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 2A
+VÉRTICE | NORTE (m) | ESTE (m) | SEGMENTO | DISTANCIA (m)
+7 | 2124561.951 | 4790737.16 |  | 
+8 | 2124551.061 | 4790792.018 | 7-8 | 55.93
+9 | 2124537.403 | 4790813.957 | 8-9 | 25.84
+10 | 2124535.627 | 4790810.702 | 9-10 | 3.71
+11 | 2124523.454 | 4790806.746 | 10-11 | 12.80
+12 | 2124515.595 | 4790813.179 | 11-12 | 10.16
+7 | 2124561.951 | 4790737.16 | 13-7 | 89.04
+
+--- Table 2 ---
+TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 2B | TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 2B | TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 2B | TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 2B | TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 2B
+VÉRTICE | NORTE (m) | ESTE (m) | SEGMENTO | DISTANCIA (m)
+13 | 2124510.244 | 4790822.256 | 12-13 | 
+14 | 2124506.41 | 4790841.833 | 13-14 | 19.95
+15 | 2124503.395 | 4790859.357 | 14-15 | 17.78
+16 | 2124492.519 | 4790869.085 | 15-16 | 14.59
+17 | 2124475.887 | 4790880.545 | 16-17 | 20.20
+13 | 2124510.244 | 4790822.256 | 17-7 | 67.66

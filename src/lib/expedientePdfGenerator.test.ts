@@ -5,6 +5,8 @@ import {
   computeArtifactVerificationHash,
   generateExpedientePrintableHtml,
   getLinkedArtifactMetadata,
+  tiptapJsonToHtml,
+  downloadExpedientePdf,
 } from './expedientePdfGenerator'
 
 describe('HU-V2-051: Official PDF Generator & Linked Artifacts', () => {
@@ -89,5 +91,61 @@ describe('HU-V2-051: Official PDF Generator & Linked Artifacts', () => {
     expect(text.trim().endsWith('%%EOF')).toBe(true)
     expect(text).toContain('/Root 1 0 R')
     expect(text).toContain('TRT-AUD-')
+  })
+
+  it('converts TipTap JSONContent to semantic HTML matching the visualizer structure', () => {
+    const tiptapDoc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { level: 1 },
+          content: [{ type: 'text', text: 'MINUTA DE ESCRITURA PÚBLICA' }],
+        },
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', marks: [{ type: 'bold' }], text: 'PRIMERA. - OBJETO: ' },
+            { type: 'text', text: 'Constitución de servidumbre legal de energía eléctrica.' },
+          ],
+        },
+        {
+          type: 'table',
+          content: [
+            {
+              type: 'tableRow',
+              content: [
+                { type: 'tableHeader', content: [{ type: 'text', text: 'PREDIO' }] },
+                { type: 'tableHeader', content: [{ type: 'text', text: 'FOLIO' }] },
+              ],
+            },
+            {
+              type: 'tableRow',
+              content: [
+                { type: 'tableCell', content: [{ type: 'text', text: 'La Esperanza' }] },
+                { type: 'tableCell', content: [{ type: 'text', text: '050N-204581' }] },
+              ],
+            },
+          ],
+        },
+      ],
+    }
+
+    const html = tiptapJsonToHtml(tiptapDoc)
+    expect(html).toContain('<h1>MINUTA DE ESCRITURA PÚBLICA</h1>')
+    expect(html).toContain('<strong>PRIMERA. - OBJETO: </strong>')
+    expect(html).toContain('Constitución de servidumbre')
+    expect(html).toContain('<th>PREDIO</th>')
+    expect(html).toContain('<td>La Esperanza</td>')
+  })
+
+  it('handles downloadExpedientePdf safely in Node/JSDOM test environment without throwing', async () => {
+    await expect(downloadExpedientePdf(sampleRecord, {
+      versionNumber: 2,
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Texto de prueba' }] }],
+      },
+    })).resolves.not.toThrow()
   })
 })

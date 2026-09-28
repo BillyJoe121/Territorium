@@ -114,6 +114,46 @@ class DocumentComparisonTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(saved[2]['counts']['exact'], 1)
         self.assertIsNone(saved[3])
 
+    def test_uppercase_held_name_is_exact_match(self):
+        doc_a = make_document('a.docx', 'Vendedor: CARLOS EDUARDO RINCÓN MEJÍA')
+        doc_b = make_document('b.docx', 'Vendedor: Carlos Eduardo Rincón Mejía')
+        result = validate_comparison({'fields': [{
+            'key': 'vendedor', 'label': 'Nombre del vendedor',
+            'left': side(doc_a, 'CARLOS EDUARDO RINCÓN MEJÍA'),
+            'right': side(doc_b, 'Carlos Eduardo Rincón Mejía'),
+        }]}, doc_a, doc_b)
+        self.assertEqual(result['fields'][0]['status'], 'exact')
+
+    def test_spanish_dates_different_formats_are_exact_match(self):
+        doc_a = make_document('a.docx', 'Fecha: 15 de marzo de 2024')
+        doc_b = make_document('b.docx', 'Fecha: 15/03/2024')
+        result = validate_comparison({'fields': [{
+            'key': 'fecha', 'label': 'Fecha de adquisición',
+            'left': side(doc_a, '15 de marzo de 2024'),
+            'right': side(doc_b, '15/03/2024'),
+        }]}, doc_a, doc_b)
+        self.assertEqual(result['fields'][0]['status'], 'exact')
+
+    def test_different_dates_are_marked_different(self):
+        doc_a = make_document('a.docx', 'Fecha: 15 de marzo de 2024')
+        doc_b = make_document('b.docx', 'Fecha: 16/03/2024')
+        result = validate_comparison({'fields': [{
+            'key': 'fecha', 'label': 'Fecha de adquisición',
+            'left': side(doc_a, '15 de marzo de 2024'),
+            'right': side(doc_b, '16/03/2024'),
+        }]}, doc_a, doc_b)
+        self.assertEqual(result['fields'][0]['status'], 'different')
+
+    def test_missing_letter_in_name_is_not_exact(self):
+        doc_a = make_document('a.docx', 'Vendedor: Carlos Mejía')
+        doc_b = make_document('b.docx', 'Vendedor: Carlo Mejía')
+        result = validate_comparison({'fields': [{
+            'key': 'vendedor', 'label': 'Nombre del vendedor',
+            'left': side(doc_a, 'Carlos Mejía'),
+            'right': side(doc_b, 'Carlo Mejía'),
+        }]}, doc_a, doc_b)
+        self.assertEqual(result['fields'][0]['status'], 'near')
+
 
 if __name__ == '__main__':
     unittest.main()

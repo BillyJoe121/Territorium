@@ -174,13 +174,101 @@ export async function requestExpedienteAnalysis(input: {
 }): Promise<string> {
   const client = requireSupabase()
 
-  const { data, error } = await client.functions.invoke('expediente-analysis-request', {
-    body: input,
-  })
-  if (error || !data?.executionId) {
-    throw new Error('No fue posible enviar la solicitud de procesamiento. Inténtalo nuevamente en unos instantes.')
+  // 1. Intentar invocar la Edge Function si está disponible
+  try {
+    const { data, error } = await client.functions.invoke('expediente-analysis-request', {
+      body: input,
+    })
+    if (!error && data?.executionId) {
+      return String(data.executionId)
+    }
+    // Si la Edge Function respondió con un error de negocio específico (422), extraer detalle
+    if (error && 'context' in error && (error.context as unknown) instanceof Response) {
+      try {
+        const body = await (error.context as Response).clone().json()
+        if (body?.detail) {
+          throw new Error(body.detail)
+        }
+      } catch (parseError) {
+        if (parseError instanceof Error && parseError.message && !parseError.message.includes('JSON')) {
+          throw parseError
+        }
+      }
+    }
+  } catch (fnError) {
+    if (fnError instanceof Error && (
+      fnError.message.includes('permiso') ||
+      fnError.message.includes('idempotencia') ||
+      fnError.message.includes('vigentes') ||
+      fnError.message.includes('disponible')
+    )) {
+      throw fnError
+    }
   }
-  return String(data.executionId)
+
+  // 2. Fallback directo mediante RPC en PostgreSQL (queue_expediente_group_execution)
+  const { data: rpcExecutionId, error: rpcError } = await client.rpc('queue_expediente_group_execution', {
+    p_group_id: input.groupId,
+    p_idempotency_key: input.idempotencyKey.trim(),
+    p_extractor_snapshot: input.extractorSnapshot ?? {},
+    p_prompt_snapshot: input.promptSnapshot ?? {},
+    p_model_snapshot: input.modelSnapshot ?? {},
+  })
+
+  if (!rpcError && rpcExecutionId) {
+    // 3. Notificación best-effort al worker para despertar inmediatamente el sondeo
+    if (config.workerUrl) {
+      try {
+        fetch(`${config.workerUrl}/api/worker/wake`, { method: 'POST' }).catch(() => {})
+      } catch {
+        // Ignorar errores de red hacia el wake endpoint; el worker sondea continuamente.
+      }
+    }
+    return String(rpcExecutionId)
+  }
+
+  // Si el error de RPC es por falta de permisos, propagar inmediatamente
+  if (rpcError && rpcError.message && rpcError.message.includes('permiso')) {
+    throw new Error(rpcError.message)
+  }
+
+  // 4. Fallback directo mediante el worker Python (/api/expediente/queue-execution)
+  try {
+    const workerUrl = `${config.workerUrl}/api/expediente/queue-execution`
+    const resp = await fetch(workerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        group_id: input.groupId,
+        idempotency_key: input.idempotencyKey.trim(),
+        extractor_snapshot: input.extractorSnapshot ?? {},
+        prompt_snapshot: input.promptSnapshot ?? {},
+        model_snapshot: input.modelSnapshot ?? {},
+      }),
+    })
+
+    if (resp.ok) {
+      const data = await resp.json().catch(() => ({}))
+      if (data?.execution_id) {
+        return String(data.execution_id)
+      }
+    } else {
+      const errData = await resp.json().catch(() => ({}))
+      if (errData?.detail) {
+        throw new Error(errData.detail)
+      }
+    }
+  } catch (workerErr) {
+    if (workerErr instanceof Error && !workerErr.message.includes('fetch') && !workerErr.message.includes('NetworkError')) {
+      throw workerErr
+    }
+  }
+
+  if (rpcError) {
+    throw new Error(rpcError.message || 'No fue posible enviar la solicitud de procesamiento.')
+  }
+
+  throw new Error('No fue posible enviar la solicitud de procesamiento. Inténtalo nuevamente.')
 }
 
 export async function deleteExpedienteFile(fileId: string): Promise<void> {

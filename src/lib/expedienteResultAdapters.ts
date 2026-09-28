@@ -14,6 +14,7 @@ export interface AdaptedResultData {
 }
 
 export const TITLE_COLUMNS_CONTRACT: ResultColumn[] = [
+  { key: 'sourceDocument', label: 'Documento fuente', width: 220, editable: false },
   { key: 'folio', label: 'Folio de matrícula', width: 170 },
   { key: 'cadastralId', label: 'Cédula catastral', width: 190 },
   { key: 'owners', label: 'Propietarios del predio', width: 240 },
@@ -83,35 +84,42 @@ export function adaptCanonicalPayloadToTable(
   }
 
   if (groupKey === 'titles') {
-    const owners = Array.isArray(payload.owners) ? payload.owners : []
-    const primaryOwner = owners[0] ?? {}
-    const ownersFormatted = owners.map((o: any) => o.name ?? '').filter(Boolean).join('; ') || String(payload.owners_str ?? '')
+    const titlesList = Array.isArray(payload.titles) && payload.titles.length > 0
+      ? payload.titles
+      : [payload]
 
-    const row: EditableResultRow = {
-      id: 'title-row-1',
-      folio: String(payload.folio ?? ''),
-      cadastralId: String(payload.cadastral_id ?? payload.cadastralId ?? ''),
-      owners: ownersFormatted || String(primaryOwner.name ?? ''),
-      documentNumber: String(primaryOwner.document_number ?? primaryOwner.documentNumber ?? ''),
-      documentType: String(primaryOwner.document_type ?? primaryOwner.documentType ?? 'Cédula de ciudadanía'),
-      antecedentsConsultationDate: String(payload.antecedents_consultation_date ?? payload.antecedentsConsultationDate ?? ''),
-      propertyName: String(payload.property_name ?? payload.propertyName ?? ''),
-      municipality: String(payload.municipality ?? ''),
-      department: String(payload.department ?? ''),
-      village: String(payload.village ?? ''),
-      areaNumbers: String(payload.area_numbers ?? payload.areaNumbers ?? ''),
-      areaLetters: String(payload.area_letters ?? payload.areaLetters ?? ''),
-      registryOffice: String(payload.registry_office ?? payload.registryOffice ?? ''),
-      acquisitionMode: String(payload.acquisition_mode ?? payload.acquisitionMode ?? ''),
-      boundaries: String(payload.boundaries ?? ''),
-      boundariesDocument: String(payload.boundaries_document ?? payload.boundariesDocument ?? ''),
-      legalConditions: String(payload.legal_conditions ?? payload.legalConditions ?? ''),
-      justiceMinistryCase: String(payload.justice_ministry_case ?? payload.justiceMinistryCase ?? ''),
-      urtCase: String(payload.urt_case ?? payload.urtCase ?? ''),
-      urtTerritorialDirection: String(payload.urt_territorial_direction ?? payload.urtTerritorialDirection ?? ''),
-    }
+    const rows: EditableResultRow[] = titlesList.map((t: any, idx: number) => {
+      const owners = Array.isArray(t.owners) ? t.owners : []
+      const primaryOwner = owners[0] ?? {}
+      const ownersFormatted = owners.map((o: any) => o.name ?? '').filter(Boolean).join('; ') || String(t.owners_str ?? '')
 
-    return { columns: TITLE_COLUMNS_CONTRACT, rows: [row], validationNotices: notices }
+      return {
+        id: `title-row-${idx + 1}`,
+        sourceDocument: String(t.source_document ?? t.sourceDocument ?? (titlesList.length > 1 ? `Documento ${idx + 1}` : 'Documento principal')),
+        folio: String(t.folio ?? ''),
+        cadastralId: String(t.cadastral_id ?? t.cadastralId ?? ''),
+        owners: ownersFormatted || String(primaryOwner.name ?? ''),
+        documentNumber: String(primaryOwner.document_number ?? primaryOwner.documentNumber ?? t.document_number ?? t.documentNumber ?? ''),
+        documentType: String(primaryOwner.document_type ?? primaryOwner.documentType ?? t.document_type ?? t.documentType ?? 'Cédula de ciudadanía'),
+        antecedentsConsultationDate: String(t.antecedents_consultation_date ?? t.antecedentsConsultationDate ?? ''),
+        propertyName: String(t.property_name ?? t.propertyName ?? ''),
+        municipality: String(t.municipality ?? ''),
+        department: String(t.department ?? ''),
+        village: String(t.village ?? ''),
+        areaNumbers: String(t.area_numbers ?? t.areaNumbers ?? ''),
+        areaLetters: String(t.area_letters ?? t.areaLetters ?? ''),
+        registryOffice: String(t.registry_office ?? t.registryOffice ?? ''),
+        acquisitionMode: String(t.acquisition_mode ?? t.acquisitionMode ?? ''),
+        boundaries: String(t.boundaries ?? ''),
+        boundariesDocument: String(t.boundaries_document ?? t.boundariesDocument ?? ''),
+        legalConditions: String(t.legal_conditions ?? t.legalConditions ?? ''),
+        justiceMinistryCase: String(t.justice_ministry_case ?? t.justiceMinistryCase ?? ''),
+        urtCase: String(t.urt_case ?? t.urtCase ?? ''),
+        urtTerritorialDirection: String(t.urt_territorial_direction ?? t.urtTerritorialDirection ?? ''),
+      }
+    })
+
+    return { columns: TITLE_COLUMNS_CONTRACT, rows, validationNotices: notices }
   }
 
   if (groupKey === 'plans') {
@@ -214,7 +222,33 @@ export function adaptTableRowsToPayload(
   const result = { ...existingPayload }
 
   if (groupKey === 'titles' && rows.length > 0) {
+    result.titles = rows.map((r) => ({
+      source_document: r.sourceDocument,
+      folio: r.folio,
+      cadastral_id: r.cadastralId,
+      owners_str: r.owners,
+      owners: r.owners ? [{ name: r.owners, document_number: r.documentNumber, document_type: r.documentType }] : [],
+      document_number: r.documentNumber,
+      document_type: r.documentType,
+      property_name: r.propertyName,
+      municipality: r.municipality,
+      department: r.department,
+      village: r.village,
+      area_numbers: r.areaNumbers,
+      area_letters: r.areaLetters,
+      registry_office: r.registryOffice,
+      acquisition_mode: r.acquisitionMode,
+      boundaries: r.boundaries,
+      boundaries_document: r.boundariesDocument,
+      legal_conditions: r.legalConditions,
+      justice_ministry_case: r.justiceMinistryCase,
+      urt_case: r.urtCase,
+      urt_territorial_direction: r.urtTerritorialDirection,
+      antecedents_consultation_date: r.antecedentsConsultationDate,
+    }))
+
     const row = rows[0]
+    result.source_document = row.sourceDocument
     result.folio = row.folio
     result.cadastral_id = row.cadastralId
     result.property_name = row.propertyName

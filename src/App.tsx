@@ -192,7 +192,6 @@ function App() {
       : loadState()
   )
   const [activeProjectId, setActiveProjectId] = useState('')
-  const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(remote)
   const [busyAction, setBusyAction] = useState<string | null>(null)
@@ -319,9 +318,7 @@ function App() {
   const update = (next: PlatformState) => { setState(next); saveState(next) }
   const audit = (projectId: string, action: string, detail: string): AuditEvent => ({ id: makeId('audit'), projectId, at: date(), action, detail })
   const toast = (message: string) => {
-    setNotice(message)
     sonnerToast.success(message)
-    window.setTimeout(() => setNotice(null), 4000)
   }
   const handleSignOut = async () => {
     try {
@@ -1277,7 +1274,6 @@ function App() {
           {error && <div className="error-banner" role="alert"><AlertTriangle size={17} /><span>{error}</span><button onClick={() => setError(null)} aria-label="Cerrar error"><X size={15} /></button></div>}
           <section className="page-content">{loading && !state.projects.length ? <div className="loading-card"><LoaderCircle className="spin" />Cargando información protegida…</div> : content}</section>
         </main>
-        {notice && <div className="toast"><CheckCircle2 size={18} />{notice}<button onClick={() => setNotice(null)} aria-label="Cerrar"><X size={16} /></button></div>}
         <ExcelExportConfigModal
           open={isExcelConfigModalOpen}
           onOpenChange={setIsExcelConfigModalOpen}
@@ -1286,7 +1282,7 @@ function App() {
             toast(`Libro Excel personalizado generado con ${config.selectedSheets.length} hojas (US-266).`)
           }}
         />
-        <Toaster richColors position="bottom-right" />
+        <Toaster richColors position="top-right" />
       </div>
     )}
   </SessionGuard>

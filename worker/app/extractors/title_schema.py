@@ -49,6 +49,8 @@ class TitleStudyPayload(BaseModel):
     urt_case: str = Field(default="no identificado", description="Radicado de consulta ante la Unidad de Restitución de Tierras")
     urt_territorial_direction: str = Field(default="no identificado", description="Dirección territorial de la URT")
     boundaries_exactness: str = Field(default="LINDEROS EXACTOS", description="'LINDEROS EXACTOS' o 'LINDEROS RESUMIDOS'")
+    source_document: str = Field(default="", description="Nombre del archivo o documento fuente principal")
+    titles: list[dict[str, Any]] = Field(default_factory=list, description="Lista de títulos individuales extraídos de cada documento cargado")
 
     @model_validator(mode="before")
     @classmethod

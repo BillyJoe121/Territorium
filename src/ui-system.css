@@ -345,9 +345,40 @@ kbd { color: var(--ui-ink-soft) !important; background: var(--ui-surface-muted) 
 .toast, [data-sonner-toast] {
   color: #ffffff !important;
   background: #1b2f24 !important;
-  border: 1px solid rgb(255 255 255 / 13%) !important;
+  border: 1px solid rgb(255 255 255 / 15%) !important;
   border-radius: var(--ui-radius-sm) !important;
-  box-shadow: var(--ui-shadow) !important;
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+  font-family: inherit !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  padding: 12px 16px !important;
+}
+
+[data-sonner-toaster] {
+  z-index: 99999 !important;
+}
+
+[data-sonner-toast] [data-icon] {
+  color: #34d399 !important;
+}
+
+[data-sonner-toast] [data-title],
+[data-sonner-toast] [data-description] {
+  color: #ffffff !important;
+  font-family: inherit !important;
+  font-size: 13.5px !important;
+  line-height: 1.4 !important;
+}
+
+[data-sonner-toast] [data-close-button] {
+  color: #a3c9b1 !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: none !important;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.18) !important;
 }
 
 /* Dashboard uses low-chrome information blocks instead of decorative cards. */

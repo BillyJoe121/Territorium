@@ -18,15 +18,41 @@ describe('solicitud de análisis del expediente', () => {
     rpc.mockReset()
   })
 
-  it('no salta la Edge Function cuando esta no puede aceptar la ejecución', async () => {
-    invoke.mockResolvedValue({ data: null, error: new Error('function unavailable') })
+  it('utiliza fallback por RPC directo cuando la Edge Function no está disponible', async () => {
+    invoke.mockResolvedValue({ data: null, error: new Error('Requested function was not found') })
     rpc.mockResolvedValue({ data: 'direct-execution-id', error: null })
+
+    const id = await requestExpedienteAnalysis({
+      groupId: '4ee9c8e7-04b7-4395-9c55-d2e59a10f29a',
+      idempotencyKey: 'expediente-v2:test-1234567890',
+    })
+
+    expect(id).toBe('direct-execution-id')
+    expect(rpc).toHaveBeenCalledWith('queue_expediente_group_execution', expect.objectContaining({
+      p_group_id: '4ee9c8e7-04b7-4395-9c55-d2e59a10f29a',
+      p_idempotency_key: 'expediente-v2:test-1234567890',
+    }))
+  })
+
+  it('retorna directamente el ID cuando la Edge Function responde con éxito', async () => {
+    invoke.mockResolvedValue({ data: { executionId: 'edge-execution-id' }, error: null })
+
+    const id = await requestExpedienteAnalysis({
+      groupId: '4ee9c8e7-04b7-4395-9c55-d2e59a10f29a',
+      idempotencyKey: 'expediente-v2:test-1234567890',
+    })
+
+    expect(id).toBe('edge-execution-id')
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('propaga error descriptivo si el RPC también falla', async () => {
+    invoke.mockResolvedValue({ data: null, error: new Error('Not found') })
+    rpc.mockResolvedValue({ data: null, error: new Error('No tienes permiso para procesar este grupo documental.') })
 
     await expect(requestExpedienteAnalysis({
       groupId: '4ee9c8e7-04b7-4395-9c55-d2e59a10f29a',
       idempotencyKey: 'expediente-v2:test-1234567890',
-    })).rejects.toThrow('No fue posible enviar la solicitud de procesamiento')
-
-    expect(rpc).not.toHaveBeenCalled()
+    })).rejects.toThrow('No tienes permiso para procesar este grupo documental.')
   })
 })

@@ -3,6 +3,8 @@
 import asyncio
 import json
 import logging
+import re
+import unicodedata
 from difflib import SequenceMatcher
 from typing import Any
 
@@ -12,6 +14,70 @@ from .preprocessing.pdf_parser import parse_pdf
 
 logger = logging.getLogger(__name__)
 MAX_TEXT_CHARS = 60000
+
+SPANISH_MONTHS = {
+    'enero': 1, 'ene': 1,
+    'febrero': 2, 'feb': 2,
+    'marzo': 3, 'mar': 3,
+    'abril': 4, 'abr': 4,
+    'mayo': 5, 'may': 5,
+    'junio': 6, 'jun': 6,
+    'julio': 7, 'jul': 7,
+    'agosto': 8, 'ago': 8,
+    'septiembre': 9, 'setiembre': 9, 'sep': 9,
+    'octubre': 10, 'oct': 10,
+    'noviembre': 11, 'nov': 11,
+    'diciembre': 12, 'dic': 12,
+}
+
+
+def parse_spanish_date(val: str) -> tuple[int, int, int] | None:
+    if not val:
+        return None
+    clean = " ".join(val.strip().lower().replace(",", " ").split())
+    # Format: "15 de marzo de 2024" or "15 de marzo del 2024" or "15 marzo 2024"
+    text_m = re.match(r"^(\d{1,2})\s+(?:de\s+)?([a-záéíóú]+)(?:\s+(?:de|del))?\s+(\d{4})$", clean)
+    if text_m:
+        day = int(text_m.group(1))
+        month_raw = unicodedata.normalize('NFD', text_m.group(2)).encode('ascii', 'ignore').decode('utf-8')
+        month = SPANISH_MONTHS.get(month_raw)
+        year = int(text_m.group(3))
+        if month and 1 <= day <= 31 and 1900 <= year <= 2100:
+            return (year, month, day)
+
+    # Format: "15/03/2024" or "15-03-2024"
+    slash_m = re.match(r"^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})$", clean)
+    if slash_m:
+        day, month, year = int(slash_m.group(1)), int(slash_m.group(2)), int(slash_m.group(3))
+        if 1 <= day <= 31 and 1 <= month <= 12 and 1900 <= year <= 2100:
+            return (year, month, day)
+
+    # Format: "2024-03-15"
+    iso_m = re.match(r"^(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})$", clean)
+    if iso_m:
+        year, month, day = int(iso_m.group(1)), int(iso_m.group(2)), int(iso_m.group(3))
+        if 1 <= day <= 31 and 1 <= month <= 12 and 1900 <= year <= 2100:
+            return (year, month, day)
+
+    return None
+
+
+def are_values_semantically_equal(a: str, b: str) -> bool:
+    if a == b:
+        return True
+    norm_a = " ".join(a.strip().split())
+    norm_b = " ".join(b.strip().split())
+    if norm_a.lower() == norm_b.lower():
+        return True
+    date_a = parse_spanish_date(norm_a)
+    date_b = parse_spanish_date(norm_b)
+    if date_a and date_b:
+        return date_a == date_b
+    clean_digits_a = re.sub(r"[\$\s,.]", "", norm_a)
+    clean_digits_b = re.sub(r"[\$\s,.]", "", norm_b)
+    if clean_digits_a and clean_digits_b and clean_digits_a.isdigit() and clean_digits_a == clean_digits_b:
+        return True
+    return False
 
 
 def parse_original(content: bytes, name: str, document_id: str) -> CanonicalDocument:
@@ -76,7 +142,14 @@ def validate_comparison(raw: Any, left: CanonicalDocument, right: CanonicalDocum
         seen.add(key)
         if left_evidence and right_evidence:
             a, b = left_evidence['value'], right_evidence['value']
-            status = 'exact' if a == b else 'near' if SequenceMatcher(None, a, b).ratio() >= 0.82 else 'different'
+            if are_values_semantically_equal(a, b):
+                status = 'exact'
+            elif parse_spanish_date(a) and parse_spanish_date(b) and parse_spanish_date(a) != parse_spanish_date(b):
+                status = 'different'
+            elif SequenceMatcher(None, a.lower(), b.lower()).ratio() >= 0.82:
+                status = 'near'
+            else:
+                status = 'different'
         else:
             status = 'different'
         fields.append({

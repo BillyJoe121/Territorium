@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { AlertTriangle, Check, ClipboardCheck, Download, LoaderCircle, RefreshCcw, X } from 'lucide-react'
+import { AlertTriangle, Check, ClipboardCheck, Download, LoaderCircle, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ResultDataTable } from './ResultDataTable'
 import type { ValidationNotice } from '../../lib/expedienteResultAdapters'
@@ -21,7 +21,7 @@ export interface ReviewDialogProps {
   onOpenChange: (open: boolean) => void
   onSave: (rows: EditableResultRow[]) => Promise<void> | void
   onApprove: (rows: EditableResultRow[]) => void
-  onReprocess: () => void
+  onReprocess?: () => void
   onDownloadExcel?: () => void
 }
 
@@ -213,10 +213,6 @@ export function ReviewDialog({
                   Descargar Excel
                 </button>
               )}
-              <button type="button" className="expediente-secondary-action" onClick={onReprocess}>
-                <RefreshCcw size={16} />
-                Repetir análisis
-              </button>
               {!isApproved && (
                 <button
                   type="button"

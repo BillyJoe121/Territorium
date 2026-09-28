@@ -7,13 +7,17 @@ an AI provider. Structured extraction starts in Phase 4.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import logging
 import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from io import BytesIO
 from typing import Any
+
+logger = logging.getLogger("territorium.expediente_v2")
 
 
 class PermanentValidationError(RuntimeError):
@@ -153,11 +157,26 @@ async def trigger_phase4_extraction_if_ready(
         if not doc_files:
             raise RuntimeError("No se encontraron archivos activos para el grupo documental.")
 
-        files_payload: list[tuple[str, bytes, str]] = []
-        for doc_meta in doc_files:
-            storage_path = doc_meta["storage_path"]
-            file_bytes = await gateway.download(storage_path)
-            files_payload.append((doc_meta["id"], file_bytes, doc_meta["original_name"]))
+        dl_semaphore = asyncio.Semaphore(8)
+
+        async def _download_doc(doc_meta: dict[str, Any]) -> tuple[str, bytes, str] | None:
+            storage_path = doc_meta.get("storage_path")
+            doc_id = doc_meta.get("id")
+            original_name = doc_meta.get("original_name", "documento")
+            if not storage_path or not doc_id:
+                return None
+            async with dl_semaphore:
+                try:
+                    file_bytes = await gateway.download(storage_path)
+                    return (doc_id, file_bytes, original_name)
+                except Exception as dl_err:
+                    logger.warning(f"Error descargando insumo {original_name} ({storage_path}): {dl_err}")
+                    return None
+
+        downloaded_items = await asyncio.gather(*[_download_doc(d) for d in doc_files])
+        files_payload: list[tuple[str, bytes, str]] = [item for item in downloaded_items if item is not None]
+        if not files_payload:
+            raise RuntimeError("No fue posible descargar ningún archivo del grupo documental.")
 
         extraction_res = await orchestrator.process_group(
             group_key=group_key,

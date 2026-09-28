@@ -99,4 +99,71 @@ describe('HU-V2-048 & HU-V2-049: Deterministic Document Compilation & Tiptap Sch
     const compiled = compileConsolidatedToTiptap(incompleteRecord)
     expect(compiled.warnings.length).toBeGreaterThanOrEqual(1)
   })
+
+  it('compiles ESCRITURA_TOL_ANZ_045_TEMPLATE matching ESCRITURA TOL-ANZ-045.docx faithfully', async () => {
+    const { ESCRITURA_TOL_ANZ_045_TEMPLATE } = await import('./expedienteDocumentTemplates')
+    const compiled = compileConsolidatedToTiptap(sampleRecord, {
+      template: ESCRITURA_TOL_ANZ_045_TEMPLATE,
+      projectName: 'SUPLENCIAS ARREBOLES',
+    })
+
+    expect(compiled.metadata.templateId).toBe('tpl-escritura-publica')
+    const docNodes = compiled.content.content || []
+    const allText = JSON.stringify(docNodes)
+
+    expect(allText).toContain('ESCRITURA PÚBLICA No.')
+    expect(allText).toContain('FORMATO DE CALIFICACIÓN')
+    expect(allText).toContain('Carlos Gómez (CC 70123456)')
+    expect(allText).toContain('050N-204581')
+    expect(allText).toContain('PRIMERA: Inmueble y Linderos Generales')
+    expect(allText).toContain('SEGUNDA: Tradición')
+    expect(allText).toContain('TERCERA: Constitución de Servidumbre')
+    expect(allText).toContain('VIGÉSIMA PRIMERA: Protocolizaciones y Aceptación')
+    expect(allText).toContain('OTORGANTE / CONSTITUYENTE')
+  })
+
+  it('compiles DESCRIPCION_LINDEROS_TEMPLATE matching ID02 descripción de linderos.docx faithfully', async () => {
+    const { DESCRIPCION_LINDEROS_TEMPLATE } = await import('./expedienteDocumentTemplates')
+    const compiled = compileConsolidatedToTiptap(sampleRecord, {
+      template: DESCRIPCION_LINDEROS_TEMPLATE,
+    })
+
+    expect(compiled.metadata.templateId).toBe('tpl-descripcion-linderos')
+    const docNodes = compiled.content.content || []
+    const allText = JSON.stringify(docNodes)
+
+    expect(allText).toContain('FICHA TÉCNICA DE DESCRIPCIÓN DE LINDEROS DE SERVIDUMBRE')
+    expect(allText).toContain('La franja o faja de servidumbre tiene un área de')
+    expect(allText).toContain('TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 1')
+    expect(allText).toContain('TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 2A')
+    expect(allText).toContain('TABLA DE COORDENADAS VÉRTICES DE SERVIDUMBRE TRAMO 2B')
+    expect(allText).toContain('PLANO-TOP-01')
+
+    // Verify 3 tables were created
+    const tables = docNodes.filter((n) => n.type === 'table')
+    expect(tables.length).toBe(3)
+  })
+
+  it('compiles MINUTA_TIPO_TERRITORIUM_TEMPLATE matching MINUTA_TIPO_TERRITORIUM.doc faithfully', async () => {
+    const { MINUTA_TIPO_TERRITORIUM_TEMPLATE } = await import('./expedienteDocumentTemplates')
+    const compiled = compileConsolidatedToTiptap(sampleRecord, {
+      template: MINUTA_TIPO_TERRITORIUM_TEMPLATE,
+    })
+
+    expect(compiled.metadata.templateId).toBe('tpl-minuta-tipo')
+    const docNodes = compiled.content.content || []
+    const allText = JSON.stringify(docNodes)
+
+    expect(allText).toContain('NOTARIA DEL CÍRCULO DE MEDELLÍN')
+    expect(allText).toContain('SÍNTESIS DE CONTENIDO')
+    expect(allText).toContain('0339')
+    expect(allText).toContain('050N-204581')
+    expect(allText).toContain('PARQUE SOLAR PUERTA DE ORO S.A.S. E.S.P.')
+    expect(allText).toContain('CLÁUSULAS CONTRACTUALES')
+    expect(allText).toContain('COMPROBANTES LEGALES Y OTORGAMIENTO')
+
+    // Verify tables created (SNR Acto, Documento, Intervinientes, Bienes, Coordenadas)
+    const tables = docNodes.filter((n) => n.type === 'table')
+    expect(tables.length).toBe(5)
+  })
 })

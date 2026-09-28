@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import suppress
 import hashlib
 import json
@@ -162,49 +163,77 @@ class Phase4PipelineOrchestrator:
                 raise ValueError("No se proporcionaron archivos de títulos para el predio.")
 
             extracted_fragments: list[dict[str, Any]] = []
+            file_discrepancies: list[dict[str, Any]] = []
+            parsed_docs_lock = asyncio.Lock()
+            extract_sem = asyncio.Semaphore(4)
 
-            for doc_id, file_bytes, filename in files:
-                doc = self.parse_source_file(file_bytes, filename, document_id=doc_id)
-                parsed_docs.append(doc)
+            async def _process_single_title_file(doc_id: str, file_bytes: bytes, filename: str) -> list[dict[str, Any]]:
+                frags: list[dict[str, Any]] = []
+                try:
+                    doc = self.parse_source_file(file_bytes, filename, document_id=doc_id)
+                    async with parsed_docs_lock:
+                        parsed_docs.append(doc)
 
-                scan_info = detect_scan_and_ocr_needs(doc, is_plan=False)
-                if not scan_info.can_proceed_textual and doc.overall_scan_status == ScanClassification.PROTECTED:
-                    logger.warning(f"Documento protegido omitido de títulos: {filename}")
-                    continue
+                    scan_info = detect_scan_and_ocr_needs(doc, is_plan=False)
+                    if not scan_info.can_proceed_textual and doc.overall_scan_status == ScanClassification.PROTECTED:
+                        logger.warning(f"Documento protegido omitido de títulos: {filename}")
+                        return []
 
-                segments = segment_canonical_document(doc)
-                for seg in segments:
-                    if seg.is_omitted:
-                        continue
-                    # Extract partial result
-                    partial = await self.title_extractor.extract_from_text(
-                        text=seg.text,
-                        document_name=filename,
-                        location_label=seg.location_summary(),
-                    )
-                    if gateway and project_id:
-                        with suppress(Exception):
-                            await gateway.record_ai_log(
-                                project_id=project_id,
-                                document_id=doc_id,
-                                extractor="title_study",
-                                **getattr(self.title_extractor, "last_telemetry", {}),
+                    segments = segment_canonical_document(doc)
+                    for seg in segments:
+                        if seg.is_omitted:
+                            continue
+                        async with extract_sem:
+                            partial = await self.title_extractor.extract_from_text(
+                                text=seg.text,
+                                document_name=filename,
+                                location_label=seg.location_summary(),
                             )
-                    data_dict = partial.model_dump()
-                    data_dict["source_document"] = filename
-                    data_dict["location_label"] = seg.location_summary()
-                    extracted_fragments.append(data_dict)
+                        if gateway and project_id:
+                            with suppress(Exception):
+                                await gateway.record_ai_log(
+                                    project_id=project_id,
+                                    document_id=doc_id,
+                                    extractor="title_study",
+                                    **getattr(self.title_extractor, "last_telemetry", {}),
+                                )
+                        data_dict = partial.model_dump()
+                        data_dict["source_document"] = filename
+                        data_dict["location_label"] = seg.location_summary()
+                        frags.append(data_dict)
+                except Exception as doc_err:
+                    logger.error(f"Error procesando documento de títulos '{filename}': {doc_err}", exc_info=True)
+                    file_discrepancies.append({
+                        "field": "lectura_archivo",
+                        "values": [filename],
+                        "description": f"No fue posible extraer datos de '{filename}': {doc_err}",
+                    })
+                return frags
+
+            doc_results = await asyncio.gather(*[_process_single_title_file(d, b, n) for d, b, n in files])
+            for frags in doc_results:
+                extracted_fragments.extend(frags)
+
+            if not extracted_fragments and files:
+                logger.warning("Ningún documento de títulos arrojó fragmentos válidos; generando registro base.")
+                extracted_fragments.append({
+                    "source_document": files[0][2],
+                    "location_label": "Documento completo",
+                })
 
             # Hierarchical Reduction (Map-Reduce)
             reduced = self.reducer.reduce_titles(extracted_fragments)
             from .extractors.title_schema import TitleStudyPayload
-            reduced_obj = TitleStudyPayload.model_validate(reduced.canonical_payload)
+            try:
+                reduced_obj = TitleStudyPayload.model_validate(reduced.canonical_payload)
+            except Exception:
+                reduced_obj = TitleStudyPayload()
             validated_payload, report = self.validator.validate_titles(reduced_obj)
 
             discrepancies_list = [
                 {"field": d.field_name, "values": d.values, "description": d.description}
                 for d in reduced.discrepancies
-            ]
+            ] + file_discrepancies
             provenance_list = [p.model_dump() for p in reduced.provenance]
 
             return Phase4ExecutionResult(
@@ -222,39 +251,72 @@ class Phase4PipelineOrchestrator:
                 raise ValueError("No se proporcionaron planos para el predio.")
 
             plans_data: list[dict[str, Any]] = []
+            plan_file_discrepancies: list[dict[str, Any]] = []
+            parsed_docs_lock = asyncio.Lock()
+            extract_sem = asyncio.Semaphore(5)
 
-            for doc_id, file_bytes, filename in files:
-                doc = self.parse_source_file(file_bytes, filename, document_id=doc_id, is_plan=True)
-                parsed_docs.append(doc)
+            async def _process_single_plan_file(doc_id: str, file_bytes: bytes, filename: str) -> dict[str, Any] | None:
+                try:
+                    doc = self.parse_source_file(file_bytes, filename, document_id=doc_id, is_plan=True)
+                    async with parsed_docs_lock:
+                        parsed_docs.append(doc)
 
-                plan_text = doc.full_text()
-                plan_res = await self.plan_extractor.extract_from_text(
-                    text=plan_text,
-                    document_name=filename,
-                    location_label="Plano completo",
-                )
-                if gateway and project_id:
-                    with suppress(Exception):
-                        await gateway.record_ai_log(
-                            project_id=project_id,
-                            document_id=doc_id,
-                            extractor="plan",
-                            **getattr(self.plan_extractor, "last_telemetry", {}),
+                    plan_text = doc.full_text()
+                    async with extract_sem:
+                        plan_res = await self.plan_extractor.extract_from_text(
+                            text=plan_text,
+                            document_name=filename,
+                            location_label="Plano completo",
                         )
-                plans_data.append(plan_res.model_dump())
+                    if gateway and project_id:
+                        with suppress(Exception):
+                            await gateway.record_ai_log(
+                                project_id=project_id,
+                                document_id=doc_id,
+                                extractor="plan",
+                                **getattr(self.plan_extractor, "last_telemetry", {}),
+                            )
+                    return plan_res.model_dump()
+                except Exception as plan_err:
+                    logger.error(f"Error procesando plano '{filename}': {plan_err}", exc_info=True)
+                    plan_file_discrepancies.append({
+                        "field": "lectura_plano",
+                        "values": [filename],
+                        "description": f"No fue posible extraer datos del plano '{filename}': {plan_err}",
+                    })
+                    return None
+
+            plan_results = await asyncio.gather(*[_process_single_plan_file(d, b, n) for d, b, n in files])
+            plans_data = [p for p in plan_results if p is not None]
+
+            if not plans_data and files:
+                logger.warning("Ningún plano arrojó datos técnicos válidos; utilizando valores por defecto.")
+                from .extractors.plan_schema import PlanExtractionPayload
+                plans_data.append(PlanExtractionPayload().model_dump())
 
             reduced = self.reducer.reduce_plans(plans_data)
             # Validate primary plan
             primary_plan_dict = plans_data[0] if plans_data else {}
             from .extractors.plan_schema import PlanExtractionPayload
-            plan_obj = PlanExtractionPayload.model_validate(primary_plan_dict) if primary_plan_dict else PlanExtractionPayload()
+            try:
+                plan_obj = PlanExtractionPayload.model_validate(primary_plan_dict) if primary_plan_dict else PlanExtractionPayload()
+            except Exception:
+                plan_obj = PlanExtractionPayload()
             _, report = self.validator.validate_plan(plan_obj)
+
+            discrepancies = [
+                {"field": d.field_name, "description": d.description}
+                for d in reduced.discrepancies
+            ] + [
+                {"field": d["field"], "description": d["description"]}
+                for d in plan_file_discrepancies
+            ]
 
             return Phase4ExecutionResult(
                 group_key="plans",
                 canonical_payload=reduced.canonical_payload,
                 validation_report=report,
-                discrepancies=[{"field": d.field_name, "description": d.description} for d in reduced.discrepancies],
+                discrepancies=discrepancies,
                 provenance=[{"field": "plans", "source": f[2]} for f in files],
                 parsed_documents=parsed_docs,
             )

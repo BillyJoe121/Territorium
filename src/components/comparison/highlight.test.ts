@@ -220,6 +220,39 @@ describe('getFieldVisualStatus classification', () => {
         right: { value: 'Servidumbre de tránsito', quote: 'tránsito', fragment_id: '2', page: 1, location: 'P.1' },
       }),
     ).toBe('absent')
-  })
+
+    // Uppercase held names (e.g. notarial ALL CAPS vs normal case) -> exact
+    expect(
+      getFieldVisualStatus({
+        key: 'k6',
+        label: 'Nombre del vendedor',
+        status: 'different',
+        left: { value: 'CARLOS EDUARDO RINCÓN MEJÍA', quote: 'CARLOS EDUARDO RINCÓN MEJÍA', fragment_id: '1', page: 1, location: 'P.1' },
+        right: { value: 'Carlos Eduardo Rincón Mejía', quote: 'Carlos Eduardo Rincón Mejía', fragment_id: '2', page: 1, location: 'P.1' },
+      }),
+    ).toBe('exact')
+
+    // Equivalent Spanish dates in different formats -> exact
+    expect(
+      getFieldVisualStatus({
+        key: 'k7',
+        label: 'Fecha de adquisición',
+        status: 'different',
+        left: { value: '15 de marzo de 2024', quote: '15 de marzo de 2024', fragment_id: '1', page: 1, location: 'P.1' },
+        right: { value: '15/03/2024', quote: '15/03/2024', fragment_id: '2', page: 1, location: 'P.1' },
+      }),
+    ).toBe('exact')
+
+    // Contradictory dates -> different
+    expect(
+      getFieldVisualStatus({
+        key: 'k8',
+        label: 'Fecha de adquisición',
+        status: 'different',
+        left: { value: '15 de marzo de 2024', quote: '15 de marzo de 2024', fragment_id: '1', page: 1, location: 'P.1' },
+        right: { value: '16/03/2024', quote: '16/03/2024', fragment_id: '2', page: 1, location: 'P.1' },
+      }),
+    ).toBe('different')
+  }, 15000)
 })
 

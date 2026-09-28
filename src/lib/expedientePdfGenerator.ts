@@ -1,3 +1,4 @@
+import type { JSONContent } from '@tiptap/react'
 import type { ConsolidatedMasterRecord } from './expedienteConsolidation'
 import {
   compileConsolidatedToTiptap,
@@ -9,6 +10,59 @@ export interface PdfExportOptions extends DocumentCompilerOptions {
   versionNumber?: number
   expedienteId?: string
   generatedBy?: string
+  content?: JSONContent
+  domElement?: HTMLElement | null
+  filename?: string
+}
+
+/**
+ * Converts a TipTap document JSON tree to semantic HTML with corporate styling.
+ */
+export function tiptapJsonToHtml(node: JSONContent | null | undefined): string {
+  if (!node) return ''
+
+  if (node.type === 'text') {
+    let text = (node.text || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+    if (node.marks) {
+      for (const mark of node.marks) {
+        if (mark.type === 'bold') text = `<strong>${text}</strong>`
+        if (mark.type === 'italic') text = `<em>${text}</em>`
+      }
+    }
+    return text
+  }
+
+  const innerHtml = (node.content || []).map((child) => tiptapJsonToHtml(child)).join('')
+
+  switch (node.type) {
+    case 'doc':
+      return innerHtml
+    case 'paragraph':
+      return `<p>${innerHtml || '<br>'}</p>`
+    case 'heading': {
+      const level = node.attrs?.level || 1
+      return `<h${level}>${innerHtml}</h${level}>`
+    }
+    case 'bulletList':
+      return `<ul>${innerHtml}</ul>`
+    case 'orderedList':
+      return `<ol>${innerHtml}</ol>`
+    case 'listItem':
+      return `<li>${innerHtml}</li>`
+    case 'table':
+      return `<table class="document-table"><tbody>${innerHtml}</tbody></table>`
+    case 'tableRow':
+      return `<tr>${innerHtml}</tr>`
+    case 'tableHeader':
+      return `<th>${innerHtml}</th>`
+    case 'tableCell':
+      return `<td>${innerHtml}</td>`
+    default:
+      return innerHtml
+  }
 }
 
 export interface LinkedArtifactMetadata {
@@ -427,26 +481,214 @@ export function buildPurePdfBinary(
 }
 
 /**
- * Downloads the official final PDF document in the browser (HU-V2-051).
+ * Downloads the official final PDF document in the browser matching the exact visualizer (HU-V2-051).
  */
-export function downloadExpedientePdf(
+export async function downloadExpedientePdf(
   record: ConsolidatedMasterRecord,
   options: PdfExportOptions = {},
-): void {
+): Promise<void> {
   const version = options.versionNumber ?? 1
   const cleanFolio = record.folio.replace(/[^a-zA-Z0-9_-]/g, '_')
-  const fileName = `INFORME_PREDIAL_${cleanFolio}_v${version}.pdf`
+  const fileName = options.filename || `DOCUMENTO_FINAL_${cleanFolio}_v${version}.pdf`
 
-  const pdfBytes = buildPurePdfBinary(record, options)
-  const blob = new Blob([pdfBytes as unknown as BlobPart], { type: 'application/pdf' })
-  const url = URL.createObjectURL(blob)
+  // In non-browser / headless test environment
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return
+  }
 
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = fileName
-  document.body.appendChild(anchor)
-  anchor.click()
-  document.body.removeChild(anchor)
+  // Determine the HTML content to render
+  let contentHtml = ''
+  const editorEl = options.domElement || document.querySelector('.document-prototype-content')
+  if (editorEl) {
+    contentHtml = editorEl.innerHTML
+  } else if (options.content) {
+    contentHtml = tiptapJsonToHtml(options.content)
+  } else {
+    const compiled = compileConsolidatedToTiptap(record, options)
+    contentHtml = tiptapJsonToHtml(compiled.content)
+  }
 
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  const meta = getLinkedArtifactMetadata(record, options)
+
+  // Construct offscreen wrapper with corporate styling matching the visualizer
+  const wrapper = document.createElement('div')
+  wrapper.className = 'territorium-pdf-render-root'
+  wrapper.style.position = 'fixed'
+  wrapper.style.left = '-9999px'
+  wrapper.style.top = '0'
+  wrapper.style.width = '794px' // A4 / Letter width at 96 DPI
+  wrapper.style.background = '#FFFFFF'
+  wrapper.style.color = '#1A1A1A'
+  wrapper.style.padding = '36px 42px'
+  wrapper.style.boxSizing = 'border-box'
+  wrapper.style.fontFamily = "'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+  wrapper.style.fontSize = '12px'
+  wrapper.style.lineHeight = '1.65'
+
+  wrapper.innerHTML = `
+    <style>
+      .territorium-pdf-render-root {
+        font-family: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        color: #1A1A1A;
+        line-height: 1.65;
+        font-size: 12px;
+      }
+      .pdf-official-header {
+        background: #18302A;
+        color: #FFFFFF;
+        padding: 14px 18px;
+        border-radius: 6px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 22px;
+      }
+      .pdf-official-header h1 {
+        margin: 0 0 4px 0;
+        font-family: 'Poppins', sans-serif;
+        font-size: 13pt;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        font-weight: 700;
+        color: #FFFFFF;
+      }
+      .pdf-official-header p {
+        margin: 0;
+        font-size: 8.5pt;
+        opacity: 0.85;
+        color: #EDF2EE;
+      }
+      .pdf-official-badge {
+        text-align: right;
+        font-family: monospace;
+        font-size: 8pt;
+        background: rgba(255, 255, 255, 0.12);
+        padding: 6px 10px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #FFFFFF;
+      }
+      .pdf-doc-body {
+        color: #1A1A1A;
+      }
+      .pdf-doc-body h1 {
+        font-family: 'Poppins', sans-serif;
+        font-size: 17px;
+        font-weight: 700;
+        color: #18302A;
+        margin: 20px 0 10px 0;
+        line-height: 1.3;
+      }
+      .pdf-doc-body h2 {
+        font-family: 'Poppins', sans-serif;
+        font-size: 13.5px;
+        font-weight: 600;
+        color: #243F30;
+        margin: 18px 0 8px 0;
+        border-bottom: 1.5px solid #DFE5EF;
+        padding-bottom: 4px;
+      }
+      .pdf-doc-body p {
+        margin: 0 0 10px 0;
+        line-height: 1.65;
+        text-align: justify;
+      }
+      .pdf-doc-body ul, .pdf-doc-body ol {
+        margin: 0 0 12px 0;
+        padding-left: 24px;
+      }
+      .pdf-doc-body li {
+        margin-bottom: 4px;
+      }
+      .pdf-doc-body table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 14px 0;
+        font-size: 10px;
+        page-break-inside: avoid;
+      }
+      .pdf-doc-body th, .pdf-doc-body td {
+        border: 1px solid #DFE5EF;
+        padding: 7px 10px;
+        vertical-align: top;
+        text-align: left;
+      }
+      .pdf-doc-body th {
+        background-color: #F2F6F3;
+        color: #1F3D32;
+        font-weight: 700;
+        font-family: 'Poppins', sans-serif;
+      }
+      .pdf-doc-body td {
+        background-color: #FFFFFF;
+        color: #1A1A1A;
+      }
+      .pdf-official-footer {
+        margin-top: 28px;
+        padding-top: 10px;
+        border-top: 1px dashed #C2CAD6;
+        font-size: 7.5pt;
+        color: #7D8A99;
+        display: flex;
+        justify-content: space-between;
+      }
+    </style>
+    <div class="pdf-official-header">
+      <div>
+        <h1>GRUPO JURÍDICO TERRITORIUM</h1>
+        <p>EXPEDIENTE PREDIAL OFICIAL &bull; DOCUMENTO ESTRUCTURADO</p>
+      </div>
+      <div class="pdf-official-badge">
+        <div>CÓDIGO: <strong>${meta.verificationHash}</strong></div>
+        <div>VERSIÓN: <strong>v${meta.documentVersion}</strong></div>
+      </div>
+    </div>
+    <div class="pdf-doc-body">
+      ${contentHtml}
+    </div>
+    <div class="pdf-official-footer">
+      <div>Territorium &bull; Generación Documental Certificada &bull; Predio: ${record.property_name || record.folio}</div>
+      <div>Sincronizado con CORRESPONDENCIA.xlsx &bull; Código: ${meta.verificationHash}</div>
+    </div>
+  `
+
+  document.body.appendChild(wrapper)
+
+  try {
+    const html2pdfModule = await import('html2pdf.js')
+    const html2pdf = (html2pdfModule as any).default || html2pdfModule
+
+    const opt = {
+      margin: [10, 10, 10, 10],
+      filename: fileName,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        letterRendering: true,
+        logging: false,
+        windowWidth: 794,
+      },
+      jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+    }
+
+    await html2pdf().set(opt).from(wrapper).save()
+  } catch (caught) {
+    console.warn('html2pdf export failed, falling back to pure binary download:', caught)
+    const pdfBytes = buildPurePdfBinary(record, options)
+    const blob = new Blob([pdfBytes as unknown as BlobPart], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = fileName
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  } finally {
+    if (document.body.contains(wrapper)) {
+      document.body.removeChild(wrapper)
+    }
+  }
 }

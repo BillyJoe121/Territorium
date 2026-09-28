@@ -70,11 +70,16 @@ begin
       where id = target_file.group_id;
     end if;
 
-    if current_grp.status in ('review_ready', 'approved') then
+    if current_grp.status in ('review_ready', 'approved', 'stale') then
       update public.expediente_document_groups
-      set status = 'stale'
+      set status = 'ready', input_version = input_version + 1
       where id = target_file.group_id;
     end if;
+
+    -- Cancelar cualquier ejecución activa pendiente para este grupo para evitar bloqueos
+    update public.expediente_executions
+    set status = 'superseded', updated_at = now()
+    where group_id = target_file.group_id and status in ('queued', 'processing');
   end if;
 
   return true;
@@ -211,13 +216,19 @@ begin
     return execution_id;
   end if;
 
-  if group_row.status not in ('ready', 'stale', 'error', 'review_ready') then
+  -- Permitir encolar si está en ready, stale, error, review_ready O approved (reprocesamiento)
+  if group_row.status not in ('ready', 'stale', 'error', 'review_ready', 'approved') then
     raise exception 'El grupo no está disponible para una nueva ejecución.';
   end if;
-  audit_action := case when group_row.status in ('stale', 'error', 'review_ready')
+  audit_action := case when group_row.status in ('stale', 'error', 'review_ready', 'approved')
     then 'expediente.execution_reprocess_requested'
     else 'expediente.execution_queued'
   end;
+
+  -- Cancelar/sustituir ejecuciones previas que aún estuvieran en queued o processing para este grupo
+  update public.expediente_executions
+  set status = 'superseded', updated_at = now()
+  where group_id = group_row.id and status in ('queued', 'processing');
 
   select count(*) into document_count from public.expediente_document_files
   where group_id = group_row.id and is_current and is_active;

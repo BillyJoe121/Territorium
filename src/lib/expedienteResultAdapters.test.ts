@@ -52,6 +52,41 @@ describe('expedienteResultAdapters (HU-V2-042)', () => {
     expect(backToPayload.property_name).toBe('La Esperanza')
   })
 
+  it('adapta el payload de títulos cuando contiene múltiples documentos de títulos cargados', () => {
+    const payload = {
+      folio: '050N-204581',
+      titles: [
+        {
+          source_document: 'Escritura_1234_1995.pdf',
+          folio: '050N-204581',
+          cadastral_id: '05001010400230012000',
+          owners: [{ name: 'Carlos Mario Duque', document_number: '12.345.678', document_type: 'Cédula de ciudadanía' }],
+          acquisition_mode: 'Compraventa',
+          area_numbers: '50000',
+        },
+        {
+          source_document: 'Escritura_5678_2012.pdf',
+          folio: '050N-204581',
+          cadastral_id: '05001010400230012000',
+          owners: [{ name: 'María Elena Rojas', document_number: '43.123.456', document_type: 'Cédula de ciudadanía' }],
+          acquisition_mode: 'Donación',
+          area_numbers: '50000',
+        },
+      ],
+    }
+
+    const adapted = adaptCanonicalPayloadToTable('titles', payload)
+    expect(adapted.rows).toHaveLength(2)
+    expect(adapted.rows[0].sourceDocument).toBe('Escritura_1234_1995.pdf')
+    expect(adapted.rows[0].owners).toBe('Carlos Mario Duque')
+    expect(adapted.rows[1].sourceDocument).toBe('Escritura_5678_2012.pdf')
+    expect(adapted.rows[1].owners).toBe('María Elena Rojas')
+
+    const back = adaptTableRowsToPayload('titles', adapted.rows, payload)
+    expect(Array.isArray(back.titles)).toBe(true)
+    expect(back.titles).toHaveLength(2)
+  })
+
   it('adapta el payload de planos soportando colecciones de planos', () => {
     const payload = {
       plans: [
