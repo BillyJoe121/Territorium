@@ -1,7 +1,7 @@
 import io
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import docx
 
@@ -83,6 +83,72 @@ class DocumentComparisonTests(unittest.IsolatedAsyncioTestCase):
         result = await compare_documents(client, 'test-model', self.left, self.right)
         self.assertEqual(result['counts']['exact'], 1)
         self.assertEqual(client.chat.completions.create.await_args.kwargs['response_format'], {'type': 'json_object'})
+
+    async def test_transient_provider_failure_is_retried_and_classified(self):
+        class ProviderError(Exception):
+            status_code = 503
+
+        create = AsyncMock(side_effect=ProviderError())
+        client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+        with patch('app.document_comparison.asyncio.sleep', new_callable=AsyncMock) as sleep:
+            with self.assertRaisesRegex(ValueError, '^AI_PROVIDER_UNAVAILABLE$'):
+                await compare_documents(client, 'test-model', self.left, self.right)
+        self.assertEqual(create.await_count, 3)
+        self.assertEqual(sleep.await_count, 2)
+
+    async def test_auth_failure_is_classified_without_retry(self):
+        class ProviderError(Exception):
+            status_code = 401
+
+        create = AsyncMock(side_effect=ProviderError())
+        client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+        with self.assertRaisesRegex(ValueError, '^AI_AUTH_FAILED$'):
+            await compare_documents(client, 'test-model', self.left, self.right)
+        self.assertEqual(create.await_count, 1)
+
+    async def test_rate_limit_is_retried_and_classified(self):
+        class ProviderError(Exception):
+            status_code = 429
+
+        create = AsyncMock(side_effect=ProviderError())
+        client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+        with patch('app.document_comparison.asyncio.sleep', new_callable=AsyncMock):
+            with self.assertRaisesRegex(ValueError, '^AI_RATE_LIMITED$'):
+                await compare_documents(client, 'test-model', self.left, self.right)
+        self.assertEqual(create.await_count, 3)
+
+    async def test_transient_provider_failure_can_recover(self):
+        import json
+
+        class ProviderError(Exception):
+            status_code = 503
+
+        payload = {'fields': [{
+            'key': 'titular', 'label': 'Titular',
+            'left': side(self.left, 'María Elena Rojas'),
+            'right': side(self.right, 'María Elena Rojas'),
+        }]}
+        response = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(payload)))])
+        create = AsyncMock(side_effect=[ProviderError(), response])
+        client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+        with patch('app.document_comparison.asyncio.sleep', new_callable=AsyncMock):
+            result = await compare_documents(client, 'test-model', self.left, self.right)
+        self.assertEqual(result['counts']['exact'], 1)
+        self.assertEqual(create.await_count, 2)
+
+    async def test_download_failure_has_a_safe_specific_error(self):
+        gateway = SimpleNamespace(
+            get_comparison_document=AsyncMock(return_value={'storage_path': 'private-source'}),
+            download=AsyncMock(side_effect=ConnectionError('private provider details')),
+            finish_comparison_job=AsyncMock(return_value=True),
+        )
+        await process_comparison_job(gateway, {
+            'id': 'job', 'project_id': 'project', 'left_document_id': 'left',
+            'right_document_id': 'right', 'lease_token': 'lease',
+        }, None, 'test-model')
+        gateway.finish_comparison_job.assert_awaited_once_with(
+            'job', 'lease', None, 'SOURCE_DOWNLOAD_FAILED',
+        )
 
     async def test_worker_persists_only_a_verified_result(self):
         import json

@@ -127,10 +127,20 @@ const statusText: Record<VisualStatus, string> = {
 }
 const jobText = { queued: 'En cola', running: 'Analizando', completed: 'Terminado', failed: 'Falló' }
 const errorText: Record<string, string> = {
+  SOURCE_NOT_FOUND: 'Uno de los originales ya no está disponible. Vuelva a seleccionar los documentos.',
+  SOURCE_DOWNLOAD_FAILED: 'No se pudo descargar un original desde el almacenamiento. Vuelva a intentar.',
+  UNSUPPORTED_FORMAT: 'Uno de los originales no es PDF ni DOCX.',
   NO_EXTRACTABLE_TEXT: 'No hay texto extraíble. Un PDF escaneado requiere OCR antes de compararse.',
   DOCUMENT_TOO_LONG: 'El texto excede el límite de esta primera versión (60 000 caracteres por documento).',
   NO_VERIFIABLE_FIELDS: 'La IA no encontró atributos con citas comprobables en los originales.',
+  INVALID_AI_RESPONSE: 'La IA devolvió una respuesta inválida. Intente de nuevo.',
   AI_NOT_CONFIGURED: 'El proveedor de IA no está configurado en el worker.',
+  AI_RATE_LIMITED: 'El proveedor de IA limitó las solicitudes. Espere un momento y vuelva a intentar.',
+  AI_AUTH_FAILED: 'El proveedor de IA rechazó la clave del worker. Revise su configuración.',
+  AI_MODEL_UNAVAILABLE: 'El modelo de IA configurado no está disponible para esta clave.',
+  AI_PROVIDER_UNAVAILABLE: 'El proveedor de IA tuvo un error temporal. Vuelva a intentar.',
+  AI_CONNECTION_FAILED: 'El worker no pudo comunicarse con el proveedor de IA. Vuelva a intentar.',
+  AI_REQUEST_REJECTED: 'El proveedor de IA rechazó la solicitud. Revise su configuración.',
   WORKER_RETRIES_EXHAUSTED: 'El worker se interrumpió varias veces durante este análisis.',
 }
 

@@ -183,15 +183,43 @@ async def compare_documents(ai_client: Any, model: str, left: CanonicalDocument,
         'Usa null cuando el atributo no exista en un lado. Cada cita y valor deben ser subcadenas '
         'exactas de un fragmento suministrado. No infieras texto ausente. Máximo 30 atributos.'
     )
-    response = await asyncio.wait_for(ai_client.chat.completions.create(
-        model=model,
-        messages=[
-            {'role': 'system', 'content': system},
-            {'role': 'user', 'content': json.dumps({'left': prompt_document(left), 'right': prompt_document(right)}, ensure_ascii=False)},
-        ],
-        response_format={'type': 'json_object'},
-        temperature=0,
-    ), timeout=180)
+    messages = [
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': json.dumps({'left': prompt_document(left), 'right': prompt_document(right)}, ensure_ascii=False)},
+    ]
+    # Keep one retry policy: the OpenAI-compatible SDK otherwise retries each attempt internally.
+    comparison_client = ai_client.with_options(max_retries=0) if callable(getattr(ai_client, 'with_options', None)) else ai_client
+    for attempt in range(3):
+        try:
+            response = await asyncio.wait_for(comparison_client.chat.completions.create(
+                model=model, messages=messages,
+                response_format={'type': 'json_object'}, temperature=0,
+            ), timeout=180)
+            break
+        except Exception as exc:
+            status = getattr(exc, 'status_code', None)
+            connection_failure = isinstance(exc, (ConnectionError, TimeoutError)) or type(exc).__name__ in {
+                'APIConnectionError', 'APITimeoutError',
+            }
+            retryable = status == 429 or (isinstance(status, int) and status >= 500) or connection_failure
+            if retryable and attempt < 2:
+                await asyncio.sleep((5, 15)[attempt])
+                continue
+            if status == 429:
+                code = 'AI_RATE_LIMITED'
+            elif status in (401, 403):
+                code = 'AI_AUTH_FAILED'
+            elif status == 404:
+                code = 'AI_MODEL_UNAVAILABLE'
+            elif isinstance(status, int) and status >= 500:
+                code = 'AI_PROVIDER_UNAVAILABLE'
+            elif connection_failure:
+                code = 'AI_CONNECTION_FAILED'
+            elif isinstance(status, int) and status >= 400:
+                code = 'AI_REQUEST_REJECTED'
+            else:
+                raise
+            raise ValueError(code) from exc
     try:
         raw = json.loads(response.choices[0].message.content or '{}')
     except (ValueError, IndexError, AttributeError) as exc:
@@ -205,8 +233,11 @@ async def process_comparison_job(gateway: Any, job: dict[str, Any], ai_client: A
         right_row = await gateway.get_comparison_document(job['right_document_id'], job['project_id'])
         if not left_row or not right_row:
             raise ValueError('SOURCE_NOT_FOUND')
-        left_bytes = await gateway.download(left_row['storage_path'])
-        right_bytes = await gateway.download(right_row['storage_path'])
+        try:
+            left_bytes = await gateway.download(left_row['storage_path'])
+            right_bytes = await gateway.download(right_row['storage_path'])
+        except Exception as exc:
+            raise ValueError('SOURCE_DOWNLOAD_FAILED') from exc
         left = parse_original(left_bytes, left_row['original_name'], left_row['id'])
         right = parse_original(right_bytes, right_row['original_name'], right_row['id'])
         result = await compare_documents(ai_client, model, left, right)
