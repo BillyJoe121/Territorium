@@ -18,6 +18,8 @@ export interface PrototypeFile {
   name: string
   size: number
   extension: string
+  /** Archivo local seleccionado; habilita la vista previa en el modo prototipo. */
+  source?: File
 }
 
 export interface EditableResultRow {

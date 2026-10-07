@@ -819,3 +819,13 @@
 @media (max-width: 1180px) { .comparison-review-grid { grid-template-columns: 1fr; }.comparison-findings ul { max-height: 240px; }.comparison-original { max-height: 600px; } }
 @media (max-width: 740px) { .comparison-setup, .comparison-originals { grid-template-columns: 1fr; }.comparison-original { min-height: 420px; }.comparison-intro { align-items: start; }.comparison-capacity { display: none; }.comparison-selects { grid-template-columns: 1fr; }.comparison-selects > svg { transform: rotate(90deg); margin: 0 auto; } }
 @media (prefers-reduced-motion: reduce) { .comparison-workspace .spin { animation: none !important; } }
+
+/* Vista previa reutilizable (modal de archivos del expediente) */
+.comparison-original.is-preview { height: 100%; max-height: none; border: 0; border-radius: 0; box-shadow: none; }
+.comparison-image-sheet { display: block; max-width: none; margin: 0 auto; background: white; box-shadow: 0 2px 12px #0002; }
+.xlsx-preview { display: grid; gap: 18px; width: max-content; min-width: 100%; }
+.xlsx-preview-sheet h4 { margin: 0 0 6px; color: var(--ui-ink); font-size: 12px; font-weight: 700; }
+.xlsx-preview-sheet table { border-collapse: collapse; background: white; box-shadow: 0 2px 12px #0002; font-size: 11px; color: var(--ui-ink); }
+.xlsx-preview-sheet th, .xlsx-preview-sheet td { max-width: 320px; padding: 4px 8px; border: 1px solid #d9ded6; text-align: left; vertical-align: top; white-space: pre-wrap; }
+.xlsx-preview-sheet th { position: sticky; top: 0; color: var(--ui-ink-soft); background: #f3f5f1; font-weight: 650; }
+.xlsx-preview-sheet tbody th { position: static; text-align: right; }

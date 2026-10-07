@@ -5,6 +5,7 @@ import {
   ChevronRight,
   ClipboardCheck,
   Download,
+  Eye,
   FileSpreadsheet,
   FileText,
   LayoutList,
@@ -67,6 +68,7 @@ import { downloadBlob, exportPagesToPdf } from '../../lib/docxPreviewPdf'
 import { ChooseDocumentTemplateModal } from './ChooseDocumentTemplateModal'
 import { DocumentDocxViewer, type DocumentDocxViewerHandle } from './DocumentDocxViewer'
 import { ReviewDialog } from './ReviewDialog'
+import { FilePreviewDialog, type FilePreviewTarget } from './FilePreviewDialog'
 import {
   OFFICIAL_FINAL_DOCUMENT_TEMPLATES,
   type ExpedienteDocumentTemplate,
@@ -239,6 +241,7 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
   const [isExportingPdf, setIsExportingPdf] = useState(false)
 
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null)
+  const [previewTarget, setPreviewTarget] = useState<FilePreviewTarget | null>(null)
 
   const responsibleName = project.responsibleName || project.clientName || 'Equipo jurídico territorial'
   const mounted = useRef(true)
@@ -940,7 +943,17 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
                           const isDeleting = deletingFileId === file.id
                           return (
                             <li key={file.id}>
-                              <FileText size={15} aria-hidden="true" />
+                              <button
+                                type="button"
+                                className="extraction-file-preview"
+                                title={`Ver ${file.name}`}
+                                aria-label={`Ver ${file.name}`}
+                                onClick={() => setPreviewTarget({
+                                  document: { id: file.id, storage_path: file.storagePath, original_name: file.name, mime_type: file.mimeType },
+                                })}
+                              >
+                                <Eye size={15} />
+                              </button>
                               <span className="extraction-file-name" title={file.name}>
                                 {file.name}
                               </span>
@@ -1305,6 +1318,8 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
         initialPredioId={documentRow?.id ?? null}
         onSelectTemplate={handleSelectDocumentTemplate}
       />
+
+      <FilePreviewDialog target={previewTarget} onClose={() => setPreviewTarget(null)} />
     </section>
   )
 }

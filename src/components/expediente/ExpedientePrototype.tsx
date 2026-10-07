@@ -9,6 +9,7 @@ import {
   CircleAlert,
   ClipboardCheck,
   Download,
+  Eye,
   FilePlus2,
   FileText,
   LayoutList,
@@ -28,6 +29,7 @@ import { toast } from 'sonner'
 import { DocumentPrototypeEditor } from './DocumentPrototypeEditor'
 import { ResultDataTable } from './ResultDataTable'
 import { ReviewDialog } from './ReviewDialog'
+import { FilePreviewDialog, type FilePreviewTarget } from './FilePreviewDialog'
 import { AiRevisionDialog } from './AiRevisionDialog'
 import {
   adaptCanonicalPayloadToTable,
@@ -150,16 +152,30 @@ function StatusText({ status, label }: { status: string; label: string }) {
   return <span className={`expediente-status status-${status}`}><span aria-hidden="true" />{label}</span>
 }
 
+const MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+}
+
+const mimeFromName = (name: string, fallback: string) =>
+  MIME_BY_EXTENSION[name.split('.').pop()?.toLowerCase() ?? ''] ?? fallback
+
 function GroupCard({
   group,
   onFilesSelected,
   onRemoveFile,
+  onPreviewFile,
   onStart,
   onReview,
 }: {
   group: DocumentGroup
   onFilesSelected: (key: DocumentGroupKey, files: FileList | null) => void
   onRemoveFile: (key: DocumentGroupKey, fileId: string) => void
+  onPreviewFile: (target: FilePreviewTarget) => void
   onStart: (key: DocumentGroupKey) => void
   onReview: (key: DocumentGroupKey) => void
 }) {
@@ -227,7 +243,25 @@ function GroupCard({
           <ul>
             {group.files.map((file) => (
               <li key={file.id}>
-                <FileText size={15} aria-hidden="true" />
+                {file.source ? (
+                  <button
+                    type="button"
+                    className="extraction-file-preview"
+                    title={`Ver ${file.name}`}
+                    aria-label={`Ver ${file.name}`}
+                    onClick={() => {
+                      const source = file.source as File
+                      onPreviewFile({
+                        document: { id: file.id, storage_path: '', original_name: file.name, mime_type: mimeFromName(file.name, source.type) },
+                        loadBlob: async () => source,
+                      })
+                    }}
+                  >
+                    <Eye size={15} />
+                  </button>
+                ) : (
+                  <FileText size={15} aria-hidden="true" />
+                )}
                 <span className="extraction-file-name" title={file.name}>{file.name}</span>
                 <span className="extraction-file-meta">{formatFileSize(file.size)}</span>
                 <button type="button" className="extraction-file-remove" aria-label={`Retirar ${file.name}`} onClick={() => onRemoveFile(group.key, file.id)}>
@@ -270,6 +304,7 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
   const [view, setView] = useState<DetailView>('summary')
   const [groups, setGroups] = useState(createDemoGroups)
   const [activeGroup, setActiveGroup] = useState<DocumentGroupKey | null>(null)
+  const [previewTarget, setPreviewTarget] = useState<FilePreviewTarget | null>(null)
   const [consolidation, setConsolidation] = useState<ConsolidationState>({ status: 'blocked', progress: 0, version: 1 })
   const [masterRecord, setMasterRecord] = useState<ConsolidatedMasterRecord | null>(null)
   const [consolidatedRows, setConsolidatedRows] = useState(createDemoConsolidatedRows)
@@ -385,6 +420,7 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
       name: file.name,
       size: file.size,
       extension: file.name.split('.').pop()?.toUpperCase() ?? 'ARCHIVO',
+      source: file,
     }))
     changeGroupFiles(key, (files) => key === 'negotiation' ? additions : [...files, ...additions])
     setNotice(key === 'negotiation' ? 'Se actualizó la tabla vigente de negociación en el prototipo.' : `Se agregaron ${additions.length} archivo(s) a ${groups[key].label}.`)
@@ -748,7 +784,7 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
       {view === 'extraction' && (
         <section className="expediente-extraction" aria-label="Extracción y consolidación">
           <div className="extraction-card-grid">
-            {(Object.keys(groups) as DocumentGroupKey[]).map((key) => <GroupCard key={key} group={groups[key]} onFilesSelected={addFiles} onRemoveFile={removeFile} onStart={startAnalysis} onReview={setActiveGroup} />)}
+            {(Object.keys(groups) as DocumentGroupKey[]).map((key) => <GroupCard key={key} group={groups[key]} onFilesSelected={addFiles} onRemoveFile={removeFile} onPreviewFile={setPreviewTarget} onStart={startAnalysis} onReview={setActiveGroup} />)}
           </div>
 
           {/* Consolidation Section - Single Row */}
@@ -910,6 +946,7 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
         isGenerating={isGeneratingDoc}
         onSelectTemplate={handleSelectDocumentTemplate}
       />
+      <FilePreviewDialog target={previewTarget} onClose={() => setPreviewTarget(null)} />
     </div>
   )
 }

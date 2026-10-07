@@ -5122,6 +5122,30 @@ main:has(.audit-trail-view) {
   outline: none;
 }
 
+.expediente-file-preview-modal {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.extraction-file-preview {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 6px);
+  color: var(--color-text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.extraction-file-preview:hover,
+.extraction-file-preview:focus-visible {
+  border-color: var(--color-border-subtle);
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+}
+
 .expediente-ai-modal {
   position: fixed;
   top: 50%;

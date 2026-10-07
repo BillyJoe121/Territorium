@@ -1,22 +1,44 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, CircleSlash, Download, FileWarning, LoaderCircle, MapPin, ZoomIn, ZoomOut } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CircleSlash, Download, FileWarning, LoaderCircle, MapPin, X, ZoomIn, ZoomOut } from 'lucide-react'
 import * as pdfjs from 'pdfjs-dist'
 import { renderAsync } from 'docx-preview'
 import type { ComparisonDocument, Evidence, MatchStatus } from '../../data/documentComparison'
 import { downloadComparisonOriginal } from '../../data/documentComparison'
 import { clearEvidence, highlightEvidence } from './highlight'
+import { renderXlsxPreview, XLSX_MIME } from './xlsxPreview'
+import './document-comparison.css'
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
 
+/** Lo mínimo que el visor necesita de un archivo del bucket source-documents. */
+export type ViewerDocument = Pick<ComparisonDocument, 'id' | 'storage_path' | 'original_name' | 'mime_type'>
+
 interface Props {
-  document: ComparisonDocument
-  evidence: Evidence | null
-  status: MatchStatus | null
-  side: 'left' | 'right'
+  document: ViewerDocument
+  evidence?: Evidence | null
+  status?: MatchStatus | null
+  side?: 'left' | 'right'
   activeFieldLabel?: string
+  /** 'preview': solo zoom, páginas y cerrar; sin título, ubicación ni descarga. */
+  variant?: 'comparison' | 'preview'
+  /** Origen alterno del archivo (p. ej. un File local); por defecto se descarga del bucket. */
+  loadBlob?: () => Promise<Blob>
+  onClose?: () => void
 }
 
-export function OriginalViewer({ document: source, evidence, status, side, activeFieldLabel }: Props) {
+export function OriginalViewer({
+  document: source,
+  evidence = null,
+  status = null,
+  side = 'left',
+  activeFieldLabel,
+  variant = 'comparison',
+  loadBlob,
+  onClose,
+}: Props) {
+  const isPreview = variant === 'preview'
+  const loadBlobRef = useRef(loadBlob)
+  loadBlobRef.current = loadBlob
   const [blob, setBlob] = useState<Blob | null>(null)
   const [pdf, setPdf] = useState<pdfjs.PDFDocumentProxy | null>(null)
   const [page, setPage] = useState(1)
@@ -29,7 +51,7 @@ export function OriginalViewer({ document: source, evidence, status, side, activ
   useEffect(() => {
     let cancelled = false
     setBlob(null); setPdf(null); setError(null); setPage(1)
-    void downloadComparisonOriginal(source).then((value) => {
+    void (loadBlobRef.current ? loadBlobRef.current() : downloadComparisonOriginal(source)).then((value) => {
       if (!cancelled) setBlob(value)
     }).catch(() => { if (!cancelled) setError('No se pudo abrir el original protegido.') })
     return () => { cancelled = true; clearEvidence(side) }
@@ -91,6 +113,19 @@ export function OriginalViewer({ document: source, evidence, status, side, activ
       }).catch(() => { if (!cancelled) setError('No se pudo representar la página del PDF.') })
       return () => { cancelled = true; renderTask?.cancel(); root.replaceChildren() }
     }
+    if (source.mime_type.startsWith('image/')) {
+      // Con zoom 100 % la imagen ocupa el ancho del visor; los planos escaneados suelen ser enormes.
+      const url = URL.createObjectURL(blob)
+      const image = document.createElement('img')
+      image.className = 'comparison-image-sheet'
+      image.alt = source.original_name
+      image.style.width = `${zoom * 100}%`
+      image.onload = () => { if (!cancelled) setRendered((value) => value + 1) }
+      image.onerror = () => { if (!cancelled) setError('La imagen no se pudo representar.') }
+      image.src = url
+      root.append(image)
+      return () => { cancelled = true; URL.revokeObjectURL(url); root.replaceChildren() }
+    }
     const wrapper = document.createElement('div')
     wrapper.className = 'comparison-docx-zoom-wrapper'
     wrapper.style.transform = `scale(${zoom})`
@@ -98,7 +133,11 @@ export function OriginalViewer({ document: source, evidence, status, side, activ
     wrapper.style.width = 'fit-content'
     wrapper.style.margin = '0 auto'
     const staging = document.createElement('div')
-    void renderAsync(blob, staging, staging, { breakPages: true, renderHeaders: true, renderFooters: true })
+    const isXlsx = source.mime_type === XLSX_MIME
+    const rendering = isXlsx
+      ? renderXlsxPreview(blob, staging)
+      : renderAsync(blob, staging, staging, { breakPages: true, renderHeaders: true, renderFooters: true })
+    void rendering
       .then(() => {
         if (!cancelled) {
           wrapper.replaceChildren(...Array.from(staging.childNodes))
@@ -106,7 +145,7 @@ export function OriginalViewer({ document: source, evidence, status, side, activ
           setRendered((value) => value + 1)
         }
       })
-      .catch(() => { if (!cancelled) setError('El DOCX no se pudo representar.') })
+      .catch(() => { if (!cancelled) setError(isXlsx ? 'El XLSX no se pudo representar.' : 'El DOCX no se pudo representar.') })
     return () => { cancelled = true; root.replaceChildren() }
   }, [blob, pdf, page, source.mime_type, side, zoom])
 
@@ -192,6 +231,54 @@ export function OriginalViewer({ document: source, evidence, status, side, activ
   const zoomIn = () => setZoom((prev) => Math.min(2.5, Math.round((prev + 0.1) * 10) / 10))
   const zoomOut = () => setZoom((prev) => Math.max(0.3, Math.round((prev - 0.1) * 10) / 10))
 
+  const zoomBar = (
+    <div className="comparison-zoom-bar" role="group" aria-label="Controles de zoom">
+      <button type="button" onClick={zoomOut} disabled={zoom <= 0.3} title="Alejar (Zoom out)" aria-label="Alejar">
+        <ZoomOut size={14} />
+      </button>
+      <span className="comparison-zoom-label">{Math.round(zoom * 100)}%</span>
+      <button type="button" onClick={zoomIn} disabled={zoom >= 2.5} title="Acercar (Zoom in)" aria-label="Acercar">
+        <ZoomIn size={14} />
+      </button>
+    </div>
+  )
+
+  const pageControls = pdf ? (
+    <div className="comparison-page-controls">
+      <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} title="Página anterior" aria-label="Página anterior">
+        <ChevronLeft size={13} />
+      </button>
+      <span>Pág. {page} de {pdf.numPages}</span>
+      <button type="button" disabled={page >= pdf.numPages} onClick={() => setPage(page + 1)} title="Página siguiente" aria-label="Página siguiente">
+        <ChevronRight size={13} />
+      </button>
+    </div>
+  ) : null
+
+  const previewState = error ? (
+    <div className="comparison-preview-state" role="alert"><FileWarning size={22} />{error}</div>
+  ) : !blob ? (
+    <div className="comparison-preview-state"><LoaderCircle size={22} className="spin" />Abriendo original…</div>
+  ) : null
+
+  if (isPreview) {
+    return <section className="comparison-original is-preview" ref={containerRef} aria-label={`Vista previa: ${source.original_name}`}>
+      <div className="comparison-original-header">
+        <div>{pageControls}</div>
+        <div className="comparison-header-actions">
+          {zoomBar}
+          {onClose && (
+            <button type="button" className="comparison-action-btn" onClick={onClose} title="Cerrar" aria-label="Cerrar visualizador">
+              <X size={15} />
+            </button>
+          )}
+        </div>
+      </div>
+      {previewState}
+      <div className="comparison-original-body" ref={bodyRef} />
+    </section>
+  }
+
   return <section className="comparison-original" ref={containerRef} aria-label={`Original ${side === 'left' ? 'A' : 'B'}: ${source.original_name}`}>
     <div className="comparison-original-header">
       <div className="comparison-doc-title">
@@ -199,15 +286,7 @@ export function OriginalViewer({ document: source, evidence, status, side, activ
         <strong title={source.original_name}>{source.original_name}</strong>
       </div>
       <div className="comparison-header-actions">
-        <div className="comparison-zoom-bar" role="group" aria-label="Controles de zoom">
-          <button type="button" onClick={zoomOut} disabled={zoom <= 0.3} title="Alejar (Zoom out)" aria-label="Alejar">
-            <ZoomOut size={14} />
-          </button>
-          <span className="comparison-zoom-label">{Math.round(zoom * 100)}%</span>
-          <button type="button" onClick={zoomIn} disabled={zoom >= 2.5} title="Acercar (Zoom in)" aria-label="Acercar">
-            <ZoomIn size={14} />
-          </button>
-        </div>
+        {zoomBar}
         <button type="button" className="comparison-action-btn" onClick={download} disabled={!blob} aria-label={`Descargar ${source.original_name}`} title="Descargar documento">
           <Download size={14} />
         </button>
@@ -226,17 +305,7 @@ export function OriginalViewer({ document: source, evidence, status, side, activ
           <span>{evidence?.location ?? 'Vista general'}{located === false ? ' · Cita verificada, no localizada' : ''}</span>
         </div>
       )}
-      {pdf ? (
-        <div className="comparison-page-controls">
-          <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} title="Página anterior" aria-label="Página anterior">
-            <ChevronLeft size={13} />
-          </button>
-          <span>Pág. {page} de {pdf.numPages}</span>
-          <button type="button" disabled={page >= pdf.numPages} onClick={() => setPage(page + 1)} title="Página siguiente" aria-label="Página siguiente">
-            <ChevronRight size={13} />
-          </button>
-        </div>
-      ) : (
+      {pageControls ?? (
         <div className="comparison-format-badge">
           <span>DOCX · Flujo continuo</span>
         </div>
@@ -252,11 +321,7 @@ export function OriginalViewer({ document: source, evidence, status, side, activ
       </div>
     ) : null}
 
-    {error ? (
-      <div className="comparison-preview-state" role="alert"><FileWarning size={22} />{error}</div>
-    ) : !blob ? (
-      <div className="comparison-preview-state"><LoaderCircle size={22} className="spin" />Abriendo original…</div>
-    ) : null}
+    {previewState}
     <div className="comparison-original-body" ref={bodyRef} />
   </section>
 }

@@ -196,7 +196,7 @@ export async function requestComparison(leftDocumentId: string, rightDocumentId:
   return rpcJobId as string
 }
 
-export async function downloadComparisonOriginal(document: ComparisonDocument): Promise<Blob> {
+export async function downloadComparisonOriginal(document: Pick<ComparisonDocument, 'storage_path'>): Promise<Blob> {
   const { data, error } = await requireSupabase().storage.from('source-documents').download(document.storage_path)
   if (error || !data) throw error ?? new Error('No se pudo abrir el archivo original.')
   return data

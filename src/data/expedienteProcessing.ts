@@ -5,6 +5,8 @@ import type { ExpedienteGroupKey, ExpedienteGroupStatus } from '../lib/expedient
 export interface RemoteExpedienteFile {
   id: string
   name: string
+  storagePath: string
+  mimeType: string
   sizeBytes: number
   validationStatus: 'pending' | 'validated' | 'rejected'
   validationErrorCode: string | null
@@ -42,7 +44,7 @@ export async function loadRemoteExpedienteProcessing(projectId: string): Promise
   const client = requireSupabase()
   const [groupsResult, filesResult, executionsResult] = await Promise.all([
     client.from('expediente_document_groups').select('id,group_key,status,last_error_code,last_error_message').eq('project_id', projectId),
-    client.from('expediente_document_files').select('id,group_id,original_name,size_bytes,validation_status,validation_error_code,created_at').eq('project_id', projectId).eq('is_current', true).eq('is_active', true).order('created_at'),
+    client.from('expediente_document_files').select('id,group_id,original_name,storage_path,mime_type,size_bytes,validation_status,validation_error_code,created_at').eq('project_id', projectId).eq('is_current', true).eq('is_active', true).order('created_at'),
     client.from('expediente_executions').select('id,group_id,status,completed_units,total_units,stage,stage_message,error_code,error_message,created_at').eq('project_id', projectId).order('created_at', { ascending: false }),
   ])
   const error = [groupsResult, filesResult, executionsResult].find((result) => result.error)?.error
@@ -58,6 +60,8 @@ export async function loadRemoteExpedienteProcessing(projectId: string): Promise
     values.push({
       id: file.id,
       name: file.original_name,
+      storagePath: file.storage_path,
+      mimeType: file.mime_type,
       sizeBytes: file.size_bytes,
       validationStatus: file.validation_status,
       validationErrorCode: file.validation_error_code ?? null,
