@@ -430,7 +430,14 @@ export function ResultDataTable({
                         onMouseLeave={hidePreview}
                         onFocusCapture={hidePreview}
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        {/*
+                          La celda se invoca como función y no como componente: las definiciones de
+                          columna se recrean cuando cambian las alertas, y como componente React
+                          desmontaría el input en cada tecla (se perdía el foco).
+                        */}
+                        {typeof cell.column.columnDef.cell === 'function'
+                          ? cell.column.columnDef.cell(cell.getContext())
+                          : flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}
                   </tr>

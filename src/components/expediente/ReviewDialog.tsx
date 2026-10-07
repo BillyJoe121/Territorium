@@ -84,8 +84,16 @@ export function ReviewDialog({
   const [alertsAcknowledged, setAlertsAcknowledged] = useState(false)
   const saveTimeoutRef = useRef<number | null>(null)
 
+  // Los datos se cargan al abrir el modal. Mientras está abierto, el borrador manda: si el
+  // autoguardado devuelve una versión anterior, no debe pisar lo que se sigue escribiendo.
+  const loadedOnOpenRef = useRef(false)
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      loadedOnOpenRef.current = false
+      return
+    }
+    if (loadedOnOpenRef.current) return
+    loadedOnOpenRef.current = true
     setDraft(cloneRows(rows))
     setDirty(false)
     setSaving(false)
