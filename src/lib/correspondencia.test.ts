@@ -41,10 +41,13 @@ const negotiationPayload = {
 }
 
 describe('CORRESPONDENCIA', () => {
-  it('has the 71 template columns A–BS in order', () => {
-    expect(CORRESPONDENCIA_COLUMNS).toHaveLength(71)
+  it('has the template columns A–BS in order, without F, H and AK', () => {
+    expect(CORRESPONDENCIA_COLUMNS).toHaveLength(68)
     expect(CORRESPONDENCIA_COLUMNS[0]).toMatchObject({ letter: 'A', header: 'CARPETA' })
-    expect(CORRESPONDENCIA_COLUMNS[70]).toMatchObject({ letter: 'BS', header: 'CIUDAD DE DOMICILIO PROPIETARIO' })
+    expect(CORRESPONDENCIA_COLUMNS[67]).toMatchObject({ letter: 'BS', header: 'CIUDAD DE DOMICILIO PROPIETARIO' })
+    expect(CORRESPONDENCIA_COLUMNS.map((c) => c.letter)).not.toContain('F')
+    expect(CORRESPONDENCIA_COLUMNS.map((c) => c.letter)).not.toContain('H')
+    expect(CORRESPONDENCIA_COLUMNS.map((c) => c.letter)).not.toContain('AK')
     expect(CORRESPONDENCIA_COLUMNS.find((c) => c.letter === 'BE')?.header).toBe('VALOR NEGOCIADO (NUMEROS)')
   })
 
@@ -57,7 +60,6 @@ describe('CORRESPONDENCIA', () => {
     expect(row.D).toBe('MARTHA LUCÍA BERNAL DE GARZÓN / ALEJANDRO MONTOYA CASTELLANOS')
     expect(row.E).toBe('38.244.519 / 93.401.226')
     expect(row.G).toBe('CC / CC')
-    expect(row.H).toBe('siete (07) de octubre de 2024')
     expect(row.M).toBe('6 ha 9524 m2')
     expect(row.N).toBe('SEIS HECTÁREAS CON NUEVE MIL QUINIENTOS VEINTICUATRO METROS CUADRADOS')
     expect(row.W).toBe('3374.06')
@@ -67,7 +69,7 @@ describe('CORRESPONDENCIA', () => {
     expect(row.AC).toBe('5.5')
     expect(row.AD).toBe('CINCO METROS Y MEDIO')
     expect(row.AF).toBe('TRES')
-    expect(row.AK).toBe('siete (07) de noviembre de 2024')
+    expect(row.AK).toBeUndefined()
     expect(row.AN).toBe('CELSIA COLOMBIA S.A E.S.P.')
     expect(row.AY).toBe('7628712')
     expect(row.BE).toBe('9628712')

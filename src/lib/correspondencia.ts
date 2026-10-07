@@ -1,7 +1,9 @@
 /**
  * Consolidado CORRESPONDENCIA: una fila por predio (pareja estudio de títulos ↔ plano,
- * vinculada por FMI) con su negociación. Las 71 columnas (A–BS) siguen exactamente la
- * plantilla CORRESPONDENCIA.xlsx entregada por Territorium.
+ * vinculada por FMI) con su negociación. Las columnas siguen la plantilla CORRESPONDENCIA.xlsx
+ * entregada por Territorium, sin F (sin título), H (fecha Tusdatos.co) ni AK (fecha del plano).
+ * La letra de cada columna es su clave estable (la de la plantilla); la tabla y el Excel
+ * exportado reasignan las letras visibles según la posición.
  */
 import type { EditableResultRow, ResultColumn } from '../components/expediente/types'
 import type { ConsolidatedMasterRecord } from './expedienteConsolidation'
@@ -20,16 +22,14 @@ export interface CorrespondenciaColumn {
 
 const col = (letter: string, header: string, source: CorrespondenciaSource, numeric = false): CorrespondenciaColumn => ({ letter, header, source, numeric })
 
-/** Encabezados exactos de CORRESPONDENCIA.xlsx (Hoja1, fila 1), incluida la columna F sin título. */
+/** Encabezados exactos de CORRESPONDENCIA.xlsx (Hoja1, fila 1), salvo las columnas retiradas F, H y AK. */
 export const CORRESPONDENCIA_COLUMNS: CorrespondenciaColumn[] = [
   col('A', 'CARPETA', 'negociacion'),
   col('B', 'FOLIO DE MATRICULA', 'titulo'),
   col('C', 'CEDULA CATASTRAL', 'titulo'),
   col('D', 'PROPIETARIOS DEL PREDIO', 'titulo'),
   col('E', 'NO DOCUMENTO', 'titulo'),
-  col('F', '', 'titulo'),
   col('G', 'TIPO DOCUMENTO', 'titulo'),
-  col('H', 'FECHA DE CONSULTA ANTEDECENTES DEL PROPIETARIO TUSDATOS.CO', 'titulo'),
   col('I', 'NOMBRE DEL PREDIO', 'titulo'),
   col('J', 'MUNICIPIO DEL PREDIO', 'titulo'),
   col('K', 'DEPARTAMENTO DEL PREDIO', 'titulo'),
@@ -58,7 +58,6 @@ export const CORRESPONDENCIA_COLUMNS: CorrespondenciaColumn[] = [
   col('AH', 'CANTIDAD DE CAJAS (LETRAS)', 'plano'),
   col('AI', 'NOMBRE DEL PLANO', 'plano'),
   col('AJ', 'ESCALA DEL PLANO', 'plano'),
-  col('AK', 'FECHA DEL PLANO', 'plano'),
   col('AL', 'NOMBRE DEL PROYECTO', 'proyecto'),
   col('AM', 'TENSIÓN', 'proyecto'),
   col('AN', 'NOMBRE EMPRESA E.S. P.', 'proyecto'),
@@ -106,11 +105,18 @@ const SOURCE_LABEL: Record<CorrespondenciaSource, string> = {
   manual: 'Se diligencia por predio',
 }
 
-/** Columnas del modal: letra + encabezado de la plantilla. */
+/** "AB" para el índice 27: letra visible de la columna según su posición en el Excel exportado. */
+export function excelColumnName(index: number): string {
+  let name = ''
+  for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) name = String.fromCharCode(65 + ((n - 1) % 26)) + name
+  return name
+}
+
+/** Columnas del modal: letra (posición en el Excel exportado) + encabezado de la plantilla. */
 export function correspondenciaTableColumns(): ResultColumn[] {
-  return CORRESPONDENCIA_COLUMNS.map((c) => ({
+  return CORRESPONDENCIA_COLUMNS.map((c, index) => ({
     key: c.letter,
-    label: `${c.letter} · ${c.header || '(sin título)'}`,
+    label: `${excelColumnName(index)} · ${c.header}`,
     width: ['Q', 'P', 'S'].includes(c.letter) ? 320 : c.header.includes('(LETRAS)') || c.letter === 'BD' ? 340 : c.header.length > 28 ? 230 : 170,
     editable: c.source !== 'calculado',
     broadcast: c.source === 'proyecto',
@@ -321,9 +327,7 @@ export function buildCorrespondencia({ titlesPayload, plansPayload, negotiationP
       C: text(title.cadastral_id),
       D: ownerNames.join(' / ') || text(title.owners_str),
       E: ownerDocs.join(' / ') || text(title.document_number),
-      F: '',
       G: ownerTypes.join(' / ') || (DOC_TYPE[text(title.document_type).toLowerCase()] ?? text(title.document_type)),
-      H: formatLongDate(text(title.antecedents_consultation_date)),
       I: text(title.property_name),
       J: text(title.municipality),
       K: text(title.department),
@@ -352,7 +356,6 @@ export function buildCorrespondencia({ titlesPayload, plansPayload, negotiationP
       AH: boxes !== null ? upper(spanishIntegerWords(Math.round(boxes), false)) : '',
       AI: planName,
       AJ: text(plan.plan_scale),
-      AK: formatLongDate(text(plan.plan_date)),
       ...constants,
       AY: offers[0].value !== null ? String(Math.round(offers[0].value)) : '',
       AZ: offers[0].letters,
