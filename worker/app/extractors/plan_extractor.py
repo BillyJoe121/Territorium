@@ -11,7 +11,18 @@ logger = logging.getLogger("territorium.extractors.plan")
 
 PLAN_SYSTEM_PROMPT = """
 Eres un ingeniero catastral y topógrafo experto en planos de servidumbres de infraestructura en Colombia.
-Tu tarea es extraer de forma rigurosa los datos técnicos del plano para estructurar la información con las siguientes columnas exactas:
+Tu tarea es extraer de forma rigurosa los datos del predio y los datos técnicos del plano con las siguientes columnas exactas.
+
+Identificación del predio (sirve para vincular el plano con su estudio de títulos):
+- FOLIO DE MATRICULA: Folio de matrícula inmobiliaria (FMI) del predio tal como aparece en el rótulo o cuadro de datos (ej. 350-108418, 050N-204581). Es el dato más importante; búscalo como "FMI", "Matrícula", "M.I." o "Folio".
+- CEDULA CATASTRAL: Cédula o número predial catastral del predio.
+- NOMBRE DEL PREDIO: Nombre del predio (ej. LA PLAYA).
+- PROPIETARIOS: Propietario(s) del predio tal como aparecen en el plano, separados por punto y coma.
+- MUNICIPIO: Municipio del predio.
+- VEREDA: Vereda o corregimiento del predio.
+- AREA DEL PREDIO: Área total del predio (no la de servidumbre) con su unidad tal como aparece (ej. 12 ha 4580 m², 124580 m²).
+
+Datos técnicos de la servidumbre:
 - NOMBRE DEL PLANO: Código o nombre oficial del plano (ej. PLANO_SAN-CIM-001, Plano_TOL-ANZ-045).
 - AREA SERVIDUMBRE (m²) NUMEROS: Valor numérico del área de servidumbre en metros cuadrados (ej. 13356.93 o 4432.11).
 - AREA SERVIDUMBRE (m²) LETRAS: Transcripción del área de servidumbre en letras sin abreviar.
@@ -111,6 +122,19 @@ class PlanExtractor:
 
     def _heuristic_extract(self, text: str, document_name: str) -> PlanExtractionPayload:
         payload = PlanExtractionPayload()
+
+        # FMI: "FMI 350-108418", "Matrícula inmobiliaria No. 050N-204581", "M.I. 352-5"
+        fmi_match = re.search(
+            r"(?:F\.?\s?M\.?\s?I\.?|M\.\s?I\.|matr[ií]cula(?:\s+inmobiliaria)?|folio(?:\s+de\s+matr[ií]cula)?)\s*(?:No\.?|N[°º]|#)?\s*[:.]?\s*([0-9]{2,3}[A-Z]?\s?[-–]\s?[0-9]{1,8})",
+            text,
+            re.IGNORECASE,
+        )
+        if fmi_match:
+            payload.folio = re.sub(r"\s", "", fmi_match.group(1)).replace("–", "-")
+
+        cad_match = re.search(r"(?:c[ée]dula\s+catastral|n[uú]mero\s+predial)[\s\.:#No]*([0-9][0-9\-\s]{14,40}[0-9])", text, re.IGNORECASE)
+        if cad_match:
+            payload.cadastral_id = re.sub(r"[\s-]", "", cad_match.group(1))
 
         # Plan name from document name or text
         name_cand = document_name.replace(".pdf", "").replace(".docx", "").strip()

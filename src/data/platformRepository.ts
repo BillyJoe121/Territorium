@@ -72,9 +72,26 @@ async function uploadResumable(file: File, path: string, onProgress: (percent: n
   })
 }
 
+const PROJECT_COLUMNS = 'id,name,client_name,municipality,department,power_line,is_archived,archived_at,created_at,updated_at,project_members!inner(role)'
+const MISSING_RESPONSIBLE_COLUMN_MESSAGE =
+  'Falta la columna "responsible_name" en la tabla "projects". Ejecuta la migración 20261004120000_project_responsible_name.sql en el editor SQL de Supabase.'
+
+/** Postgres (42703) o PostgREST (PGRST204) indican que la columna aún no existe. */
+export function isMissingResponsibleColumnError(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false
+  return (error.code === '42703' || error.code === 'PGRST204') && (error.message ?? '').includes('responsible_name')
+}
+
 export async function loadPlatformState(): Promise<PlatformState> {
   const client = requireSupabase()
-  const projectsResult = await client.from('projects').select('id,name,client_name,municipality,department,power_line,is_archived,archived_at,created_at,updated_at,project_members!inner(role)').order('created_at', { ascending: false })
+  let projectsResult: { data: any[] | null; error: { code?: string; message: string } | null } = await client
+    .from('projects')
+    .select(`${PROJECT_COLUMNS},responsible_name`)
+    .order('created_at', { ascending: false })
+  // Tolera bases de datos donde la migración del responsable aún no se ha aplicado.
+  if (isMissingResponsibleColumnError(projectsResult.error)) {
+    projectsResult = await client.from('projects').select(PROJECT_COLUMNS).order('created_at', { ascending: false })
+  }
   if (projectsResult.error) throw new Error(projectsResult.error.message)
   const projects: Project[] = (projectsResult.data ?? []).map((row: any) => ({
     id: row.id,
@@ -83,6 +100,7 @@ export async function loadPlatformState(): Promise<PlatformState> {
     municipality: row.municipality ?? 'Sin definir',
     department: row.department ?? 'Sin definir',
     powerLine: row.power_line ?? undefined,
+    responsibleName: row.responsible_name ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     isArchived: Boolean(row.is_archived),
@@ -281,8 +299,11 @@ export async function createRemoteProject(input: {
   clientName?: string
   municipality: string
   department: string
-  powerLine?: string
+  responsibleName: string
 }) {
+  if (!input.responsibleName?.trim()) {
+    throw new Error('Debes registrar el nombre del profesional responsable del proyecto.')
+  }
   const client = requireSupabase()
   const { data: { user }, error: authError } = await client.auth.getUser()
   if (authError || !user) {
@@ -297,10 +318,11 @@ export async function createRemoteProject(input: {
     created_by: user.id,
   }
   if (input.clientName?.trim()) payload.client_name = input.clientName.trim()
-  if (input.powerLine?.trim()) payload.power_line = input.powerLine.trim()
+  payload.responsible_name = input.responsibleName.trim()
 
   const { error } = await client.from('projects').insert(payload)
   if (error) {
+    if (isMissingResponsibleColumnError(error)) throw new Error(MISSING_RESPONSIBLE_COLUMN_MESSAGE)
     if (error.message.includes('row-level security') || error.code === '42501') {
       throw new Error(
         'Error de seguridad RLS en la tabla "projects". Asegúrate de ejecutar el script de actualización de políticas RLS en el editor SQL de Supabase.'
@@ -320,8 +342,8 @@ export async function createRemoteProject(input: {
       clientName: input.clientName,
       municipality: input.municipality,
       department: input.department,
-      powerLine: input.powerLine,
-      detail: `Expediente creado con metadatos completos para ${input.name}.`
+      responsibleName: input.responsibleName,
+      detail: `Proyecto creado por ${input.responsibleName} para ${input.name}.`
     }
   })
 
@@ -333,7 +355,7 @@ export async function updateRemoteProject(projectId: string, input: {
   clientName?: string
   municipality?: string
   department?: string
-  powerLine?: string
+  responsibleName?: string
 }) {
   const client = requireSupabase(); const { data: { user }, error: authError } = await client.auth.getUser()
   if (authError || !user) throw new Error('La sesión expiró.')
@@ -343,9 +365,13 @@ export async function updateRemoteProject(projectId: string, input: {
   if (input.clientName !== undefined) payload.client_name = input.clientName.trim() || null
   if (input.municipality !== undefined) payload.municipality = input.municipality.trim()
   if (input.department !== undefined) payload.department = input.department.trim()
-  if (input.powerLine !== undefined) payload.power_line = input.powerLine.trim() || null
+  if (input.responsibleName !== undefined) {
+    if (!input.responsibleName.trim()) throw new Error('El profesional responsable es obligatorio.')
+    payload.responsible_name = input.responsibleName.trim()
+  }
 
   const { error } = await client.from('projects').update(payload).eq('id', projectId)
+  if (isMissingResponsibleColumnError(error)) throw new Error(MISSING_RESPONSIBLE_COLUMN_MESSAGE)
   if (error) throw new Error(error.message)
 
   await client.from('audit_events').insert({
@@ -354,7 +380,7 @@ export async function updateRemoteProject(projectId: string, input: {
     action: 'project.metadata_updated',
     entity_type: 'project',
     entity_id: projectId,
-    metadata: { ...input, detail: 'Metadatos del expediente actualizados sin alterar extracciones históricas.' }
+    metadata: { ...input, detail: 'Metadatos del proyecto actualizados sin alterar extracciones históricas.' }
   })
 }
 

@@ -168,7 +168,7 @@ describe('expedienteResultAdapters (HU-V2-042)', () => {
     const adapted = adaptCanonicalPayloadToTable('consolidated', payload)
     expect(adapted.columns).toEqual(CONSOLIDATED_COLUMNS_CONTRACT)
     expect(adapted.rows.length).toBeGreaterThan(5)
-    expect(adapted.rows.find((r) => r.field === 'Matrícula inmobiliaria')?.value).toBe('050N-204581')
+    expect(adapted.rows.find((r) => r.field === 'Matrícula inmobiliaria (FMI)')?.value).toBe('050N-204581')
     expect(adapted.rows.find((r) => r.field === 'Área de servidumbre')?.value).toBe('4.580 m²')
 
     const backToPayload = adaptTableRowsToPayload('consolidated', adapted.rows)

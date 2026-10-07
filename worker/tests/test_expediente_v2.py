@@ -41,6 +41,24 @@ class ExpedienteV2WorkerTests(unittest.TestCase):
         result = asyncio.run(trigger_phase4_extraction_if_ready(MockGatewayNotReady(), execution, None))
         self.assertIsNone(result)
 
+    def test_trigger_phase4_extraction_skips_when_another_worker_claimed_it(self) -> None:
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from app.expediente_v2 import trigger_phase4_extraction_if_ready
+
+        gateway = MagicMock()
+        gateway.is_execution_ready_for_extraction = AsyncMock(return_value=True)
+        gateway.claim_extraction = AsyncMock(return_value=False)
+        gateway.save_v2_phase4_output = AsyncMock()
+        orchestrator = MagicMock()
+        orchestrator.process_group = AsyncMock()
+
+        execution = V2Execution("exec-1", "proj-1", "group-1", "negotiation", {}, {}, {})
+        result = asyncio.run(trigger_phase4_extraction_if_ready(gateway, execution, orchestrator))
+        self.assertIsNone(result)
+        orchestrator.process_group.assert_not_called()
+        gateway.save_v2_phase4_output.assert_not_called()
+
     def test_trigger_phase4_extraction_runs_and_saves_when_ready(self) -> None:
         import asyncio
         from unittest.mock import AsyncMock, MagicMock

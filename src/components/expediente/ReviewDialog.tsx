@@ -1,11 +1,23 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { AlertTriangle, Check, ClipboardCheck, Download, LoaderCircle, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ResultDataTable } from './ResultDataTable'
+import { AlertTriangle, Check, Download, LoaderCircle, RefreshCcw, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { cellAlertKey, ResultDataTable, type CellAlert } from './ResultDataTable'
+import { NegotiationLinkagePanel, PlanLinkagePanel } from './PlanLinkagePanel'
 import type { ValidationNotice } from '../../lib/expedienteResultAdapters'
+import { buildNegotiationLinkage, negotiationAlertCount, type LinkedPair } from '../../lib/negotiationLinking'
+import {
+  buildPlanTitleLinkage,
+  linkageAlertCount,
+  READONLY_ROW_FLAG,
+} from '../../lib/planTitleLinking'
 import type { DocumentGroup, DocumentGroupKey, EditableResultRow } from './types'
 
 const cloneRows = (rows: EditableResultRow[]) => rows.map((row) => ({ ...row }))
+
+export interface RowAlert extends CellAlert {
+  rowId: string
+  columnKey: string
+}
 
 export interface ReviewDialogProps {
   open: boolean
@@ -18,6 +30,21 @@ export interface ReviewDialogProps {
   groupKey?: DocumentGroupKey | 'consolidated'
   isApproved?: boolean
   validationNotices?: ValidationNotice[]
+  /**
+   * Planos: filas aprobadas del estudio de títulos. Con ellas la tabla resultante
+   * es la suma plano + estudio, vinculada por FMI y con alertas por casilla.
+   */
+  linkedTitleRows?: EditableResultRow[]
+  /** Negociación: parejas estudio ↔ plano aprobadas, para vincular cada fila por FMI. */
+  linkedPairs?: LinkedPair[]
+  /** Motivo externo que impide aprobar (p. ej. estudio de títulos no aprobado). */
+  approvalBlockedReason?: string | null
+  /** Recalcula columnas derivadas de una fila tras cada edición. */
+  deriveRow?: (row: EditableResultRow) => EditableResultRow
+  /** Contenido adicional sobre la tabla (p. ej. resumen de exclusiones). */
+  headerPanel?: ReactNode
+  /** Validaciones por casilla propias del modal; los errores bloquean la aprobación. */
+  validateRows?: (rows: EditableResultRow[]) => RowAlert[]
   onOpenChange: (open: boolean) => void
   onSave: (rows: EditableResultRow[]) => Promise<void> | void
   onApprove: (rows: EditableResultRow[]) => void
@@ -35,6 +62,13 @@ export function ReviewDialog({
   approveLabel,
   isApproved = false,
   validationNotices = [],
+  groupKey,
+  linkedTitleRows,
+  linkedPairs,
+  approvalBlockedReason = null,
+  deriveRow,
+  headerPanel,
+  validateRows,
   onOpenChange,
   onSave,
   onApprove,
@@ -47,6 +81,7 @@ export function ReviewDialog({
   const [conflictError, setConflictError] = useState<string | null>(null)
   const [showDiscard, setShowDiscard] = useState(false)
   const [lastSaved, setLastSaved] = useState<string | null>(null)
+  const [alertsAcknowledged, setAlertsAcknowledged] = useState(false)
   const saveTimeoutRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -57,7 +92,41 @@ export function ReviewDialog({
     setConflictError(null)
     setShowDiscard(false)
     setLastSaved(null)
+    setAlertsAcknowledged(false)
   }, [open, rows])
+
+  const planLinkage = useMemo(
+    () => (groupKey === 'plans' && linkedTitleRows ? buildPlanTitleLinkage(draft, linkedTitleRows) : null),
+    [draft, groupKey, linkedTitleRows],
+  )
+  const negotiationLinkage = useMemo(
+    () => (groupKey === 'negotiation' && linkedPairs ? buildNegotiationLinkage(draft, linkedPairs) : null),
+    [draft, groupKey, linkedPairs],
+  )
+  const linkage = planLinkage ?? negotiationLinkage
+  // El valor negociado faltante bloquea; las demás alertas se aprueban bajo confirmación.
+  const missingNegotiated = negotiationLinkage?.summary.missingValues ?? 0
+  const linkageAlerts = planLinkage
+    ? linkageAlertCount(planLinkage.summary)
+    : negotiationLinkage ? negotiationAlertCount(negotiationLinkage.summary) - missingNegotiated : 0
+  const rowAlerts = useMemo(() => (validateRows ? validateRows(draft) : []), [draft, validateRows])
+  const rowAlertErrors = rowAlerts.filter((alert) => alert.severity === 'error').length
+  const cellAlerts = useMemo(() => {
+    if (!linkage && !rowAlerts.length) return undefined
+    const map = new Map<string, CellAlert>()
+    const all = [...((linkage?.alerts ?? []) as RowAlert[]), ...rowAlerts]
+    for (const alert of all) {
+      const key = cellAlertKey(alert.rowId, alert.columnKey)
+      // Un error prevalece sobre una advertencia en la misma casilla.
+      if (!map.has(key) || alert.severity === 'error') map.set(key, alert)
+    }
+    return map
+  }, [linkage, rowAlerts])
+
+  const approvalBlocker = approvalBlockedReason
+    ?? (rowAlertErrors > 0 ? `Corrige las ${rowAlertErrors} casilla(s) marcadas en rojo antes de aprobar.` : null)
+    ?? (missingNegotiated > 0 ? `Falta el valor negociado válido (números y letras que coincidan) en ${missingNegotiated} fila(s).` : null)
+    ?? (linkageAlerts > 0 && !alertsAcknowledged ? 'Confirma que revisaste las alertas del cotejo antes de aprobar.' : null)
 
   const hasBlockingErrors = useMemo(
     () => validationNotices.some((notice) => notice.severity === 'error'),
@@ -91,19 +160,23 @@ export function ReviewDialog({
   isApprovedRef.current = isApproved
   const columnsRef = useRef(columns)
   columnsRef.current = columns
+  const deriveRef = useRef(deriveRow)
+  deriveRef.current = deriveRow
 
   const updateCell = useCallback((rowId: string, key: string, value: string) => {
     if (isApprovedRef.current) return
     const negotiationFields = ['firstOfferNumbers', 'firstOfferLetters', 'secondOfferNumbers', 'secondOfferLetters']
     const hasNegotiationComparison = columnsRef.current.some((column) => column.key === 'valuesMatch')
 
+    // Columnas comunes (datos del proyecto): editar una fila actualiza todas.
+    const broadcast = columnsRef.current.some((column) => column.key === key && column.broadcast)
+
     setDraft((currentDraft) => {
       const nextDraft = currentDraft.map((row) => {
-        if (row.id !== rowId) return row
-        const nextRow = { ...row, [key]: value }
-        return hasNegotiationComparison && negotiationFields.includes(key)
-          ? { ...nextRow, valuesMatch: 'Requiere revisión' }
-          : nextRow
+        if (row.id !== rowId && !broadcast) return row
+        let nextRow = { ...row, [key]: value }
+        if (hasNegotiationComparison && negotiationFields.includes(key)) nextRow = { ...nextRow, valuesMatch: 'Requiere revisión' }
+        return deriveRef.current ? deriveRef.current(nextRow) : nextRow
       })
 
       // Debounced autosave (HU-V2-043)
@@ -128,7 +201,7 @@ export function ReviewDialog({
   }
 
   const handleApprove = () => {
-    if (hasBlockingErrors || dirty || saving) return
+    if (hasBlockingErrors || dirty || saving || approvalBlocker) return
     onApprove(draft)
   }
 
@@ -150,11 +223,11 @@ export function ReviewDialog({
         <Dialog.Content className="expediente-review-modal" aria-describedby="expediente-review-description">
           <header className="expediente-modal-header">
             <div>
-              <p className="expediente-modal-kicker">
-                {isApproved ? 'Versión aprobada y congelada' : 'Revisión y persistencia de borrador'} · versión {version}
-              </p>
               <Dialog.Title>{title}</Dialog.Title>
-              <Dialog.Description id="expediente-review-description">{description}</Dialog.Description>
+              {/* Solo para lectores de pantalla: el espacio visible es para la tabla. */}
+              <Dialog.Description id="expediente-review-description" className="sr-only">
+                {description} Versión {version}{isApproved ? ', aprobada y en solo lectura.' : '.'}
+              </Dialog.Description>
             </div>
             <button type="button" className="expediente-modal-close" onClick={close} aria-label="Cerrar revisión"><X size={18} /></button>
           </header>
@@ -169,19 +242,21 @@ export function ReviewDialog({
                 <button type="button" onClick={handleReloadServer}>Recargar datos más recientes</button>
               </div>
             )}
-            <div className="expediente-review-context">
-              <ClipboardCheck size={16} />
-              <span>
-                {isApproved
-                  ? 'Esta versión ya fue aprobada formalmente. Los datos se encuentran en modo solo lectura para garantizar la integridad.'
-                  : 'Los cambios se guardan automáticamente como borrador persistente. Puedes editar valores antes de emitir la aprobación formal.'}
-              </span>
-            </div>
+            {planLinkage && <PlanLinkagePanel linkage={planLinkage} />}
+            {negotiationLinkage && <NegotiationLinkagePanel linkage={negotiationLinkage} />}
+            {headerPanel}
             <ResultDataTable
               caption={`Resultados de ${title}`}
-              columns={effectiveColumns}
-              rows={draft}
+              columns={linkage ? (isApproved ? linkage.columns.map((col) => ({ ...col, editable: false })) : linkage.columns) : effectiveColumns}
+              rows={linkage ? linkage.rows : draft}
               validationNotices={validationNotices}
+              cellAlerts={cellAlerts}
+              rowClassName={linkage ? (row) => {
+                if (row[READONLY_ROW_FLAG] === 'true') return 'linkage-row-orphan'
+                return (linkage.alerts as { rowId: string; kind: string }[]).some((alert) => alert.rowId === row.id && (alert.kind === 'plan_without_title' || alert.kind === 'negotiation_without_pair'))
+                  ? 'linkage-row-orphan'
+                  : undefined
+              } : undefined}
               onChange={updateCell}
             />
           </div>
@@ -206,11 +281,29 @@ export function ReviewDialog({
                 <span>Borrador sincronizado</span>
               )}
             </div>
+            {!isApproved && linkageAlerts > 0 && !approvalBlockedReason && (
+              <label className="linkage-acknowledge">
+                <input type="checkbox" checked={alertsAcknowledged} onChange={(event) => setAlertsAcknowledged(event.target.checked)} />
+                <span>Revisé las {linkageAlerts} alerta(s) del cotejo y apruebo bajo mi responsabilidad.</span>
+              </label>
+            )}
             <div className="expediente-modal-footer-actions">
               {onDownloadExcel && (
                 <button type="button" className="expediente-secondary-action" onClick={onDownloadExcel}>
                   <Download size={16} />
                   Descargar Excel
+                </button>
+              )}
+              {!isApproved && onReprocess && (
+                <button
+                  type="button"
+                  className="expediente-secondary-action"
+                  disabled={saving}
+                  onClick={onReprocess}
+                  title="Vuelve a extraer los datos desde los archivos cargados"
+                >
+                  <RefreshCcw size={16} />
+                  Reprocesar
                 </button>
               )}
               {!isApproved && (
@@ -227,8 +320,8 @@ export function ReviewDialog({
                 <button
                   type="button"
                   className="expediente-primary-action"
-                  disabled={hasBlockingErrors || dirty || saving}
-                  title={hasBlockingErrors ? 'Resuelve los errores antes de aprobar' : dirty ? 'Guarda los cambios antes de aprobar' : ''}
+                  disabled={hasBlockingErrors || dirty || saving || Boolean(approvalBlocker)}
+                  title={hasBlockingErrors ? 'Resuelve los errores antes de aprobar' : dirty ? 'Guarda los cambios antes de aprobar' : approvalBlocker ?? ''}
                   onClick={handleApprove}
                 >
                   <Check size={16} />

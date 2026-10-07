@@ -175,6 +175,7 @@ function normalizeConsolidatedRecord(raw: any): Record<string, string> {
     : ''
 
   const safeStr = (val: any, fallback = '—') => (val != null && String(val).trim() !== '' ? String(val) : fallback)
+  const negotiated = (val: any) => (val != null && !['', '—'].includes(String(val).trim()) ? String(val).trim() : '')
 
   return {
     property_name: safeStr(raw?.property_name || p.nombre, 'PREDIO SIN NOMBRE'),
@@ -208,8 +209,10 @@ function normalizeConsolidatedRecord(raw: any): Record<string, string> {
     voltage_level: safeStr(raw?.voltage_level || s.tipoProyecto, '230 kV'),
 
     property_code: safeStr(raw?.property_code || p.nombre),
-    first_offer: safeStr(raw?.first_offer || n.valorIndemnizacion, '0'),
-    first_offer_letters: safeStr(raw?.first_offer_letters || n.valorLetras, ''),
+    // El valor negociado (verificado números ↔ letras) prevalece sobre la primera oferta.
+    // Las plantillas anteponen "$ ", así que el valor se guarda sin el signo.
+    first_offer: safeStr(negotiated(raw?.negotiated_value) || raw?.first_offer || n.valorIndemnizacion, '0').replace(/^\$\s*/, ''),
+    first_offer_letters: safeStr(negotiated(raw?.negotiated_value_letters).toUpperCase() || raw?.first_offer_letters || n.valorLetras, ''),
   }
 }
 
@@ -764,6 +767,7 @@ function compileStandardPredialReportNodes(
       ['Segunda Oferta Formal', record.second_offer],
       ['Tercera Oferta Formal', record.third_offer],
       ['Coincidencia de Valores Números/Letras', record.values_match],
+      ['Valor Negociado', record.negotiated_value ? `${record.negotiated_value} (${record.negotiated_value_letters ?? ''})` : '—'],
     ]),
 
     // 5. Consideraciones Jurídicas (Sección Narrativa para IA / usuario)

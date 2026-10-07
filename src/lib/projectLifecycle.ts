@@ -118,6 +118,7 @@ export function duplicateProjectConfiguration(
     municipality: options.newMunicipality || sourceProject.municipality,
     department: options.newDepartment || sourceProject.department,
     powerLine: sourceProject.powerLine,
+    responsibleName: sourceProject.responsibleName,
     createdAt: now,
     updatedAt: now,
     isArchived: false,

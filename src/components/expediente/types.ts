@@ -31,6 +31,14 @@ export interface ResultColumn {
   editable?: boolean
   inputMode?: 'text' | 'numeric'
   width?: number
+  /** Ejemplo visible dentro de la casilla vacía. */
+  placeholder?: string
+  /** Casilla obligatoria (se marca con * en el encabezado). */
+  required?: boolean
+  /** Dato común a todas las filas: editarlo en una fila lo aplica a todas. */
+  broadcast?: boolean
+  /** Ayuda corta que se muestra al pasar sobre el encabezado. */
+  hint?: string
 }
 
 export interface DocumentGroup {
@@ -61,8 +69,8 @@ const file = (id: string, name: string, size: number): PrototypeFile => ({
 export const createDemoGroups = (): Record<DocumentGroupKey, DocumentGroup> => ({
   titles: {
     key: 'titles',
-    label: 'Títulos',
-    singularLabel: 'títulos',
+    label: 'Estudio de Títulos',
+    singularLabel: 'estudio de títulos',
     description: 'Estudios, certificados y antecedentes jurídicos del predio.',
     helper: 'Todos los documentos deben referirse a este mismo predio.',
     acceptedTypes: 'PDF o DOCX',
@@ -180,8 +188,8 @@ export const createDemoGroups = (): Record<DocumentGroupKey, DocumentGroup> => (
   },
   negotiation: {
     key: 'negotiation',
-    label: 'Negociación',
-    singularLabel: 'negociación',
+    label: 'Plantilla de negociación',
+    singularLabel: 'plantilla de negociación',
     description: 'Tabla vigente de ofertas y validaciones económicas.',
     helper: 'Se utiliza la versión vigente de la tabla para la consolidación.',
     acceptedTypes: 'XLSX',
@@ -211,18 +219,18 @@ export const createDemoGroups = (): Record<DocumentGroupKey, DocumentGroup> => (
 })
 
 export const createDemoConsolidatedRows = (): EditableResultRow[] => [
-  { id: 'consolidated-folio', field: 'Matrícula inmobiliaria', value: '050N-204581', source: 'Títulos' },
-  { id: 'consolidated-cadastral', field: 'Cédula catastral', value: '05001010400230012000', source: 'Títulos' },
-  { id: 'consolidated-owner', field: 'Propietario(s) actual(es)', value: 'María Elena Rojas y Carlos Rojas', source: 'Títulos' },
+  { id: 'consolidated-folio', field: 'Matrícula inmobiliaria', value: '050N-204581', source: 'Estudio de Títulos' },
+  { id: 'consolidated-cadastral', field: 'Cédula catastral', value: '05001010400230012000', source: 'Estudio de Títulos' },
+  { id: 'consolidated-owner', field: 'Propietario(s) actual(es)', value: 'María Elena Rojas y Carlos Rojas', source: 'Estudio de Títulos' },
   { id: 'consolidated-area', field: 'Área de servidumbre', value: '4.580 m²', source: 'Planos' },
   { id: 'consolidated-length', field: 'Longitud de servidumbre', value: '458 m', source: 'Planos' },
-  { id: 'consolidated-offer', field: 'Oferta vigente', value: '$ 232.800.000', source: 'Negociación' },
+  { id: 'consolidated-offer', field: 'Oferta vigente', value: '$ 232.800.000', source: 'Plantilla de negociación' },
 ]
 
 export const consolidatedColumns: ResultColumn[] = [
   { key: 'field', label: 'Campo', editable: false, width: 190 },
   { key: 'value', label: 'Valor consolidado', width: 350 },
-  { key: 'source', label: 'Origen', editable: false, width: 100 },
+  { key: 'source', label: 'Origen', editable: false, width: 180 },
 ]
 
 export const formatFileSize = (bytes: number): string => {

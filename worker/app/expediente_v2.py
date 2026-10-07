@@ -140,12 +140,18 @@ async def trigger_phase4_extraction_if_ready(
     if not is_ready:
         return None
 
+    message = "Insumos validados. Extrayendo información estructurada canónica..."
+    claim = getattr(gateway, "claim_extraction", None)
+    if not asyncio.iscoroutinefunction(claim):
+        claim = None
+    if claim is not None:
+        # Varios workers pueden ver la misma ejecución lista: solo el que la reclama extrae.
+        if not await claim(execution.id, message):
+            logger.info("Extracción %s ya reclamada por otro worker; se omite.", execution.id)
+            return None
     try:
-        await gateway.update_execution_stage(
-            execution.id,
-            "extracting",
-            "Insumos validados. Extrayendo información estructurada canónica...",
-        )
+        if claim is None:
+            await gateway.update_execution_stage(execution.id, "extracting", message)
 
         group_info = await gateway.get_v2_group_info(execution.group_id)
         group_key = group_info.get("group_key")

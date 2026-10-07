@@ -261,7 +261,10 @@ export interface Project {
   clientName?: string
   municipality: string
   department: string
+  /** Legado: ya no se captura en el formulario de proyecto. */
   powerLine?: string
+  /** Profesional/abogado que crea el proyecto y responde por él. */
+  responsibleName?: string
   createdAt: string
   updatedAt?: string
   isArchived?: boolean
@@ -719,3 +722,13 @@ export interface CapacityQuotaStatus {
   recommendation: string
 }
 
+
+/** Datos maestros capturados al crear o editar un proyecto. */
+export interface ProjectMetadataInput {
+  name: string
+  clientName: string
+  /** Texto libre; admite varios municipios separados por coma. */
+  municipality: string
+  department: string
+  responsibleName: string
+}

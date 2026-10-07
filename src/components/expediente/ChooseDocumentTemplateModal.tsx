@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { Check, Compass, FileCheck, FileSignature, FileText, LoaderCircle, Scale, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   OFFICIAL_FINAL_DOCUMENT_TEMPLATES,
   type ExpedienteDocumentTemplate,
@@ -9,9 +9,12 @@ import {
 export interface ChooseDocumentTemplateModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSelectTemplate: (template: ExpedienteDocumentTemplate) => void | Promise<void>
+  onSelectTemplate: (template: ExpedienteDocumentTemplate, predioId?: string) => void | Promise<void>
   initialTemplateId?: string
   isGenerating?: boolean
+  /** Predios del consolidado (una fila de CORRESPONDENCIA cada uno): el documento es por predio. */
+  predios?: { id: string; label: string }[]
+  initialPredioId?: string | null
 }
 
 export function ChooseDocumentTemplateModal({
@@ -20,13 +23,20 @@ export function ChooseDocumentTemplateModal({
   onSelectTemplate,
   initialTemplateId = 'tpl-escritura-publica',
   isGenerating = false,
+  predios,
+  initialPredioId,
 }: ChooseDocumentTemplateModalProps) {
   const [selectedId, setSelectedId] = useState<string>(initialTemplateId)
+  const [predioId, setPredioId] = useState<string>(initialPredioId ?? predios?.[0]?.id ?? '')
+
+  useEffect(() => {
+    if (open) setPredioId(initialPredioId ?? predios?.[0]?.id ?? '')
+  }, [open, initialPredioId, predios])
 
   const handleConfirm = async () => {
     const tpl = OFFICIAL_FINAL_DOCUMENT_TEMPLATES.find((t) => t.id === selectedId)
     if (tpl) {
-      await onSelectTemplate(tpl)
+      await onSelectTemplate(tpl, predios ? predioId : undefined)
     }
   }
 
@@ -64,6 +74,15 @@ export function ChooseDocumentTemplateModal({
           </header>
 
           <div className="template-picker-body">
+            {predios && (
+              <label className="template-predio-select">
+                <span>Predio</span>
+                <select value={predioId} onChange={(event) => setPredioId(event.target.value)} disabled={!predios.length}>
+                  {predios.length === 0 && <option value="">No hay predios consolidados</option>}
+                  {predios.map((predio) => <option key={predio.id} value={predio.id}>{predio.label}</option>)}
+                </select>
+              </label>
+            )}
             <div
               className="template-picker-grid"
               role="radiogroup"
@@ -139,7 +158,7 @@ export function ChooseDocumentTemplateModal({
               <button
                 type="button"
                 className="expediente-primary-action"
-                disabled={isGenerating || !selectedId}
+                disabled={isGenerating || !selectedId || (predios !== undefined && !predioId)}
                 onClick={() => void handleConfirm()}
               >
                 {isGenerating ? <LoaderCircle size={16} className="spin" /> : <FileCheck size={16} />}

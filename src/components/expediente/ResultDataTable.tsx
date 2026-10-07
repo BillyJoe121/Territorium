@@ -19,8 +19,19 @@ import {
   ZoomOut,
 } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ValidationNotice } from '../../lib/expedienteResultAdapters'
+import { READONLY_ROW_FLAG } from '../../lib/planTitleLinking'
 import type { EditableResultRow, ResultColumn } from './types'
+
+/** Alerta sobre una casilla concreta (fila + columna). */
+export interface CellAlert {
+  severity: 'error' | 'warning'
+  kind: string
+  message: string
+}
+
+export const cellAlertKey = (rowId: string, columnKey: string) => `${rowId}::${columnKey}`
 
 const ZOOM_LEVELS = [60, 75, 85, 100, 115, 125, 150]
 const DEFAULT_ZOOM = 100
@@ -34,6 +45,7 @@ interface EditableTableCellInputProps {
   hasNotice: boolean
   noticeSeverity?: 'error' | 'warning'
   noticeMessage?: string
+  placeholder?: string
   onCommit: (rowId: string, columnKey: string, value: string) => void
 }
 
@@ -46,6 +58,7 @@ function EditableTableCellInput({
   hasNotice,
   noticeSeverity,
   noticeMessage,
+  placeholder,
   onCommit,
 }: EditableTableCellInputProps) {
   const [localValue, setLocalValue] = useState(initialValue)
@@ -68,6 +81,8 @@ function EditableTableCellInput({
         value={localValue}
         inputMode={inputMode === 'numeric' ? 'decimal' : 'text'}
         aria-label={ariaLabel}
+        placeholder={placeholder}
+        title={hasNotice && noticeMessage ? noticeMessage : undefined}
         onChange={handleChange}
         onCompositionStart={() => {
           isComposingRef.current = true
@@ -96,6 +111,10 @@ interface ResultDataTableProps {
   rows: EditableResultRow[]
   validationNotices?: ValidationNotice[]
   isLoading?: boolean
+  /** Alertas por casilla, indexadas con cellAlertKey(rowId, columnKey). */
+  cellAlerts?: Map<string, CellAlert>
+  /** Clase CSS adicional por fila (p. ej. filas huérfanas). */
+  rowClassName?: (row: EditableResultRow) => string | undefined
   onChange: (rowId: string, key: string, value: string) => void
 }
 
@@ -105,11 +124,27 @@ export function ResultDataTable({
   rows,
   validationNotices = [],
   isLoading = false,
+  cellAlerts,
+  rowClassName,
   onChange,
 }: ResultDataTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [zoom, setZoom] = useState(DEFAULT_ZOOM)
+  // Vista flotante del texto completo de una casilla recortada.
+  const [preview, setPreview] = useState<{ text: string; top: number; left: number; above: boolean } | null>(null)
+
+  const showPreview = useCallback((cell: HTMLElement) => {
+    const target = cell.querySelector<HTMLElement>('.result-table-input, .result-table-text')
+    if (!target || target === document.activeElement) return
+    const text = target instanceof HTMLInputElement ? target.value : target.textContent ?? ''
+    // Solo cuando el texto no cabe en la casilla.
+    if (!text.trim() || target.scrollWidth <= target.clientWidth + 1) return
+    const rect = cell.getBoundingClientRect()
+    const above = rect.bottom > window.innerHeight * 0.6
+    setPreview({ text, left: Math.max(8, Math.min(rect.left, window.innerWidth - 460)), top: above ? rect.top - 6 : rect.bottom + 6, above })
+  }, [])
+  const hidePreview = useCallback(() => setPreview(null), [])
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const onChangeRef = useRef(onChange)
@@ -145,7 +180,17 @@ export function ResultDataTable({
     scrollContainerRef.current?.scrollBy({ left: 320, behavior: 'smooth' })
   }
 
-  const tableMinWidth = definitions.reduce((total, definition) => total + (definition.width ?? 160), 0)
+  // Columnas con textos largos: se muestran ~60 caracteres antes del "…".
+  const LONG_TEXT_WIDTH = 440
+  const longColumns = useMemo(() => {
+    const set = new Set<string>()
+    for (const definition of definitions) {
+      if (rows.some((row) => String(row[definition.key] ?? '').length > 60)) set.add(definition.key)
+    }
+    return set
+  }, [definitions, rows])
+  const columnWidth = (key: string, width: number | undefined) => (longColumns.has(key) ? Math.max(width ?? 160, LONG_TEXT_WIDTH) : width ?? 160)
+  const tableMinWidth = definitions.reduce((total, definition) => total + columnWidth(definition.key, definition.width), 0)
 
   // Map notices by field key
   const noticeByField = useMemo(() => {
@@ -167,8 +212,9 @@ export function ResultDataTable({
           className="result-table-sort-btn"
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
           aria-label={`Ordenar por ${definition.label}`}
+          title={definition.hint}
         >
-          <span>{definition.label}</span>
+          <span>{definition.label}{definition.required && <span className="result-table-required" aria-hidden="true"> *</span>}</span>
           <ArrowUpDown size={13} className="result-table-sort-icon" />
           {fieldNotice && (
             <span
@@ -184,10 +230,24 @@ export function ResultDataTable({
       size: definition.width,
       cell: ({ getValue, row }) => {
         const value = String(getValue() ?? '')
-        if (definition.editable === false) {
-          return <span className="result-table-readonly">{value || '—'}</span>
+        const cellAlert = cellAlerts?.get(cellAlertKey(row.original.id, definition.key))
+        if (definition.editable === false || row.original[READONLY_ROW_FLAG] === 'true') {
+          return (
+            <span
+              className={`result-table-readonly${cellAlert ? ` has-alert ${cellAlert.severity} kind-${cellAlert.kind}` : ''}`}
+              title={cellAlert?.message}
+            >
+              {cellAlert && (
+                <span className={`cell-notice-indicator ${cellAlert.severity}`} aria-label={cellAlert.message}>
+                  {cellAlert.severity === 'error' ? <AlertCircle size={13} /> : <AlertTriangle size={13} />}
+                </span>
+              )}
+              <span className="result-table-text">{value || '—'}</span>
+            </span>
+          )
         }
 
+        const notice = cellAlert ?? fieldNotice
         return (
           <EditableTableCellInput
             initialValue={value}
@@ -195,15 +255,16 @@ export function ResultDataTable({
             columnKey={definition.key}
             inputMode={definition.inputMode}
             ariaLabel={`${definition.label}, fila ${row.index + 1}`}
-            hasNotice={fieldNotice !== undefined}
-            noticeSeverity={fieldNotice?.severity}
-            noticeMessage={fieldNotice?.message}
+            hasNotice={notice !== undefined}
+            noticeSeverity={notice?.severity}
+            noticeMessage={notice?.message}
+            placeholder={definition.placeholder}
             onCommit={handleCommit}
           />
         )
       },
     }
-  }), [definitions, noticeByField, handleCommit])
+  }), [definitions, noticeByField, handleCommit, cellAlerts])
 
   const table = useReactTable({
     data: rows,
@@ -316,7 +377,17 @@ export function ResultDataTable({
         </div>
       </div>
 
-      <div className="result-table-scroll" ref={scrollContainerRef} tabIndex={0} aria-label={caption}>
+      {preview && createPortal(
+        <div
+          className={`result-cell-preview${preview.above ? ' is-above' : ''}`}
+          style={{ left: preview.left, top: preview.top }}
+          role="tooltip"
+        >
+          {preview.text}
+        </div>,
+        document.body,
+      )}
+      <div className="result-table-scroll" ref={scrollContainerRef} onScroll={hidePreview} tabIndex={0} aria-label={caption}>
         <div
           className="result-table-zoom-container"
           style={{
@@ -329,7 +400,7 @@ export function ResultDataTable({
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
-                    <th key={header.id} style={{ minWidth: header.getSize() }} scope="col">
+                    <th key={header.id} style={{ minWidth: columnWidth(header.column.id, header.getSize()) }} scope="col">
                       {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                     </th>
                   ))}
@@ -351,9 +422,14 @@ export function ResultDataTable({
                 </tr>
               ) : (
                 table.getRowModel().rows.map((row) => (
-                  <tr key={row.id}>
+                  <tr key={row.id} className={rowClassName?.(row.original)}>
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id}>
+                      <td
+                        key={cell.id}
+                        onMouseEnter={(event) => showPreview(event.currentTarget)}
+                        onMouseLeave={hidePreview}
+                        onFocusCapture={hidePreview}
+                      >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}

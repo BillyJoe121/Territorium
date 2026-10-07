@@ -126,6 +126,11 @@ def compare_number_and_letters(
     if norm_expected == norm_actual:
         return True, "Coinciden números y letras"
 
+    # Redacción correcta con apócope ("veintiún mil", "un millón de pesos").
+    canonical = _normalize_spanish_text(amount_in_words(number))
+    if norm_actual in (canonical, _normalize_spanish_text(canonical.replace(" PESOS", "").replace(" DE", ""))):
+        return True, "Coinciden números y letras"
+
     # Also handle minor variants: e.g. "un millon" vs "un millon de", or "veinte y siete" vs "veintisiete"
     tokens_expected = set(norm_expected.split())
     tokens_actual = set(norm_actual.split())
@@ -142,3 +147,59 @@ def compare_number_and_letters(
         f"Discrepancia detectada: el número ${number:,.0f} equivale a "
         f"'{expected_words.strip()}', pero el texto indica '{letters.strip()}'."
     )
+
+
+_UNITS_AP = ["", "UN", "DOS", "TRES", "CUATRO", "CINCO", "SEIS", "SIETE", "OCHO", "NUEVE"]
+_TEENS = ["DIEZ", "ONCE", "DOCE", "TRECE", "CATORCE", "QUINCE", "DIECISÉIS", "DIECISIETE", "DIECIOCHO", "DIECINUEVE"]
+_TWENTIES = ["VEINTE", "VEINTIÚN", "VEINTIDÓS", "VEINTITRÉS", "VEINTICUATRO", "VEINTICINCO", "VEINTISÉIS", "VEINTISIETE", "VEINTIOCHO", "VEINTINUEVE"]
+_TENS = ["", "", "", "TREINTA", "CUARENTA", "CINCUENTA", "SESENTA", "SETENTA", "OCHENTA", "NOVENTA"]
+_HUNDREDS = ["", "CIENTO", "DOSCIENTOS", "TRESCIENTOS", "CUATROCIENTOS", "QUINIENTOS", "SEISCIENTOS", "SETECIENTOS", "OCHOCIENTOS", "NOVECIENTOS"]
+
+
+def _group_words(n: int) -> str:
+    """1..999 con apócope (UN, VEINTIÚN): siempre precede a MIL/MILLONES/PESOS."""
+    if n == 100:
+        return "CIEN"
+    hundreds, rest = divmod(n, 100)
+    parts = [_HUNDREDS[hundreds]] if hundreds else []
+    if 10 <= rest < 20:
+        parts.append(_TEENS[rest - 10])
+    elif 20 <= rest < 30:
+        parts.append(_TWENTIES[rest - 20])
+    elif rest >= 30:
+        tens, units = divmod(rest, 10)
+        parts.append(f"{_TENS[tens]} Y {_UNITS_AP[units]}" if units else _TENS[tens])
+    elif rest:
+        parts.append(_UNITS_AP[rest])
+    return " ".join(parts)
+
+
+def _thousands_words(n: int) -> str:
+    thousands, rest = divmod(n, 1000)
+    parts = []
+    if thousands == 1:
+        parts.append("MIL")
+    elif thousands:
+        parts.append(f"{_group_words(thousands)} MIL")
+    if rest:
+        parts.append(_group_words(rest))
+    return " ".join(parts)
+
+
+def amount_in_words(amount: int | float) -> str:
+    """Redacción canónica en mayúsculas con tildes: 2000000 -> 'DOS MILLONES DE PESOS'.
+
+    Usa las mismas reglas que la validación del valor negociado en la aplicación.
+    """
+    value = int(round(amount))
+    if value <= 0:
+        return "CERO PESOS"
+    millions, rest = divmod(value, 1_000_000)
+    parts = []
+    if millions:
+        parts.append("UN MILLÓN" if millions == 1 else f"{_thousands_words(millions)} MILLONES")
+    if rest:
+        parts.append(_thousands_words(rest))
+    currency = "PESO" if value == 1 else "PESOS"
+    connector = "DE " if rest == 0 else ""
+    return f"{' '.join(parts)} {connector}{currency}"

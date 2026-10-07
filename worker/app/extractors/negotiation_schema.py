@@ -23,3 +23,7 @@ class NegotiationExtractionPayload(BaseModel):
     values_match: str = Field(default="Sí, coinciden", description="'Sí, coinciden' o descripción de discrepancia")
     discrepancies: list[str] = Field(default_factory=list, description="Lista detallada de discrepancias detectadas")
     cell_references: dict[str, str] = Field(default_factory=dict, description="Coordenadas de celda para auditoría (ej. Sheet1!C4)")
+    negotiations: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Una fila por predio de la plantilla (carpeta, FMI, cédula, ofertas). Se vincula por FMI con estudio y plano.",
+    )

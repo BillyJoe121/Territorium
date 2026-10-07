@@ -1238,6 +1238,14 @@ nav[aria-label="Migas de pan"] button:disabled {
   display: block;
 }
 
+.form-hint {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+}
+
 .form-field input {
   height: 35px;
   padding: 6px 12px;

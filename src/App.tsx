@@ -69,6 +69,7 @@ import type {
   SourceDocument,
   UploadProgress,
   VisualDensity,
+  ProjectMetadataInput,
 } from './types'
 
 export type Screen =
@@ -105,7 +106,7 @@ const navGroups: NavGroup[] = [
     title: 'Módulos',
     items: [
       { id: 'comparador', label: 'Comparador Documental', icon: Scale },
-      { id: 'expedientes', label: 'Expedientes Prediales', icon: FolderKanban },
+      { id: 'expedientes', label: 'Proyectos', icon: FolderKanban },
       { id: 'telemetria', label: 'Telemetría de IA', icon: Activity },
     ],
   },
@@ -126,7 +127,7 @@ const screenRequiresProject = (screen: Screen) => projectScopedScreens.includes(
 
 const screenLabels: Record<Screen, { title: string; eyebrow: string }> = {
   comparador: { title: 'Comparador Documental', eyebrow: 'COTEJO DE ORIGINALES' },
-  expedientes: { title: 'Expedientes Prediales', eyebrow: 'INVENTARIO DE PROYECTOS' },
+  expedientes: { title: 'Proyectos', eyebrow: 'INVENTARIO DE PROYECTOS' },
   proyecto_detalle: { title: 'Ficha del Proyecto', eyebrow: 'DETALLE Y ETAPAS OPERATIVAS' },
   telemetria: { title: 'Telemetría de IA', eyebrow: 'OBSERVABILIDAD Y COSTOS EN TIEMPO REAL' },
   carga: { title: 'Ingesta y Manifiesto', eyebrow: 'RECEPCIÓN DOCUMENTAL' },
@@ -142,7 +143,7 @@ const screenLabels: Record<Screen, { title: string; eyebrow: string }> = {
 
 const navShortLabels: Partial<Record<Screen, string>> = {
   comparador: 'Comparador',
-  expedientes: 'Expedientes',
+  expedientes: 'Proyectos',
   telemetria: 'Telemetría',
 }
 
@@ -271,7 +272,7 @@ function App() {
       if (legacyReplacedScreens.includes(targetScreen)) {
         setScreen('proyecto_detalle')
         window.location.hash = '#/app/proyecto_detalle'
-        toast('La navegación se unificó en la Ficha del Expediente (un predio, una gestión).')
+        toast('La navegación se unificó en la Ficha del Proyecto (un predio, una gestión).')
         return
       }
       if (validScreens.includes(targetScreen)) {
@@ -293,7 +294,7 @@ function App() {
     }
   }, [screen])
 
-  // HU-V2-053: Redirección de pantallas obsoletas a la Ficha del Expediente unificada
+  // HU-V2-053: Redirección de pantallas obsoletas a la Ficha del Proyecto unificada
   useEffect(() => {
     const legacyReplacedScreens: Screen[] = [
       'monitor',
@@ -331,13 +332,13 @@ function App() {
     }
   }
 
-  // Las rutas operativas trabajan sobre un expediente concreto. Si se abre una
+  // Las rutas operativas trabajan sobre un proyecto concreto. Si se abre una
   // URL profunda sin contexto, llevamos al usuario al selector en lugar de
   // renderizar una pantalla vacía o una vista con datos ambiguos.
   useEffect(() => {
     if (screenRequiresProject(screen) && !activeProject) {
       setScreen('expedientes')
-      toast('Selecciona un expediente para continuar.')
+      toast('Selecciona un proyecto para continuar.')
     }
   }, [activeProject, screen])
 
@@ -355,13 +356,7 @@ function App() {
   useEffect(() => { const onOnline = () => { setOnline(true); if (remote && user) void refresh(true) }; const onOffline = () => setOnline(false); window.addEventListener('online', onOnline); window.addEventListener('offline', onOffline); return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline) } }, [refresh, remote, user])
   useEffect(() => { if (!remote || !user || !activeProjectId) return; return subscribeToProject(activeProjectId, () => void refresh(true)) }, [activeProjectId, refresh, remote, user])
 
-  async function handleCreateProject(input: {
-    name: string
-    clientName: string
-    municipality: string
-    department: string
-    powerLine: string
-  }) {
+  async function handleCreateProject(input: ProjectMetadataInput) {
     if (remote) {
       setBusyAction('create-project')
       try {
@@ -369,9 +364,9 @@ function App() {
         await refresh(true)
         setActiveProjectId(id)
         setScreen('proyecto_detalle')
-        toast('Expediente creado con éxito. Abriendo la Ficha del Predio.')
+        toast('Proyecto creado con éxito. Abriendo la ficha del proyecto.')
       } catch (caught) {
-        setError(caught instanceof Error ? caught.message : 'No fue posible crear el expediente.')
+        setError(caught instanceof Error ? caught.message : 'No fue posible crear el proyecto.')
       } finally {
         setBusyAction(null)
       }
@@ -383,27 +378,21 @@ function App() {
       clientName: input.clientName || undefined,
       municipality: input.municipality,
       department: input.department,
-      powerLine: input.powerLine || undefined,
+      responsibleName: input.responsibleName,
       createdAt: date(),
       isArchived: false,
     }
     update({
       ...state,
       projects: [...state.projects, project],
-      audit: [...state.audit, audit(project.id, 'Expediente creado', `Se creó el expediente ${input.name} con metadatos completos.`)]
+      audit: [...state.audit, audit(project.id, 'Proyecto creado', `Se creó el proyecto ${input.name} con metadatos completos.`)]
     })
     setActiveProjectId(project.id)
     setScreen('proyecto_detalle')
-    toast('Expediente creado con éxito. Abriendo la Ficha del Predio.')
+    toast('Proyecto creado con éxito. Abriendo la ficha del proyecto.')
   }
 
-  async function handleUpdateProjectMetadata(projectId: string, input: {
-    name: string
-    clientName: string
-    municipality: string
-    department: string
-    powerLine: string
-  }) {
+  async function handleUpdateProjectMetadata(projectId: string, input: ProjectMetadataInput) {
     setBusyAction(`edit:${projectId}`)
     try {
       if (remote) {
@@ -420,15 +409,15 @@ function App() {
                   clientName: input.clientName || undefined,
                   municipality: input.municipality,
                   department: input.department,
-                  powerLine: input.powerLine || undefined,
+                  responsibleName: input.responsibleName,
                   updatedAt: date(),
                 }
               : p
           ),
-          audit: [...state.audit, audit(projectId, 'Metadatos actualizados', `Se actualizaron metadatos del expediente ${input.name} sin alterar extracciones.`)]
+          audit: [...state.audit, audit(projectId, 'Metadatos actualizados', `Se actualizaron metadatos del proyecto ${input.name} sin alterar extracciones.`)]
         })
       }
-      toast('Metadatos del expediente actualizados correctamente.')
+      toast('Metadatos del proyecto actualizados correctamente.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible actualizar los metadatos.')
     } finally {
@@ -457,13 +446,13 @@ function App() {
             ...state.audit,
             audit(
               projectId,
-              isArchived ? 'Expediente archivado' : 'Expediente restaurado',
-              isArchived ? `Se archivó el expediente ${project.name} de forma recuperable.` : `Se restauró el expediente ${project.name} a estado activo.`
+              isArchived ? 'Proyecto archivado' : 'Proyecto restaurado',
+              isArchived ? `Se archivó el proyecto ${project.name} de forma recuperable.` : `Se restauró el proyecto ${project.name} a estado activo.`
             )
           ]
         })
       }
-      toast(isArchived ? 'Expediente archivado de forma recuperable.' : 'Expediente restaurado con éxito.')
+      toast(isArchived ? 'Proyecto archivado de forma recuperable.' : 'Proyecto restaurado con éxito.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible cambiar el estado de archivado.')
     } finally {
@@ -873,7 +862,7 @@ function App() {
                   clientName: 'Territorium',
                   municipality: 'General',
                   department: 'Cundinamarca',
-                  powerLine: 'Comparador',
+                  responsibleName: user?.email ?? 'Equipo Territorium',
                 })}
               >
                 Habilitar comparador
@@ -1056,9 +1045,9 @@ function App() {
         <div className="section-title">
           <div>
             <p className="eyebrow">RECUPERACIÓN Y SEGURIDAD</p>
-            <h2>Papelera de Expedientes</h2>
+            <h2>Papelera de Proyectos</h2>
             <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-              Expedientes archivados o retirados de la bandeja activa. Puede restaurarlos en cualquier momento.
+              Proyectos archivados o retirados de la bandeja activa. Puede restaurarlos en cualquier momento.
             </p>
           </div>
         </div>
@@ -1084,10 +1073,10 @@ function App() {
                     className="btn btn-secondary btn-sm"
                     onClick={async () => {
                       await handleToggleArchiveProject(p.id, false)
-                      toast(`Expediente ${p.name} restaurado con éxito.`)
+                      toast(`Proyecto ${p.name} restaurado con éxito.`)
                     }}
                   >
-                    <RotateCcw size={14} /> Restaurar Expediente
+                    <RotateCcw size={14} /> Restaurar Proyecto
                   </button>
                 </div>
               ))}
@@ -1095,7 +1084,7 @@ function App() {
         ) : (
           <NewEmptyState
             title="Papelera vacía"
-            description="No hay expedientes archivados o en espera de purga en este momento."
+            description="No hay proyectos archivados o en espera de purga en este momento."
             icon={<Trash2 size={24} />}
           />
         )}
@@ -1177,8 +1166,8 @@ function App() {
                     setScreen('expedientes')
                   }}
                   className="sidebar-context-clear-btn"
-                  title="Cerrar expediente activo y volver a la lista"
-                  aria-label="Cerrar expediente activo"
+                  title="Cerrar proyecto activo y volver a la lista"
+                  aria-label="Cerrar proyecto activo"
                 >
                   <X size={12} />
                 </button>
@@ -1208,10 +1197,10 @@ function App() {
                       key={id}
                       className={`nav-item ${isActive ? 'active' : ''} ${isUnavailable ? 'is-contextual' : ''}`}
                       aria-disabled={isUnavailable}
-                      title={isUnavailable ? 'Selecciona un expediente para abrir este módulo' : label}
+                      title={isUnavailable ? 'Selecciona un proyecto para abrir este módulo' : label}
                       onClick={() => {
                         if (isUnavailable) {
-                          toast('Selecciona un expediente para abrir este módulo.')
+                          toast('Selecciona un proyecto para abrir este módulo.')
                           setScreen('expedientes')
                           return
                         }
@@ -1288,5 +1277,5 @@ function App() {
   </SessionGuard>
 }
 
-function ProjectRequired({ onSelect, title = 'Selecciona un expediente para continuar' }: { onSelect: () => void; title?: string }) { return <div className="empty-page project-required"><FolderKanban size={34} /><h2>{title}</h2><p>La carga, revisión, exportación y gestión de participantes trabajan sobre el contexto de un expediente.</p><button className="button primary" onClick={onSelect}>Ir a expedientes</button></div> }
+function ProjectRequired({ onSelect, title = 'Selecciona un proyecto para continuar' }: { onSelect: () => void; title?: string }) { return <div className="empty-page project-required"><FolderKanban size={34} /><h2>{title}</h2><p>La carga, revisión, exportación y gestión de participantes trabajan sobre el contexto de un proyecto.</p><button className="button primary" onClick={onSelect}>Ir a proyectos</button></div> }
 export default App

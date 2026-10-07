@@ -527,6 +527,27 @@ class SupabaseGateway:
             raise RuntimeError("GROUP_NOT_FOUND")
         return rows[0]
 
+    async def claim_extraction(self, execution_id: str, stage_message: str, stale_after_seconds: int = 600) -> bool:
+        """Reclama la extracción de forma atómica: solo un worker la ejecuta.
+
+        La actualización es condicional (PostgREST): pasa a "extracting" únicamente si la ejecución
+        sigue abierta y nadie la está extrayendo, o si el reclamo anterior quedó abandonado.
+        """
+        now = datetime.now(UTC)
+        stale = (now - timedelta(seconds=stale_after_seconds)).isoformat()
+        response = await self._request(
+            "PATCH",
+            "/rest/v1/expediente_executions",
+            params={
+                "id": f"eq.{execution_id}",
+                "status": "not.in.(completed,review_ready,failed,cancelled)",
+                "or": f"(stage.neq.extracting,updated_at.lt.{stale})",
+            },
+            json={"stage": "extracting", "stage_message": stage_message, "updated_at": now.isoformat()},
+            headers={**self.headers, "Prefer": "return=representation"},
+        )
+        return bool(response.json())
+
     async def update_execution_stage(self, execution_id: str, stage: str, stage_message: str) -> None:
         await self._request(
             "PATCH",

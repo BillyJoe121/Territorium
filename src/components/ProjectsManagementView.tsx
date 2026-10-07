@@ -1,18 +1,27 @@
 import { FormEvent, useMemo, useState } from 'react'
-import { Archive, ArchiveRestore, Building2, Calendar, CheckCircle2, Edit3, Filter, FolderKanban, MapPin, Plus, Search, Shield, Zap } from 'lucide-react'
-import type { Project } from '../types'
+import { Archive, ArchiveRestore, Building2, Calendar, CheckCircle2, Edit3, FolderKanban, MapPin, Plus, Search, Shield, UserCheck } from 'lucide-react'
+import type { Project, ProjectMetadataInput } from '../types'
 
 interface ProjectsManagementViewProps {
   projects: Project[]
   activeId: string
   onSelect: (id: string) => void
-  onCreate: (input: { name: string; clientName: string; municipality: string; department: string; powerLine: string }) => Promise<void>
-  onUpdateMetadata: (projectId: string, input: { name: string; clientName: string; municipality: string; department: string; powerLine: string }) => Promise<void>
+  onCreate: (input: ProjectMetadataInput) => Promise<void>
+  onUpdateMetadata: (projectId: string, input: ProjectMetadataInput) => Promise<void>
   onToggleArchive: (projectId: string, isArchived: boolean) => Promise<void>
   busyAction: string | null
 }
 
 type FilterStatus = 'activos' | 'archivados' | 'todos'
+
+/** Normaliza la lista de municipios: "Pereira ,Dosquebradas" → "Pereira, Dosquebradas". */
+export function normalizeMunicipalities(raw: string): string {
+  return raw
+    .split(/[,;]/)
+    .map((item) => item.trim().replace(/\s+/g, ' '))
+    .filter(Boolean)
+    .join(', ')
+}
 
 export function ProjectsManagementView({
   projects,
@@ -32,14 +41,14 @@ export function ProjectsManagementView({
   const [newClient, setNewClient] = useState('')
   const [newMunicipality, setNewMunicipality] = useState('')
   const [newDepartment, setNewDepartment] = useState('')
-  const [newPowerLine, setNewPowerLine] = useState('')
+  const [newResponsible, setNewResponsible] = useState('')
 
   // Edit form state
   const [editName, setEditName] = useState('')
   const [editClient, setEditClient] = useState('')
   const [editMunicipality, setEditMunicipality] = useState('')
   const [editDepartment, setEditDepartment] = useState('')
-  const [editPowerLine, setEditPowerLine] = useState('')
+  const [editResponsible, setEditResponsible] = useState('')
 
   function openEditModal(project: Project, event: React.MouseEvent) {
     event.stopPropagation()
@@ -48,38 +57,38 @@ export function ProjectsManagementView({
     setEditClient(project.clientName ?? '')
     setEditMunicipality(project.municipality)
     setEditDepartment(project.department)
-    setEditPowerLine(project.powerLine ?? '')
+    setEditResponsible(project.responsibleName ?? '')
   }
 
   async function handleCreateSubmit(event: FormEvent) {
     event.preventDefault()
-    if (!newName.trim()) return
+    if (!newName.trim() || !newResponsible.trim()) return
 
     await onCreate({
       name: newName.trim(),
       clientName: newClient.trim(),
-      municipality: newMunicipality.trim() || 'Sin definir',
+      municipality: normalizeMunicipalities(newMunicipality) || 'Sin definir',
       department: newDepartment.trim() || 'Sin definir',
-      powerLine: newPowerLine.trim(),
+      responsibleName: newResponsible.trim().replace(/\s+/g, ' '),
     })
 
     setNewName('')
     setNewClient('')
     setNewMunicipality('')
     setNewDepartment('')
-    setNewPowerLine('')
+    setNewResponsible('')
   }
 
   async function handleEditSubmit(event: FormEvent) {
     event.preventDefault()
-    if (!editingProject || !editName.trim()) return
+    if (!editingProject || !editName.trim() || !editResponsible.trim()) return
 
     await onUpdateMetadata(editingProject.id, {
       name: editName.trim(),
       clientName: editClient.trim(),
-      municipality: editMunicipality.trim() || 'Sin definir',
+      municipality: normalizeMunicipalities(editMunicipality) || 'Sin definir',
       department: editDepartment.trim() || 'Sin definir',
-      powerLine: editPowerLine.trim(),
+      responsibleName: editResponsible.trim().replace(/\s+/g, ' '),
     })
 
     setEditingProject(null)
@@ -99,7 +108,7 @@ export function ProjectsManagementView({
         (p.clientName && p.clientName.toLowerCase().includes(term)) ||
         p.municipality.toLowerCase().includes(term) ||
         p.department.toLowerCase().includes(term) ||
-        (p.powerLine && p.powerLine.toLowerCase().includes(term))
+        (p.responsibleName && p.responsibleName.toLowerCase().includes(term))
       )
     })
   }, [projects, search, statusFilter])
@@ -109,7 +118,7 @@ export function ProjectsManagementView({
       <div className="projects-header-bar">
         <div className="projects-header-info">
           <div className="projects-header-title-wrap">
-            <h1 className="projects-header-kicker">Expedientes y ciclo de vida</h1>
+            <h1 className="projects-header-kicker">Proyectos y ciclo de vida</h1>
           </div>
         </div>
       </div>
@@ -122,7 +131,7 @@ export function ProjectsManagementView({
               <Search size={16} />
               <input
                 type="search"
-                placeholder="Buscar por nombre, cliente, línea o municipio…"
+                placeholder="Buscar por nombre, cliente, responsable o municipio…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 aria-label="Buscar proyectos"
@@ -160,10 +169,10 @@ export function ProjectsManagementView({
                 <FolderKanban size={24} />
                 <span>
                   {search
-                    ? `No se encontraron expedientes que coincidan con "${search}".`
+                    ? `No se encontraron proyectos que coincidan con "${search}".`
                     : statusFilter === 'archivados'
-                    ? 'No hay expedientes archivados en este momento.'
-                    : 'Aún no hay expedientes creados.'}
+                    ? 'No hay proyectos archivados en este momento.'
+                    : 'Aún no hay proyectos creados.'}
                 </span>
               </div>
             ) : (
@@ -191,7 +200,7 @@ export function ProjectsManagementView({
                             <button
                               type="button"
                               className="icon-button small"
-                              title="Editar metadatos del expediente (US-012)"
+                              title="Editar metadatos del proyecto"
                               onClick={(e) => openEditModal(project, e)}
                             >
                               <Edit3 size={15} />
@@ -201,7 +210,7 @@ export function ProjectsManagementView({
                             <button
                               type="button"
                               className="icon-button small"
-                              title={project.isArchived ? 'Restaurar expediente (US-015)' : 'Archivar expediente (US-015)'}
+                              title={project.isArchived ? 'Restaurar proyecto' : 'Archivar proyecto'}
                               onClick={() => void onToggleArchive(project.id, !project.isArchived)}
                               disabled={busyAction === `archive:${project.id}`}
                             >
@@ -224,10 +233,10 @@ export function ProjectsManagementView({
                           <MapPin size={13} />
                           <span>{project.municipality}, {project.department}</span>
                         </div>
-                        {project.powerLine && (
-                          <div className="meta-line line-highlight">
-                            <Zap size={13} />
-                            <span>{project.powerLine}</span>
+                        {project.responsibleName && (
+                          <div className="meta-line line-highlight" title="Profesional responsable">
+                            <UserCheck size={13} />
+                            <span>{project.responsibleName}</span>
                           </div>
                         )}
                         <div className="meta-line date-line">
@@ -238,11 +247,11 @@ export function ProjectsManagementView({
 
                       <div className="card-bottom">
                         {project.role && (
-                          <span className={`status ${project.role}`} title="Tu rol en este expediente">
+                          <span className={`status ${project.role}`} title="Tu rol en este proyecto">
                             <Shield size={11} /> {project.role}
                           </span>
                         )}
-                        <span className="open-hint">Abrir expediente →</span>
+                        <span className="open-hint">Abrir proyecto →</span>
                       </div>
                     </article>
                   )
@@ -255,8 +264,8 @@ export function ProjectsManagementView({
         {/* US-011: Formulario de Creación Completa */}
         <form className="card form-card" onSubmit={handleCreateSubmit}>
           <div className="form-card-header">
-            <p className="eyebrow">NUEVO EXPEDIENTE TERRITORIAL (US-011)</p>
-            <h3>Crear proyecto completo</h3>
+            <p className="eyebrow">NUEVO PROYECTO</p>
+            <h3>Crear proyecto</h3>
             <p className="form-sub">
               Registra los datos maestros del proyecto antes de cargar estudios de títulos o planos.
             </p>
@@ -264,7 +273,7 @@ export function ProjectsManagementView({
 
           <div className="form-field">
             <label>
-              <span>Nombre del proyecto / expediente *</span>
+              <span>Nombre del proyecto *</span>
               <input
                 required
                 name="name"
@@ -290,14 +299,17 @@ export function ProjectsManagementView({
           <div className="form-row">
             <div className="form-field">
               <label>
-                <span>Municipio *</span>
+                <span>Municipio(s) *</span>
                 <input
                   required
                   name="municipality"
-                  placeholder="Ej. Pereira"
+                  maxLength={400}
+                  placeholder="Ej. Pereira, Dosquebradas"
                   value={newMunicipality}
                   onChange={(e) => setNewMunicipality(e.target.value)}
+                  aria-describedby="new-municipality-hint"
                 />
+                <small id="new-municipality-hint" className="form-hint">Si el proyecto abarca varios, sepáralos con coma.</small>
               </label>
             </div>
             <div className="form-field">
@@ -316,20 +328,25 @@ export function ProjectsManagementView({
 
           <div className="form-field">
             <label>
-              <span>Línea de transmisión / Infraestructura</span>
+              <span>Profesional responsable *</span>
               <input
-                name="powerLine"
-                placeholder="Ej. Tramo torre 45 a subestación"
-                value={newPowerLine}
-                onChange={(e) => setNewPowerLine(e.target.value)}
+                required
+                name="responsibleName"
+                autoComplete="name"
+                maxLength={180}
+                placeholder="Ej. María Fernanda Gómez Ruiz"
+                value={newResponsible}
+                onChange={(e) => setNewResponsible(e.target.value)}
+                aria-describedby="new-responsible-hint"
               />
+              <small id="new-responsible-hint" className="form-hint">Nombre completo del abogado o profesional que crea el proyecto y responde por él.</small>
             </label>
           </div>
 
           <div className="form-actions">
-            <button className="button primary full-width" type="submit" disabled={busyAction === 'create-project' || !newName.trim()}>
+            <button className="button primary full-width" type="submit" disabled={busyAction === 'create-project' || !newName.trim() || !newResponsible.trim()}>
               <Plus size={17} />
-              {busyAction === 'create-project' ? 'Creando expediente…' : 'Crear y abrir expediente'}
+              {busyAction === 'create-project' ? 'Creando proyecto…' : 'Crear y abrir proyecto'}
             </button>
           </div>
         </form>
@@ -341,7 +358,7 @@ export function ProjectsManagementView({
           <div className="card modal-card">
             <div className="section-title">
               <div>
-                <p className="eyebrow">METADATOS DEL EXPEDIENTE (US-012)</p>
+                <p className="eyebrow">METADATOS DEL PROYECTO</p>
                 <h3 id="edit-project-title">Editar metadatos: {editingProject.name}</h3>
               </div>
               <button className="text-button" onClick={() => setEditingProject(null)}>✕</button>
@@ -374,10 +391,12 @@ export function ProjectsManagementView({
 
               <div className="form-row">
                 <label className="form-label">
-                  <span>Municipio</span>
+                  <span>Municipio(s)</span>
                   <input
                     type="text"
                     required
+                    maxLength={400}
+                    placeholder="Ej. Pereira, Dosquebradas"
                     value={editMunicipality}
                     onChange={(e) => setEditMunicipality(e.target.value)}
                   />
@@ -394,12 +413,14 @@ export function ProjectsManagementView({
               </div>
 
               <label className="form-label">
-                <span>Línea eléctrica / Proyecto</span>
+                <span>Profesional responsable *</span>
                 <input
                   type="text"
-                  placeholder="Ej. Línea 230 kV"
-                  value={editPowerLine}
-                  onChange={(e) => setEditPowerLine(e.target.value)}
+                  required
+                  maxLength={180}
+                  placeholder="Ej. María Fernanda Gómez Ruiz"
+                  value={editResponsible}
+                  onChange={(e) => setEditResponsible(e.target.value)}
                 />
               </label>
 
@@ -414,7 +435,7 @@ export function ProjectsManagementView({
                 <button
                   type="submit"
                   className="button primary"
-                  disabled={busyAction === `edit:${editingProject.id}` || !editName.trim()}
+                  disabled={busyAction === `edit:${editingProject.id}` || !editName.trim() || !editResponsible.trim()}
                 >
                   <CheckCircle2 size={16} />
                   Guardar cambios

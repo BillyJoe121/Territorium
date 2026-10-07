@@ -8,9 +8,13 @@ from app.pipeline_v2 import Phase4PipelineOrchestrator
 class Phase4EndToEndTests(unittest.TestCase):
     def setUp(self) -> None:
         self.orchestrator = Phase4PipelineOrchestrator()
-        self.base_real_dir = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..", "1. Proyecto extracción información")
-        )
+        workspace = os.path.join(os.path.dirname(__file__), "..", "..", "..")
+        # Los insumos reales pueden estar en la raíz o dentro de "Insumos entregados".
+        candidates = [
+            os.path.join(workspace, "Insumos entregados", "1. Proyecto extracción información"),
+            os.path.join(workspace, "1. Proyecto extracción información"),
+        ]
+        self.base_real_dir = os.path.abspath(next((c for c in candidates if os.path.isdir(c)), candidates[0]))
 
     def test_e2e_real_negotiation_xlsx(self) -> None:
         # Find RESULTADO_VALORES_SERVIDUMBRE.xlsx

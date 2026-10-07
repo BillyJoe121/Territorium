@@ -1,26 +1,23 @@
 import type { JSONContent } from '@tiptap/react'
 import {
-  AlertTriangle,
   ArrowLeft,
-  Check,
   CheckCircle2,
   ChevronRight,
-  CircleAlert,
   ClipboardCheck,
   Download,
   FileSpreadsheet,
   FileText,
   LayoutList,
+  Link2,
   LoaderCircle,
+  Lock,
   Map,
-  MapPin,
   PencilLine,
   Play,
   RefreshCcw,
   Sparkles,
   Trash2,
   Upload,
-  X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { toast } from 'sonner'
@@ -47,33 +44,34 @@ import {
   adaptTableRowsToPayload,
   type ValidationNotice,
 } from '../../lib/expedienteResultAdapters'
+import type { ConsolidatedMasterRecord } from '../../lib/expedienteConsolidation'
+import { downloadCorrespondenciaExcel } from '../../lib/consolidatedExcelGenerator'
 import {
-  consolidateApprovedGroups,
-  type ConsolidatedMasterRecord,
-} from '../../lib/expedienteConsolidation'
-import { downloadConsolidatedExcel } from '../../lib/consolidatedExcelGenerator'
-import {
-  compileConsolidatedToTiptap,
-  extractNarrativeSection,
-} from '../../lib/expedienteDocumentCompiler'
-import {
-  createAiRevisionProposal,
-  type AiRevisionProposal,
-} from '../../lib/expedienteAiRevisionGuard'
-import { downloadExpedientePdf } from '../../lib/expedientePdfGenerator'
+  correspondenciaRowToMasterRecord,
+  deriveCorrespondenciaRow,
+  validateCorrespondenciaRows,
+  type CorrespondenciaExclusion,
+} from '../../lib/correspondencia'
+import { LinkagePanel } from './LinkagePanel'
+import { compileConsolidatedToTiptap } from '../../lib/expedienteDocumentCompiler'
 import type { ExpedienteGroupKey } from '../../lib/expedienteWorkflow'
-import { AiRevisionDialog } from './AiRevisionDialog'
-import { AiRevisionProposalModal } from './AiRevisionProposalModal'
+import { buildPlanTitleLinkage, linkageSnapshot } from '../../lib/planTitleLinking'
+import {
+  buildNegotiationLinkage,
+  negotiationLinkageSnapshot,
+  pairsFromPlanRecords,
+  type LinkedPair,
+} from '../../lib/negotiationLinking'
+import { buildDocxBlob } from '../../lib/tiptapToDocx'
+import { downloadBlob, exportPagesToPdf } from '../../lib/docxPreviewPdf'
 import { ChooseDocumentTemplateModal } from './ChooseDocumentTemplateModal'
-import { DocumentPrototypeEditor } from './DocumentPrototypeEditor'
+import { DocumentDocxViewer, type DocumentDocxViewerHandle } from './DocumentDocxViewer'
 import { ReviewDialog } from './ReviewDialog'
 import {
   OFFICIAL_FINAL_DOCUMENT_TEMPLATES,
   type ExpedienteDocumentTemplate,
 } from '../../lib/expedienteDocumentTemplates'
-import { downloadPopulatedDocx } from '../../lib/expedienteDocxExport'
 import {
-  consolidatedColumns,
   formatFileSize,
   statusLabel,
   type DetailView,
@@ -96,8 +94,8 @@ const groupInfo: Record<
   }
 > = {
   titles: {
-    title: 'Títulos',
-    description: 'Estudios, certificados y antecedentes jurídicos del mismo predio.',
+    title: 'Estudio de Títulos',
+    description: 'Estudios de títulos de los predios. Se analiza y aprueba primero: su FMI es la llave de los planos.',
     accepted: 'PDF o DOCX',
     accept: '.pdf,.docx',
     multiple: true,
@@ -105,15 +103,15 @@ const groupInfo: Record<
   },
   plans: {
     title: 'Planos',
-    description: 'Planos y soportes técnicos asociados a la gestión predial.',
+    description: 'Un plano por estudio de títulos. Se vincula por FMI y se coteja contra el estudio aprobado.',
     accepted: 'PDF, PNG o JPG',
     accept: '.pdf,.png,.jpg,.jpeg',
     multiple: true,
     icon: Map,
   },
   negotiation: {
-    title: 'Negociación',
-    description: 'La tabla vigente de ofertas y validaciones económicas.',
+    title: 'Plantilla de negociación',
+    description: 'El Excel vigente de ofertas. Al aprobar se registra el valor negociado en números y letras.',
     accepted: 'XLSX',
     accept: '.xlsx',
     multiple: false,
@@ -179,7 +177,7 @@ const documentLabel = (status: PrototypeDocumentStatus): string =>
   ({
     blocked: 'Pendiente de consolidación',
     generating: 'Generando documento',
-    editable: 'Listo para editar',
+    editable: 'Listo para revisar',
     reprocessing: 'Aplicando cambios solicitados',
     final: 'Versión final lista',
     stale: 'Requiere regeneración',
@@ -204,6 +202,10 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
     rows: EditableResultRow[]
     columns: ResultColumn[]
     validationNotices: ValidationNotice[]
+    /** Planos: filas del estudio de títulos aprobado para vincular por FMI. */
+    titleRows?: EditableResultRow[]
+    /** Negociación: parejas estudio ↔ plano aprobadas. */
+    pairs?: LinkedPair[]
   } | null>(null)
 
   // Consolidation state
@@ -211,8 +213,11 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
   const [consolidationVersion, setConsolidationVersion] = useState<number>(1)
   const [consolidating, setConsolidating] = useState(false)
   const [consolidatedOpen, setConsolidatedOpen] = useState(false)
+  // Consolidado CORRESPONDENCIA: una fila por predio (estudio + plano + negociación).
   const [consolidatedRows, setConsolidatedRows] = useState<EditableResultRow[]>([])
-  const [consolidatedMasterRecord, setConsolidatedMasterRecord] = useState<ConsolidatedMasterRecord | null>(null)
+  const [consolidatedColumns, setConsolidatedColumns] = useState<ResultColumn[]>([])
+  const [consolidatedExcluded, setConsolidatedExcluded] = useState<CorrespondenciaExclusion[]>([])
+  const [documentPredioId, setDocumentPredioId] = useState<string | null>(null)
   const [consolidatedResultVersion, setConsolidatedResultVersion] = useState<ExpedienteResultVersionSnapshot | null>(null)
 
   // Document workspace state
@@ -223,29 +228,24 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
     updatedAt?: string
   }>({ status: 'blocked', version: 1, id: null })
   const [documentContent, setDocumentContent] = useState<JSONContent>(initialDocumentContent)
-  const [documentDirty, setDocumentDirty] = useState(false)
+  // El .docx generado es la fuente única: se visualiza, se descarga y de él sale el PDF.
+  const [documentDocx, setDocumentDocx] = useState<Blob | null>(null)
+  const viewerRef = useRef<DocumentDocxViewerHandle>(null)
   const [chooseTemplateOpen, setChooseTemplateOpen] = useState(false)
   const [activeTemplate, setActiveTemplate] = useState<ExpedienteDocumentTemplate>(
     OFFICIAL_FINAL_DOCUMENT_TEMPLATES[0],
   )
   const [isGeneratingDoc, setIsGeneratingDoc] = useState(false)
-  const [isExportingDocx, setIsExportingDocx] = useState(false)
   const [isExportingPdf, setIsExportingPdf] = useState(false)
 
-  // AI revision modal state
-  const [aiDialogOpen, setAiDialogOpen] = useState(false)
-  const [currentProposal, setCurrentProposal] = useState<AiRevisionProposal | null>(null)
-  const [proposalModalOpen, setProposalModalOpen] = useState(false)
-  const [lastUserComment, setLastUserComment] = useState('')
-  const [activeAiRevisionId, setActiveAiRevisionId] = useState<string | null>(null)
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null)
 
+  const responsibleName = project.responsibleName || project.clientName || 'Equipo jurídico territorial'
   const mounted = useRef(true)
   const repo: ExpedienteV2Repository = useMemo(() => createExpedienteV2Repository({ mode: 'supabase' }), [])
 
   const applyDocumentSnapshot = useCallback((document: ExpedienteDocumentVersionSnapshot) => {
     setDocumentContent(document.content as JSONContent)
-    setDocumentDirty(false)
     setDocumentState({
       id: document.id,
       status: document.finalizedAt ? 'final' : 'editable',
@@ -268,9 +268,10 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
         if (mounted.current && consSnap) {
           setConsolidatedResultVersion(consSnap)
           setConsolidationVersion(consSnap.versionNumber)
-          setConsolidatedMasterRecord(consSnap.payload as unknown as ConsolidatedMasterRecord)
           const adapted = adaptCanonicalPayloadToTable('consolidated', consSnap.payload)
           setConsolidatedRows(adapted.rows)
+          setConsolidatedColumns(adapted.columns)
+          setConsolidatedExcluded(Array.isArray(consSnap.payload.excluded) ? (consSnap.payload.excluded as CorrespondenciaExclusion[]) : [])
           if (consSnap.status === 'approved') {
             setConsolidationStatus('approved')
           } else {
@@ -283,7 +284,7 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
       const document = await repo.getCurrentDocument(project.id)
       if (mounted.current && document) applyDocumentSnapshot(document)
     } catch (caught) {
-      const msg = caught instanceof Error ? caught.message : 'No fue posible sincronizar el expediente.'
+      const msg = caught instanceof Error ? caught.message : 'No fue posible sincronizar el proyecto.'
       if (mounted.current) {
         setLoadError(msg)
         setError(msg)
@@ -319,59 +320,39 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
     return () => clearInterval(interval)
   }, [groups, refresh])
 
+
   useEffect(() => {
-    if (!activeAiRevisionId) return
+    if (!documentState.id) {
+      setDocumentDocx(null)
+      return
+    }
     let cancelled = false
-    const poll = async () => {
-      try {
-        const revision = await repo.getDocumentAiRevision(activeAiRevisionId)
-        if (cancelled || !revision) return
-        if (revision.status === 'completed' && revision.proposedContent) {
-          const proposal = createAiRevisionProposal(
-            {
-              id: revision.id,
-              expedienteId: project.id,
-              sourceVersion: documentState.version,
-              userComment: revision.userComment,
-              requestedBy: project.clientName || 'Analista Jurídico Territorium',
-              requestedAt: revision.createdAt,
-              scope: 'narrative_only',
-            },
-            documentContent,
-            extractNarrativeSection(revision.proposedContent as JSONContent),
-            consolidatedMasterRecord || undefined,
-          )
-          setLastUserComment(revision.userComment)
-          setCurrentProposal({ ...proposal, id: revision.id, requestId: revision.id, proposedContent: revision.proposedContent as JSONContent })
-          setProposalModalOpen(true)
-          setActiveAiRevisionId(null)
-          setDocumentState((previous) => ({ ...previous, status: 'editable' }))
-          return
-        }
-        if (revision.status === 'failed') {
-          setActiveAiRevisionId(null)
-          setDocumentState((previous) => ({ ...previous, status: 'editable' }))
-          setError('La revisión de IA no pudo completarse tras los reintentos. Inténtalo de nuevo.')
-        }
-      } catch (caught) {
-        if (!cancelled) setError(caught instanceof Error ? caught.message : 'No fue posible consultar la revisión de IA.')
-      }
-    }
-    void poll()
-    const timer = window.setInterval(() => void poll(), 2000)
-    return () => {
-      cancelled = true
-      window.clearInterval(timer)
-    }
-  }, [activeAiRevisionId, consolidatedMasterRecord, documentContent, documentState.version, project.clientName, project.id, repo])
+    buildDocxBlob(documentContent, { title: activeTemplate.name, author: responsibleName })
+      .then((blob) => { if (!cancelled) setDocumentDocx(blob) })
+      .catch(() => { if (!cancelled) setError('No fue posible preparar el documento para visualizarlo.') })
+    return () => { cancelled = true }
+  }, [activeTemplate.name, documentContent, documentState.id, responsibleName, setError])
 
   const approvedGroupsCount = useMemo(
     () => (groups ? orderedKeys.filter((key) => groups[key].status === 'approved').length : 0),
     [groups],
   )
   const allGroupsApproved = approvedGroupsCount === 3
+  const correspondenciaRows = useMemo(() => consolidatedRows.filter((row) => 'B' in row && 'BE' in row), [consolidatedRows])
+  const documentRow = correspondenciaRows.find((row) => row.id === documentPredioId) ?? correspondenciaRows[0]
+  // Registro del predio elegido para el documento final.
+  const consolidatedMasterRecord: ConsolidatedMasterRecord | null = useMemo(() => {
+    if (!documentRow) return null
+    const metadata = (consolidatedResultVersion?.payload?.metadata ?? {}) as Partial<ConsolidatedMasterRecord['metadata']>
+    return correspondenciaRowToMasterRecord(documentRow, metadata)
+  }, [consolidatedResultVersion, documentRow])
+  const predioOptions = useMemo(
+    () => correspondenciaRows.map((row) => ({ id: row.id, label: `${row.A || 'Sin carpeta'} · FMI ${row.B} · ${row.I || 'Predio'}` })),
+    [correspondenciaRows],
+  )
+
   const isConsolidatedReady = Boolean(
-    consolidatedMasterRecord ||
+    correspondenciaRows.length > 0 ||
     consolidationStatus === 'approved' ||
     consolidationStatus === 'review_ready',
   )
@@ -427,6 +408,14 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
   }
 
   async function enqueue(group: RemoteExpedienteGroup) {
+    if (group.key === 'plans' && groups?.titles.status !== 'approved') {
+      setError('Primero analiza y aprueba el Estudio de Títulos: los planos se vinculan con él por FMI.')
+      return
+    }
+    if (group.key === 'negotiation' && (groups?.titles.status !== 'approved' || groups?.plans.status !== 'approved')) {
+      setError('Primero aprueba el Estudio de Títulos y los Planos: cada fila de la negociación se vincula con su pareja por FMI.')
+      return
+    }
     setBusyGroup(group.key)
     try {
       await requestExpedienteAnalysis({
@@ -468,11 +457,26 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
 
       const payload = snap.payload
       const adapted = adaptCanonicalPayloadToTable(group.key, payload)
+      let titleRows: EditableResultRow[] | undefined
+      if (group.key === 'plans' && groups) {
+        const titlesVersion = groups.titles.status === 'approved' ? await repo.getApprovedResultVersion(groups.titles.id) : null
+        titleRows = titlesVersion?.payload ? adaptCanonicalPayloadToTable('titles', titlesVersion.payload).rows : []
+      }
+      let pairs: LinkedPair[] | undefined
+      if (group.key === 'negotiation' && groups) {
+        pairs = await loadApprovedPairs()
+        if (!Array.isArray(payload.negotiations)) {
+          // Resultado de un worker anterior: trae un solo predio y sin FMI, así que no puede vincularse.
+          setError('Este resultado de negociación lo generó una versión anterior del worker (sin las filas por predio ni su FMI). Usa "Reprocesar" para extraerlo de nuevo con la versión actual.')
+        }
+      }
       setGroupResult({
         version: snap,
         rows: adapted.rows,
         columns: adapted.columns,
         validationNotices: adapted.validationNotices,
+        titleRows,
+        pairs,
       })
       setActiveGroupKey(group.key)
     } catch (caught) {
@@ -480,6 +484,20 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
     } finally {
       setBusyGroup(null)
     }
+  }
+
+  /** Parejas estudio ↔ plano de la versión aprobada de planos (su tabla resultante congelada). */
+  async function loadApprovedPairs(): Promise<LinkedPair[]> {
+    if (!groups || groups.plans.status !== 'approved') return []
+    const plansVersion = await repo.getApprovedResultVersion(groups.plans.id)
+    const records = plansVersion?.payload?.linked_records
+    if (Array.isArray(records) && records.length) return pairsFromPlanRecords(records as EditableResultRow[])
+    // Aprobaciones anteriores al cotejo: se recalcula el vínculo con los estudios aprobados.
+    const titlesVersion = groups.titles.status === 'approved' ? await repo.getApprovedResultVersion(groups.titles.id) : null
+    if (!plansVersion?.payload || !titlesVersion?.payload) return []
+    const planRows = adaptCanonicalPayloadToTable('plans', plansVersion.payload).rows
+    const titleRows = adaptCanonicalPayloadToTable('titles', titlesVersion.payload).rows
+    return pairsFromPlanRecords(buildPlanTitleLinkage(planRows, titleRows).rows)
   }
 
   async function handleSaveGroupDraft(rows: EditableResultRow[]) {
@@ -507,7 +525,27 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
     if (!activeGroupKey || !groupResult) return
     const key = activeGroupKey
     const existing = groupResult.version
-    const updatedPayload = adaptTableRowsToPayload(key, rows, existing.payload)
+    let updatedPayload = adaptTableRowsToPayload(key, rows, existing.payload)
+    if (key === 'plans') {
+      if (groups?.titles.status !== 'approved') {
+        setError('El Estudio de Títulos debe estar aprobado para aprobar los planos.')
+        return
+      }
+      // Tabla resultante = planos + estudio de títulos, con sus alertas, congelada al aprobar.
+      updatedPayload = { ...updatedPayload, ...linkageSnapshot(buildPlanTitleLinkage(rows, groupResult.titleRows ?? [])) }
+    }
+    if (key === 'negotiation') {
+      if (groups?.plans.status !== 'approved') {
+        setError('Los Planos deben estar aprobados para aprobar la plantilla de negociación.')
+        return
+      }
+      const linkage = buildNegotiationLinkage(rows, groupResult.pairs ?? [])
+      if (linkage.summary.missingValues > 0) {
+        setError('Cada predio vinculado debe tener su valor negociado en números y letras que coincidan.')
+        return
+      }
+      updatedPayload = { ...updatedPayload, ...negotiationLinkageSnapshot(linkage) }
+    }
 
     if (existing.id) {
       await repo.saveDraft(existing.id, updatedPayload, 'Edición previa a aprobación', existing.editRevision)
@@ -538,22 +576,23 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
     if (!allGroupsApproved) return
     setConsolidating(true)
     try {
-      await repo.consolidate(project.id)
+      await repo.consolidate(project.id, undefined, { projectName: project.name })
       const consSnap = await repo.getConsolidatedResultVersion(project.id)
       if (consSnap) {
         setConsolidatedResultVersion(consSnap)
         setConsolidationVersion(consSnap.versionNumber)
         setConsolidationStatus('review_ready')
-        const master = consSnap.payload as unknown as ConsolidatedMasterRecord
-        setConsolidatedMasterRecord(master)
         const adapted = adaptCanonicalPayloadToTable('consolidated', consSnap.payload)
         setConsolidatedRows(adapted.rows)
+        setConsolidatedColumns(adapted.columns)
+        setConsolidatedExcluded(Array.isArray(consSnap.payload.excluded) ? (consSnap.payload.excluded as CorrespondenciaExclusion[]) : [])
         setConsolidatedOpen(true)
-        setNotice('Consolidación determinística ejecutada exitosamente.')
+        const count = Array.isArray(consSnap.payload.correspondencia) ? consSnap.payload.correspondencia.length : 0
+        setNotice(`Consolidado CORRESPONDENCIA generado: ${count} predio(s).`)
       }
       await refresh()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Error al consolidar el expediente.')
+      setError(caught instanceof Error ? caught.message : 'Error al consolidar el proyecto.')
     } finally {
       setConsolidating(false)
     }
@@ -586,42 +625,30 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
     setConsolidationStatus('approved')
     setConsolidatedOpen(false)
 
-    // Store approved consolidated record and transition to mandatory template selection
-    const master = updatedPayload as unknown as ConsolidatedMasterRecord
-    setConsolidatedMasterRecord(master)
+    // Consolidado aprobado: se pasa a escoger predio y plantilla del documento final.
+    setConsolidatedRows(rows)
     setNotice('Consolidado aprobado con éxito. Por favor, escoge el documento oficial que deseas generar.')
     setChooseTemplateOpen(true)
     await refresh()
   }
 
-  async function handleSelectDocumentTemplate(template: ExpedienteDocumentTemplate) {
+  async function handleSelectDocumentTemplate(template: ExpedienteDocumentTemplate, predioId?: string) {
     setIsGeneratingDoc(true)
     setError(null)
     try {
-      let master = consolidatedMasterRecord
-      if (!master && groups) {
-        const titlesVersion = await repo.getResultVersion(groups.titles.id)
-        const plansVersion = await repo.getResultVersion(groups.plans.id)
-        const negVersion = await repo.getResultVersion(groups.negotiation.id)
-        master = consolidateApprovedGroups({
-          titlesApprovedPayload: titlesVersion?.payload ?? {},
-          titlesVersionId: titlesVersion?.id ?? 'v1',
-          plansApprovedPayload: plansVersion?.payload ?? {},
-          plansVersionId: plansVersion?.id ?? 'v1',
-          negotiationApprovedPayload: negVersion?.payload ?? {},
-          negotiationVersionId: negVersion?.id ?? 'v1',
-        })
-        setConsolidatedMasterRecord(master)
-      }
-      if (!master) {
+      const row = correspondenciaRows.find((item) => item.id === predioId) ?? documentRow
+      if (!row) {
         throw new Error('Debes consolidar los resultados antes de generar el documento final.')
       }
+      setDocumentPredioId(row.id)
+      const metadata = (consolidatedResultVersion?.payload?.metadata ?? {}) as Partial<ConsolidatedMasterRecord['metadata']>
+      const master = correspondenciaRowToMasterRecord(row, metadata)
 
       const compiled = compileConsolidatedToTiptap(master, {
         template,
         projectCode: project.id,
         projectName: project.name,
-        compiledBy: project.clientName,
+        compiledBy: responsibleName,
       })
 
       const document = await repo.saveDocument(
@@ -642,151 +669,44 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
     }
   }
 
-  async function handleDownloadDocx() {
-    let master = consolidatedMasterRecord
-    if (!master && groups) {
-      const titlesVersion = await repo.getResultVersion(groups.titles.id)
-      const plansVersion = await repo.getResultVersion(groups.plans.id)
-      const negVersion = await repo.getResultVersion(groups.negotiation.id)
-      master = consolidateApprovedGroups({
-        titlesApprovedPayload: titlesVersion?.payload ?? {},
-        titlesVersionId: titlesVersion?.id ?? 'v1',
-        plansApprovedPayload: plansVersion?.payload ?? {},
-        plansVersionId: plansVersion?.id ?? 'v1',
-        negotiationApprovedPayload: negVersion?.payload ?? {},
-        negotiationVersionId: negVersion?.id ?? 'v1',
-      })
-      setConsolidatedMasterRecord(master)
-    }
-    if (!master) {
-      setError('Debes consolidar los datos antes de exportar el archivo Word.')
+  const documentBaseName = () => (activeTemplate.targetFilename || 'DOCUMENTO_CONSOLIDADO.docx').replace(/\.docx?$/i, '')
+
+  function handleDownloadDocx() {
+    if (!documentDocx) {
+      setError('El documento aún se está preparando. Intenta de nuevo en un momento.')
       return
     }
-    setIsExportingDocx(true)
-    try {
-      await downloadPopulatedDocx({
-        templateId: activeTemplate.id,
-        record: master,
-        fallbackFilename: `${activeTemplate.targetFilename.replace(/\.docx?$/i, '')}_CONSOLIDADO.docx`,
-      })
-      setNotice(`Archivo Word (${activeTemplate.targetFilename}) generado y descargado exitosamente.`)
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Error al exportar archivo Word.')
-    } finally {
-      setIsExportingDocx(false)
-    }
+    // Se descarga exactamente el mismo archivo que se está visualizando.
+    downloadBlob(documentDocx, `${documentBaseName()}.docx`)
+    setNotice(`Archivo Word descargado (v${documentState.version}), idéntico al visualizado.`)
   }
 
   async function handleDownloadExcel() {
     try {
-      let record = consolidatedMasterRecord
-      if (!record && groups) {
-        const titlesVersion = await repo.getResultVersion(groups.titles.id)
-        const plansVersion = await repo.getResultVersion(groups.plans.id)
-        const negVersion = await repo.getResultVersion(groups.negotiation.id)
-        record = consolidateApprovedGroups({
-          titlesApprovedPayload: titlesVersion?.payload ?? {},
-          titlesVersionId: titlesVersion?.id ?? 'v1',
-          plansApprovedPayload: plansVersion?.payload ?? {},
-          plansVersionId: plansVersion?.id ?? 'v1',
-          negotiationApprovedPayload: negVersion?.payload ?? {},
-          negotiationVersionId: negVersion?.id ?? 'v1',
-        })
-        setConsolidatedMasterRecord(record)
-      }
-      if (!record) throw new Error('No hay datos consolidados disponibles para exportar.')
-      await downloadConsolidatedExcel(record, {
-        projectId: project.id,
-        projectName: project.name,
-        versionNumber: consolidationVersion,
-      })
-      setNotice('Archivo Excel oficial (CORRESPONDENCIA) generado y descargado.')
+      if (!correspondenciaRows.length) throw new Error('No hay predios consolidados para exportar a CORRESPONDENCIA.')
+      const safeName = project.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '')
+      await downloadCorrespondenciaExcel(correspondenciaRows, `CORRESPONDENCIA_${safeName}_v${consolidationVersion}.xlsx`)
+      setNotice(`CORRESPONDENCIA descargado: ${correspondenciaRows.length} predio(s) con las 71 columnas de la plantilla.`)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Error al descargar archivo Excel.')
     }
   }
 
   async function handleDownloadPdf() {
+    const pages = viewerRef.current?.getPages() ?? []
+    if (!pages.length) {
+      setError('El documento aún se está visualizando. Intenta de nuevo en un momento.')
+      return
+    }
+    setIsExportingPdf(true)
     try {
-      if (!consolidatedMasterRecord) {
-        throw new Error('Debes aprobar el consolidado antes de generar el PDF oficial.')
-      }
-      setIsExportingPdf(true)
-      await downloadExpedientePdf(consolidatedMasterRecord, {
-        versionNumber: documentState.version,
-        expedienteId: project.id,
-        projectCode: project.id,
-        projectName: project.name,
-        generatedBy: project.clientName,
-        content: documentContent,
-        filename: activeTemplate.targetFilename
-          ? activeTemplate.targetFilename.replace(/\.docx$/i, '.pdf')
-          : undefined,
-      })
-      setNotice(`Archivo PDF oficial generado y descargado (v${documentState.version} con diseño idéntico al visualizador).`)
+      // El PDF se arma con las mismas hojas que muestra el visualizador.
+      await exportPagesToPdf(pages, `${documentBaseName()}.pdf`)
+      setNotice(`Archivo PDF descargado (v${documentState.version}), idéntico al visualizado.`)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Error al generar el PDF.')
     } finally {
       setIsExportingPdf(false)
-    }
-  }
-
-  async function handleRequestAiRevision(comment: string) {
-    setAiDialogOpen(false)
-    setLastUserComment(comment)
-    if (documentDirty || !documentState.id) {
-      setError('Guarda la versión actual antes de solicitar una revisión a IA.')
-      return
-    }
-    try {
-      const revisionId = await repo.queueDocumentAiRevision(documentState.id, comment)
-      setActiveAiRevisionId(revisionId)
-      setDocumentState((previous) => ({ ...previous, status: 'reprocessing' }))
-      setNotice('Solicitud enviada a IA. La propuesta aparecerá cuando el worker finalice el procesamiento.')
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No fue posible solicitar la revisión de IA.')
-    }
-  }
-
-  async function handleAcceptAiProposal(proposal: AiRevisionProposal) {
-    try {
-      const document = await repo.acceptDocumentAiRevision(proposal.requestId)
-      applyDocumentSnapshot(document)
-      setCurrentProposal(null)
-      setProposalModalOpen(false)
-      setActiveAiRevisionId(null)
-      setNotice(`Propuesta v${document.versionNumber} adoptada y guardada en Supabase.`)
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No fue posible adoptar la propuesta de IA.')
-    }
-  }
-
-  async function handleDiscardAiProposal() {
-    try {
-      if (currentProposal) await repo.discardDocumentAiRevision(currentProposal.requestId)
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No fue posible descartar la propuesta de IA.')
-      return
-    }
-    setCurrentProposal(null)
-    setProposalModalOpen(false)
-    setActiveAiRevisionId(null)
-    setDocumentState((previous) => ({ ...previous, status: 'editable' }))
-    setNotice('Propuesta de IA descartada. El documento actual no sufrió modificaciones.')
-  }
-
-  async function handleSaveDocument() {
-    try {
-      const document = await repo.saveDocument(
-        project.id,
-        documentContent as Record<string, unknown>,
-        documentState.id,
-        'Edición manual del documento',
-      )
-      applyDocumentSnapshot(document)
-      setNotice(`Versión ${document.versionNumber} del documento guardada en Supabase.`)
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No fue posible guardar el documento.')
     }
   }
 
@@ -799,34 +719,33 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
         status: 'final',
         updatedAt: new Intl.DateTimeFormat('es-CO', { timeStyle: 'medium' }).format(new Date()),
       }))
-      setDocumentDirty(false)
       setNotice('Documento marcado como versión final oficial. Listo para entrega y firma.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible finalizar el documento.')
     }
   }
 
-  if (loading && !groups) return <div className="expediente-remote-loading">Cargando expediente remoto…</div>
-  if (!groups) return <div className="expediente-remote-loading" role="alert">{loadError ?? 'No fue posible cargar el expediente.'}</div>
+  if (loading && !groups) return <div className="expediente-remote-loading">Cargando proyecto remoto…</div>
+  if (!groups) return <div className="expediente-remote-loading" role="alert">{loadError ?? 'No fue posible cargar el proyecto.'}</div>
 
   const activeGroup = activeGroupKey ? groups[activeGroupKey] : null
 
   return (
-    <section className="expediente-prototype expediente-remote-workspace" aria-label="Gestión de expediente predial">
+    <section className="expediente-prototype expediente-remote-workspace" aria-label="Gestión de proyecto predial">
       <div className="expediente-nav-tabs-bar">
         {onBack && (
           <button
             type="button"
             className="expediente-back-icon-btn"
             onClick={onBack}
-            aria-label="Volver a expedientes"
-            title="Volver a expedientes"
+            aria-label="Volver a proyectos"
+            title="Volver a proyectos"
           >
             <ArrowLeft size={16} />
           </button>
         )}
 
-        <div className="expediente-flow-tabs" role="tablist" aria-label="Etapas del expediente">
+        <div className="expediente-flow-tabs" role="tablist" aria-label="Etapas del proyecto">
           {[
             { id: 'summary' as const, label: 'Resumen', icon: LayoutList },
             { id: 'extraction' as const, label: 'Extracción', icon: Sparkles },
@@ -850,12 +769,12 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
 
       {/* 1. SUMMARY VIEW */}
       {view === 'summary' && (
-        <section className="expediente-summary" aria-label="Resumen del expediente">
+        <section className="expediente-summary" aria-label="Resumen del proyecto">
           <article className="expediente-identity-card">
             <div className="expediente-section-heading">
               <div>
-                <p>Identificación predial</p>
-                <h2>Un predio, una gestión</h2>
+                <p>Identificación del proyecto</p>
+                <h2>{project.name}</h2>
               </div>
               <button type="button" className="expediente-secondary-action" onClick={() => setView('extraction')}>
                 <ChevronRight size={16} />
@@ -864,26 +783,28 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
             </div>
             <dl className="expediente-identity-grid">
               <div>
-                <dt>Matrícula inmobiliaria</dt>
-                <dd>{consolidatedMasterRecord?.folio || 'Pendiente de extracción'}</dd>
+                <dt>Predios consolidados</dt>
+                <dd>{correspondenciaRows.length ? `${correspondenciaRows.length} predio(s)` : 'Pendiente de consolidación'}</dd>
               </div>
               <div>
-                <dt>Cédula catastral</dt>
-                <dd>{consolidatedMasterRecord?.cadastral_id || 'Pendiente de extracción'}</dd>
+                <dt>Matrículas (FMI)</dt>
+                <dd title={correspondenciaRows.map((row) => row.B).join(', ')}>
+                  {correspondenciaRows.length ? correspondenciaRows.slice(0, 3).map((row) => row.B).join(', ') + (correspondenciaRows.length > 3 ? '…' : '') : 'Pendiente de consolidación'}
+                </dd>
               </div>
               <div>
-                <dt>Predio</dt>
+                <dt>Proyecto</dt>
                 <dd>{project.name}</dd>
               </div>
               <div>
-                <dt>Ubicación</dt>
+                <dt>Municipio(s)</dt>
                 <dd>
                   {project.municipality}, {project.department}
                 </dd>
               </div>
               <div>
-                <dt>Responsable</dt>
-                <dd>{project.clientName || 'Equipo jurídico territorial'}</dd>
+                <dt>Profesional responsable</dt>
+                <dd>{responsibleName}</dd>
               </div>
               <div>
                 <dt>Estado general</dt>
@@ -901,7 +822,7 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
           <article className="expediente-overview-card">
             <div className="expediente-section-heading">
               <div>
-                <p>Avance del expediente</p>
+                <p>Avance del proyecto</p>
                 <h2>Fuentes y entregables</h2>
               </div>
               <span>{approvedGroupsCount}/3 aprobaciones</span>
@@ -960,7 +881,10 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
               const info = groupInfo[key]
               const Icon = info.icon
               const active = group.status === 'queued' || group.status === 'processing'
-              const canEnqueue = group.files.length > 0 && !active && group.status !== 'review_ready' && group.status !== 'approved'
+              // Los planos se corren solo después de aprobar el estudio de títulos (llave FMI).
+              const waitingForTitles = (key === 'plans' && groups.titles.status !== 'approved')
+                || (key === 'negotiation' && (groups.titles.status !== 'approved' || groups.plans.status !== 'approved'))
+              const canEnqueue = group.files.length > 0 && !active && !waitingForTitles && group.status !== 'review_ready' && group.status !== 'approved'
               const canReview = !active && (group.status === 'review_ready' || group.status === 'approved')
               const uploadProgress = progress?.groupKey === key ? progress.percent : null
               const remoteProgress = progressFor(group)
@@ -1065,6 +989,30 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
                     </div>
                   )}
 
+                  {waitingForTitles && (
+                    <p className="extraction-gate-note" role="note">
+                      <Lock size={14} aria-hidden="true" />
+                      <span>
+                        {key === 'negotiation'
+                          ? group.status === 'approved' || group.status === 'review_ready'
+                            ? 'El Estudio de Títulos o los Planos cambiaron. Apruébalos de nuevo y vuelve a revisar la negociación.'
+                            : 'Primero aprueba el Estudio de Títulos y los Planos. Luego cada fila de la negociación se vinculará con su predio por FMI.'
+                          : group.status === 'approved' || group.status === 'review_ready'
+                            ? 'El Estudio de Títulos cambió. Apruébalo de nuevo y vuelve a revisar el cotejo de planos.'
+                            : 'Primero analiza y aprueba el Estudio de Títulos. Luego podrás analizar los planos y vincularlos por FMI.'}
+                      </span>
+                    </p>
+                  )}
+                  {(key === 'plans' || key === 'negotiation') && !waitingForTitles && (
+                    <p className="extraction-gate-note is-ready">
+                      <Link2 size={14} aria-hidden="true" />
+                      <span>
+                        {key === 'plans'
+                          ? 'Estudio de Títulos aprobado: cada plano se vinculará por FMI y se cotejará con su estudio.'
+                          : 'Estudio y Planos aprobados: cada fila se vinculará con su predio por FMI y exigirá el valor negociado.'}
+                      </span>
+                    </p>
+                  )}
                   {group.status === 'error' && (
                     <p className="extraction-error-note">
                       {group.lastErrorMessage ?? 'No fue posible preparar este grupo. Revisa los archivos y reintenta.'}
@@ -1144,7 +1092,7 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
 
             <div className="extraction-consolidation-right">
               <StatusText status={consolidationStatus} label={consolidationLabel(consolidationStatus)} />
-              {(consolidatedMasterRecord || consolidationStatus === 'approved' || consolidationStatus === 'review_ready') && (
+              {(correspondenciaRows.length > 0 || consolidationStatus === 'approved' || consolidationStatus === 'review_ready') && (
                 <div className="extraction-consolidation-actions">
                   {consolidationStatus === 'approved' && (
                     <button
@@ -1178,7 +1126,7 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
             <div className="expediente-document-empty">
               <FileText size={28} />
               <div>
-                <h3>Aún no hay un documento para editar</h3>
+                <h3>Aún no hay un documento para visualizar</h3>
                 <p>Aprueba el consolidado de las 3 fuentes para habilitar la generación de la plantilla.</p>
                 <button type="button" className="expediente-primary-action" onClick={() => setView('extraction')}>
                   <ChevronRight size={16} />
@@ -1207,19 +1155,13 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
                 </div>
                 <div className="document-workspace-meta-right">
                   <StatusText status={documentState.status} label={documentLabel(documentState.status)} />
-                  <span className={documentDirty ? 'document-dirty' : 'document-saved'}>
-                    {documentDirty ? 'Cambios sin guardar' : 'Guardado'}
+                  <span className="document-saved" title="El documento no se edita en la aplicación">
+                    <Lock size={12} /> Solo lectura
                   </span>
                 </div>
               </div>
 
-              <DocumentPrototypeEditor
-                content={documentContent}
-                onChange={(next) => {
-                  setDocumentContent(next)
-                  setDocumentDirty(true)
-                }}
-              />
+              <DocumentDocxViewer ref={viewerRef} docx={documentDocx} ariaLabel={`Documento final: ${activeTemplate.name}`} />
 
               <div className="document-workspace-actions">
                 <div>
@@ -1232,29 +1174,12 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
                     <RefreshCcw size={16} />
                     <span>Cambiar plantilla</span>
                   </button>
-                  <button
-                    type="button"
-                    className="expediente-secondary-action"
-                    disabled={!documentDirty}
-                    onClick={handleSaveDocument}
-                  >
-                    <Check size={16} />
-                    Guardar versión
-                  </button>
-                  <button
-                    type="button"
-                    className="expediente-secondary-action"
-                    onClick={() => setAiDialogOpen(true)}
-                  >
-                    <Sparkles size={16} />
-                    Solicitar cambios a IA
-                  </button>
                 </div>
                 <div>
                   <button
                     type="button"
                     className="expediente-secondary-action"
-                    disabled={documentDirty}
+                    disabled={documentState.status === 'final'}
                     onClick={handleFinalizeDocument}
                   >
                     <CheckCircle2 size={16} />
@@ -1263,19 +1188,19 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
                   <button
                     type="button"
                     className="expediente-primary-action"
-                    disabled={!consolidatedMasterRecord || isExportingDocx}
-                    onClick={() => void handleDownloadDocx()}
-                    title="Descargar documento Word (.docx) idéntico a la plantilla oficial"
+                    disabled={!documentDocx}
+                    onClick={handleDownloadDocx}
+                    title="Descarga el mismo archivo Word (.docx) que se está visualizando"
                   >
-                    {isExportingDocx ? <LoaderCircle size={16} className="spin" /> : <FileText size={16} />}
+                    {!documentDocx ? <LoaderCircle size={16} className="spin" /> : <FileText size={16} />}
                     <span>Descargar Word (.docx)</span>
                   </button>
                   <button
                     type="button"
                     className="expediente-secondary-action"
-                    disabled={documentDirty || isExportingPdf}
+                    disabled={!documentDocx || isExportingPdf}
                     onClick={() => void handleDownloadPdf()}
-                    title="Descargar documento PDF idéntico al visualizado"
+                    title="Descarga un PDF con las mismas páginas que se están visualizando"
                   >
                     {isExportingPdf ? <LoaderCircle size={16} className="spin" /> : <Download size={16} />}
                     <span>Descargar PDF</span>
@@ -1308,6 +1233,15 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
           groupKey={activeGroup.key}
           isApproved={activeGroup.status === 'approved'}
           validationNotices={groupResult.validationNotices}
+          linkedTitleRows={activeGroup.key === 'plans' ? groupResult.titleRows ?? [] : undefined}
+          linkedPairs={activeGroup.key === 'negotiation' ? groupResult.pairs ?? [] : undefined}
+          approvalBlockedReason={
+            activeGroup.key === 'plans' && groups.titles.status !== 'approved'
+              ? 'El Estudio de Títulos debe estar aprobado antes de aprobar los planos.'
+              : activeGroup.key === 'negotiation' && groups.plans.status !== 'approved'
+                ? 'Los Planos deben estar aprobados antes de aprobar la negociación.'
+                : null
+          }
           approveLabel={`Aprobar ${groupInfo[activeGroup.key].title.toLowerCase()}`}
           onOpenChange={(open) => {
             if (!open) {
@@ -1329,6 +1263,25 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
         version={consolidationVersion}
         rows={consolidatedRows}
         columns={consolidatedColumns}
+        deriveRow={deriveCorrespondenciaRow}
+        validateRows={validateCorrespondenciaRows}
+        headerPanel={
+          <LinkagePanel
+            title="Consolidado CORRESPONDENCIA"
+            okLabel="Todos los predios con estudio, plano y negociación quedaron consolidados"
+            chips={[
+              { label: `${correspondenciaRows.length} predio(s) consolidados`, tone: 'exact' },
+              ...(consolidatedExcluded.length ? [{ label: `${consolidatedExcluded.length} excluido(s)`, tone: 'absent' as const }] : []),
+            ]}
+            findings={consolidatedExcluded.map((item) => ({
+              key: `${item.fmi}|${item.reason}`,
+              tone: 'absent' as const,
+              tag: 'Excluido',
+              rowLabel: item.fmi ? `${item.label} · ${item.fmi}` : item.label,
+              message: item.reason,
+            }))}
+          />
+        }
         groupKey="consolidated"
         isApproved={consolidationStatus === 'approved'}
         approveLabel="Aprobar consolidado"
@@ -1342,29 +1295,14 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
         onDownloadExcel={() => void handleDownloadExcel()}
       />
 
-      {/* AI Revision Dialog */}
-      <AiRevisionDialog
-        open={aiDialogOpen}
-        onOpenChange={setAiDialogOpen}
-        onConfirm={handleRequestAiRevision}
-      />
-
-      {/* AI Revision Proposal Modal (Guardian) */}
-      <AiRevisionProposalModal
-        open={proposalModalOpen}
-        proposal={currentProposal}
-        userComment={lastUserComment}
-        onOpenChange={setProposalModalOpen}
-        onAccept={handleAcceptAiProposal}
-        onDiscard={handleDiscardAiProposal}
-      />
-
       {/* Choose Document Template Modal */}
       <ChooseDocumentTemplateModal
         open={chooseTemplateOpen}
         onOpenChange={setChooseTemplateOpen}
         initialTemplateId={activeTemplate.id}
         isGenerating={isGeneratingDoc}
+        predios={predioOptions}
+        initialPredioId={documentRow?.id ?? null}
         onSelectTemplate={handleSelectDocumentTemplate}
       />
     </section>

@@ -131,6 +131,12 @@ class HierarchicalReducer:
                     )
                 )
 
+        def _blank(value: Any) -> bool:
+            return value is None or str(value).strip().lower() in ("", "no identificado", "no identificada", "—", "none")
+
+        def _clean(value: Any) -> Any:
+            return "" if _blank(value) else value
+
         # Group by source document to preserve per-document extractions
         doc_groups: dict[str, dict[str, Any]] = {}
         for res in partial_results:
@@ -138,36 +144,37 @@ class HierarchicalReducer:
             if source_doc not in doc_groups:
                 doc_groups[source_doc] = {
                     "source_document": source_doc,
-                    "folio": res.get("folio") or "",
-                    "cadastral_id": res.get("cadastral_id") or "",
+                    "folio": _clean(res.get("folio")),
+                    "cadastral_id": _clean(res.get("cadastral_id")),
                     "owners": list(res.get("owners") or []),
                     "document_number": "",
                     "document_type": "Cédula de ciudadanía",
-                    "antecedents_consultation_date": res.get("antecedents_consultation_date") or "",
-                    "property_name": res.get("property_name") or "",
-                    "municipality": res.get("municipality") or "",
-                    "department": res.get("department") or "",
-                    "village": res.get("village") or "",
-                    "area_numbers": res.get("area_numbers") or "",
-                    "area_letters": res.get("area_letters") or "",
-                    "registry_office": res.get("registry_office") or "",
-                    "acquisition_mode": res.get("acquisition_mode") or "",
-                    "boundaries": res.get("boundaries") or "",
-                    "boundaries_document": res.get("boundaries_document") or source_doc,
-                    "legal_conditions": res.get("legal_conditions") or "",
-                    "justice_ministry_case": res.get("justice_ministry_case") or "",
-                    "urt_case": res.get("urt_case") or "",
-                    "urt_territorial_direction": res.get("urt_territorial_direction") or "",
+                    "antecedents_consultation_date": _clean(res.get("antecedents_consultation_date")),
+                    "property_name": _clean(res.get("property_name")),
+                    "municipality": _clean(res.get("municipality")),
+                    "department": _clean(res.get("department")),
+                    "village": _clean(res.get("village")),
+                    "area_numbers": _clean(res.get("area_numbers")),
+                    "area_letters": _clean(res.get("area_letters")),
+                    "registry_office": _clean(res.get("registry_office")),
+                    "acquisition_mode": _clean(res.get("acquisition_mode")),
+                    "boundaries": _clean(res.get("boundaries")),
+                    "boundaries_document": _clean(res.get("boundaries_document")) or source_doc,
+                    "legal_conditions": _clean(res.get("legal_conditions")),
+                    "justice_ministry_case": _clean(res.get("justice_ministry_case")),
+                    "urt_case": _clean(res.get("urt_case")),
+                    "urt_territorial_direction": _clean(res.get("urt_territorial_direction")),
                 }
             else:
                 existing = doc_groups[source_doc]
                 for f in scalar_fields:
-                    if not existing.get(f) and res.get(f):
+                    # Un segmento posterior completa lo que otro dejó en "no identificado".
+                    if _blank(existing.get(f)) and not _blank(res.get(f)):
                         existing[f] = res[f]
                 for o in res.get("owners") or []:
                     if o not in existing["owners"]:
                         existing["owners"].append(o)
-                if not existing.get("acquisition_mode") and res.get("acquisition_mode"):
+                if _blank(existing.get("acquisition_mode")) and not _blank(res.get("acquisition_mode")):
                     existing["acquisition_mode"] = res["acquisition_mode"]
                 if res.get("boundaries") and len(str(res["boundaries"])) > len(str(existing.get("boundaries", ""))):
                     existing["boundaries"] = res["boundaries"]

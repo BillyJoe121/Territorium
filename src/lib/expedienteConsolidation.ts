@@ -1,3 +1,5 @@
+import { normalizeFmi } from './planTitleLinking'
+
 export interface ConsolidatedMasterRecord {
   // Identity and legal background from Titles
   folio: string
@@ -41,6 +43,9 @@ export interface ConsolidatedMasterRecord {
   third_offer_letters?: string
   values_match: string
   appraisal_value?: string
+  /** Valor negociado ingresado y verificado por el profesional (números y letras). */
+  negotiated_value?: string
+  negotiated_value_letters?: string
 
   // Traceability signature
   metadata: {
@@ -72,9 +77,10 @@ export function consolidateApprovedGroups({
   negotiationVersionId,
   userId,
 }: ConsolidationInputs): ConsolidatedMasterRecord {
-  // Extract primary plan if multiple plans are present
+  // El plano principal es el que comparte FMI con el estudio de títulos (vínculo 1 a 1).
   const plansList = Array.isArray(p.plans) && p.plans.length > 0 ? p.plans : [p]
-  const primaryPlan = plansList[0] ?? {}
+  const titleFmi = normalizeFmi(String(t.folio ?? ''))
+  const primaryPlan = (titleFmi && plansList.find((plan: any) => normalizeFmi(String(plan?.folio ?? '')) === titleFmi)) || plansList[0] || {}
 
   // Format owners string
   const ownersList = Array.isArray(t.owners) ? t.owners : []
@@ -104,13 +110,13 @@ export function consolidateApprovedGroups({
     urt_territorial_direction: String(t.urt_territorial_direction || t.urtTerritorialDirection || 'no identificado'),
 
     // 2. PLANOS
-    easement_area: String(p.total_easement_area_numbers || primaryPlan.easement_area_numbers || primaryPlan.easementAreaNumbers || '—'),
-    easement_area_letters: String(p.total_easement_area_letters || primaryPlan.easement_area_letters || primaryPlan.easementAreaLetters || '—'),
-    easement_length: String(p.total_easement_length_numbers || primaryPlan.easement_length_numbers || primaryPlan.easementLengthNumbers || '—'),
-    easement_length_letters: String(p.total_easement_length_letters || primaryPlan.easement_length_letters || primaryPlan.easementLengthLetters || '—'),
+    easement_area: String(primaryPlan.easement_area_numbers || primaryPlan.easementAreaNumbers || p.total_easement_area_numbers || '—'),
+    easement_area_letters: String(primaryPlan.easement_area_letters || primaryPlan.easementAreaLetters || p.total_easement_area_letters || '—'),
+    easement_length: String(primaryPlan.easement_length_numbers || primaryPlan.easementLengthNumbers || p.total_easement_length_numbers || '—'),
+    easement_length_letters: String(primaryPlan.easement_length_letters || primaryPlan.easementLengthLetters || p.total_easement_length_letters || '—'),
     easement_width: String(primaryPlan.easement_width_numbers || primaryPlan.easementWidthNumbers || '—'),
     easement_width_letters: String(primaryPlan.easement_width_letters || primaryPlan.easementWidthLetters || '—'),
-    infrastructure_count: String(p.total_infrastructure_count || primaryPlan.infrastructure_count_numbers || primaryPlan.infrastructureCountNumbers || '0'),
+    infrastructure_count: String(primaryPlan.infrastructure_count_numbers || primaryPlan.infrastructureCountNumbers || p.total_infrastructure_count || '0'),
     infrastructure_count_letters: String(primaryPlan.infrastructure_count_letters || primaryPlan.infrastructureCountLetters || 'cero'),
     plan_name: String(primaryPlan.plan_name || primaryPlan.planName || '—'),
     plan_scale: String(primaryPlan.plan_scale || primaryPlan.planScale || '—'),
@@ -126,6 +132,8 @@ export function consolidateApprovedGroups({
     third_offer_letters: String(n.third_offer_letters || n.thirdOfferLetters || '—'),
     values_match: String(n.values_match || n.valuesMatch || 'Sí, coinciden'),
     appraisal_value: String(n.appraisal_value || n.appraisalValue || '—'),
+    negotiated_value: String(n.negotiated_value_numbers || '—'),
+    negotiated_value_letters: String(n.negotiated_value_letters || '—'),
 
     metadata: {
       titles_result_version_id: titlesVersionId,

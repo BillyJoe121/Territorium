@@ -7,7 +7,7 @@ import {
   type ExpedienteGroupKey,
   type ExpedienteGroupStatus,
 } from '../lib/expedienteWorkflow'
-import { consolidateApprovedGroups } from '../lib/expedienteConsolidation'
+import { buildCorrespondencia, defaultProjectConstants, type ProjectConstants } from '../lib/correspondencia'
 
 export interface ExpedientePropertyIdentity {
   id: string
@@ -105,9 +105,11 @@ export interface ExpedienteV2Repository {
   ): Promise<number>
   approveResult(resultVersionId: string, note?: string): Promise<string>
   getResultVersion(groupId: string, versionNumber?: number): Promise<ExpedienteResultVersionSnapshot | null>
+  /** Última versión aprobada del grupo (ignora borradores posteriores). */
+  getApprovedResultVersion(groupId: string): Promise<ExpedienteResultVersionSnapshot | null>
   getConsolidatedResultVersion(projectId: string, versionNumber?: number): Promise<ExpedienteResultVersionSnapshot | null>
   reprocessGroup(groupId: string): Promise<string>
-  consolidate(projectId: string, userId?: string): Promise<string>
+  consolidate(projectId: string, userId?: string, options?: ConsolidateOptions): Promise<string>
   getCurrentDocument(projectId: string): Promise<ExpedienteDocumentVersionSnapshot | null>
   saveDocument(projectId: string, content: Record<string, unknown>, expectedCurrentDocumentId: string | null, changeSummary?: string): Promise<ExpedienteDocumentVersionSnapshot>
   queueDocumentAiRevision(documentVersionId: string, comment: string): Promise<string>
@@ -115,6 +117,47 @@ export interface ExpedienteV2Repository {
   acceptDocumentAiRevision(revisionId: string): Promise<ExpedienteDocumentVersionSnapshot>
   discardDocumentAiRevision(revisionId: string): Promise<void>
   finalizeDocument(documentVersionId: string): Promise<void>
+}
+
+export interface ConsolidateOptions {
+  /** Nombre del proyecto para la columna AL de CORRESPONDENCIA. */
+  projectName?: string
+}
+
+/**
+ * Payload del consolidado: una fila CORRESPONDENCIA por predio (estudio + plano + negociación),
+ * los predios excluidos con su motivo y los datos comunes del proyecto (AL–AX).
+ */
+export function buildConsolidatedPayload(input: {
+  titles: Record<string, unknown>
+  plans: Record<string, unknown>
+  negotiation: Record<string, unknown>
+  versionIds: { titles: string; plans: string; negotiation: string }
+  previous?: Record<string, unknown> | null
+  projectName?: string
+  userId?: string
+}): Record<string, unknown> {
+  // Los datos del proyecto editados en un consolidado anterior se conservan al reconsolidar.
+  const constants = { ...defaultProjectConstants(input.projectName), ...((input.previous?.constants as Partial<ProjectConstants>) ?? {}) }
+  const { rows, excluded } = buildCorrespondencia({
+    titlesPayload: input.titles,
+    plansPayload: input.plans,
+    negotiationPayload: input.negotiation,
+    constants,
+  })
+  return {
+    correspondencia: rows,
+    excluded,
+    constants,
+    metadata: {
+      titles_result_version_id: input.versionIds.titles,
+      plans_result_version_id: input.versionIds.plans,
+      negotiation_result_version_id: input.versionIds.negotiation,
+      consolidated_at: new Date().toISOString(),
+      consolidated_by: input.userId,
+      is_valid: true,
+    },
+  }
 }
 
 export type ExpedienteV2RepositoryMode = 'demo' | 'supabase'
@@ -232,6 +275,20 @@ export class SupabaseExpedienteV2Repository implements ExpedienteV2Repository {
     return String(data)
   }
 
+  async getApprovedResultVersion(groupId: string): Promise<ExpedienteResultVersionSnapshot | null> {
+    const client = requireSupabase()
+    const { data, error } = await client
+      .from('expediente_result_versions')
+      .select('version_number')
+      .eq('group_id', groupId)
+      .eq('status', 'approved')
+      .order('version_number', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    return data ? this.getResultVersion(groupId, data.version_number) : null
+  }
+
   async getResultVersion(groupId: string, versionNumber?: number): Promise<ExpedienteResultVersionSnapshot | null> {
     const client = requireSupabase()
     let query = client
@@ -319,7 +376,7 @@ export class SupabaseExpedienteV2Repository implements ExpedienteV2Repository {
     })
   }
 
-  async consolidate(projectId: string, userId?: string): Promise<string> {
+  async consolidate(projectId: string, userId?: string, options: ConsolidateOptions = {}): Promise<string> {
     const client = requireSupabase()
 
     // 1. Fetch the 3 approved versions
@@ -350,14 +407,15 @@ export class SupabaseExpedienteV2Repository implements ExpedienteV2Repository {
       throw new Error('Error al recuperar las versiones aprobadas para consolidación.')
     }
 
-    // 2. Consolidate deterministically
-    const masterRecord = consolidateApprovedGroups({
-      titlesApprovedPayload: tRes.data.payload ?? {},
-      titlesVersionId: tRes.data.id,
-      plansApprovedPayload: pRes.data.payload ?? {},
-      plansVersionId: pRes.data.id,
-      negotiationApprovedPayload: nRes.data.payload ?? {},
-      negotiationVersionId: nRes.data.id,
+    // 2. Consolidate deterministically: una fila CORRESPONDENCIA por predio
+    const previous = await this.getConsolidatedResultVersion(projectId).catch(() => null)
+    const masterRecord = buildConsolidatedPayload({
+      titles: tRes.data.payload ?? {},
+      plans: pRes.data.payload ?? {},
+      negotiation: nRes.data.payload ?? {},
+      versionIds: { titles: tRes.data.id, plans: pRes.data.id, negotiation: nRes.data.id },
+      previous: previous?.payload ?? null,
+      projectName: options.projectName,
       userId,
     })
 
@@ -582,6 +640,13 @@ export class DemoExpedienteV2Repository implements ExpedienteV2Repository {
     return null
   }
 
+  async getApprovedResultVersion(groupId: string): Promise<ExpedienteResultVersionSnapshot | null> {
+    for (const res of this.results.values()) {
+      if (res.groupId === groupId && res.status === 'approved') return structuredClone(res)
+    }
+    return null
+  }
+
   async getConsolidatedResultVersion(projectId: string): Promise<ExpedienteResultVersionSnapshot | null> {
     for (const res of this.results.values()) {
       if (res.projectId === projectId && res.scope === 'consolidated') return structuredClone(res)
@@ -593,8 +658,18 @@ export class DemoExpedienteV2Repository implements ExpedienteV2Repository {
     return `demo-reprocess-${groupId}`
   }
 
-  async consolidate(projectId: string): Promise<string> {
+  async consolidate(projectId: string, userId?: string, options: ConsolidateOptions = {}): Promise<string> {
     const consId = `demo-cons-${projectId}`
+    const approved = (key: string) => [...this.results.values()].find((res) => res.projectId === projectId && res.groupId?.includes(key) && res.status === 'approved')
+    const t = approved('titles')
+    const pl = approved('plans')
+    const n = approved('negotiation')
+    const payload = t && pl && n
+      ? buildConsolidatedPayload({
+          titles: t.payload, plans: pl.payload, negotiation: n.payload,
+          versionIds: { titles: t.id, plans: pl.id, negotiation: n.id }, projectName: options.projectName, userId,
+        })
+      : { consolidated: true }
     this.results.set(consId, {
       id: consId,
       projectId,
@@ -603,7 +678,7 @@ export class DemoExpedienteV2Repository implements ExpedienteV2Repository {
       versionNumber: 1,
       editRevision: 1,
       status: 'draft',
-      payload: { consolidated: true },
+      payload,
       changeSummary: 'Consolidación demo v1',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

@@ -27,6 +27,11 @@ class NegotiationCell(BaseModel):
 class NegotiationOfferRow(BaseModel):
     property_code: str | None = None
     property_coordinate: str | None = None
+    # Llave para vincular la fila con su estudio de títulos y su plano.
+    fmi: str | None = None
+    cadastral_id: str | None = None
+    sheet_name: str | None = None
+    row_number: int | None = None
 
     first_offer_number: float | None = None
     first_offer_number_cell: str | None = None
@@ -86,7 +91,15 @@ def _is_property_code_header(norm: str) -> bool:
     return False
 
 
+def _is_fmi_header(norm: str) -> bool:
+    return norm in ("fmi", "folio", "matricula", "folio de matricula", "matricula inmobiliaria", "folio de matricula inmobiliaria")         or norm.startswith(("fmi ", "folio de matricula", "matricula inmobiliaria"))
+
+
 def _classify_header(norm: str) -> str | None:
+    if _is_fmi_header(norm):
+        return "fmi"
+    if norm in ("cedula catastral", "numero predial", "codigo catastral", "referencia catastral"):
+        return "cadastral_id"
     if _is_property_code_header(norm):
         return "property_code"
 
@@ -192,8 +205,11 @@ def read_negotiation_xlsx(
                             if _is_spanish_words(sample_val):
                                 canon = f"{prefix}_letters"
                         elif canon == "property_code" and existing:
-                            # Keep primary property code column (e.g. CARPETA)
-                            continue
+                            # La primera columna (CARPETA) es el código; "CODIGO" posterior es la cédula catastral.
+                            if norm.startswith("codigo") and "cadastral_id" not in row_map.values():
+                                canon = "cadastral_id"
+                            else:
+                                continue
                         row_map[c_idx] = canon
                         matches += 1
             if matches >= 2:  # found header row
@@ -209,6 +225,7 @@ def read_negotiation_xlsx(
             row_data: dict[str, Any] = {}
             cell_coords: dict[str, str] = {}
             raw_cells: dict[str, NegotiationCell] = {}
+            formula_gaps: list[str] = []
             has_data = False
 
             for c_idx in range(1, ws_values.max_column + 1):
@@ -226,6 +243,9 @@ def read_negotiation_xlsx(
                 if canon:
                     row_data[canon] = c_value
                     cell_coords[canon] = coord
+                    if c_value is None and f_value:
+                        # Fórmula guardada sin su valor calculado (archivo no recalculado en Excel).
+                        formula_gaps.append(coord)
 
                 raw_cells[coord] = NegotiationCell(
                     coordinate=coord,
@@ -264,10 +284,17 @@ def read_negotiation_xlsx(
             # Skip metadata/notes rows with no property code and no offer values
             if not prop_code and offer1_num is None and offer2_num is None and offer3_num is None and not offer1_let:
                 continue
+            warnings = [f"Fórmula sin valor calculado en {coord}" for coord in formula_gaps]
 
+            fmi_raw = str(row_data.get("fmi") or "").strip()
+            cad_raw = str(row_data.get("cadastral_id") or "").strip()
             row_obj = NegotiationOfferRow(
                 property_code=prop_code,
                 property_coordinate=cell_coords.get("property_code"),
+                fmi=fmi_raw if fmi_raw and _normalize_text(fmi_raw) not in ("sin informacion", "no aplica", "n/a") else None,
+                cadastral_id=cad_raw if cad_raw and _normalize_text(cad_raw) != "sin informacion" else None,
+                sheet_name=sheet_name,
+                row_number=r_idx,
                 first_offer_number=offer1_num,
                 first_offer_number_cell=cell_coords.get("first_offer_number"),
                 first_offer_letters=offer1_let,
@@ -283,6 +310,7 @@ def read_negotiation_xlsx(
                 appraisal_value=appraisal,
                 appraisal_coordinate=cell_coords.get("appraisal_value"),
                 raw_cells=raw_cells,
+                warnings=warnings,
             )
             all_rows.append(row_obj)
 

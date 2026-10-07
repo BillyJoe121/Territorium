@@ -3,6 +3,15 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class PlanExtractionPayload(BaseModel):
+    # Identificación del predio: el FMI es la llave para vincular el plano con su estudio de títulos.
+    folio: str = Field(default="no identificado", description="Folio de matrícula inmobiliaria (FMI) del predio, ej. 350-108418")
+    cadastral_id: str = Field(default="no identificado", description="Cédula o número predial catastral que aparece en el plano")
+    property_name: str = Field(default="no identificado", description="Nombre del predio según el plano")
+    owners: str = Field(default="no identificado", description="Propietario(s) del predio según el plano")
+    municipality: str = Field(default="no identificado", description="Municipio del predio según el plano")
+    village: str = Field(default="no identificado", description="Vereda o corregimiento según el plano")
+    property_area: str = Field(default="no identificado", description="Área total del predio según el plano, con su unidad")
+    source_document: str = Field(default="", description="Nombre del archivo del plano")
     plan_name: str = Field(default="no identificado", description="Nombre o código del plano (ej. PLANO_SAN-CIM-001)")
     easement_area_numbers: str = Field(default="—", description="Área de servidumbre en números (m²)")
     easement_area_letters: str = Field(default="—", description="Área de servidumbre expresada en letras")
@@ -34,6 +43,30 @@ class PlanExtractionPayload(BaseModel):
                         if val is not None and str(val).strip() != "":
                             return val
             return None
+
+        fmi = _find_val("folio_de_matricula", "folio_matricula", "matricula_inmobiliaria", "fmi", "folio")
+        if fmi: normalized["folio"] = str(fmi).strip()
+
+        cad = _find_val("cedula_catastral", "numero_predial", "cadastral_id")
+        if cad: normalized["cadastral_id"] = str(cad).strip()
+
+        prop = _find_val("nombre_del_predio", "nombre_predio", "property_name")
+        if prop: normalized["property_name"] = str(prop).strip()
+
+        owners = _find_val("propietarios", "propietario", "owners")
+        if owners:
+            if isinstance(owners, list):
+                owners = "; ".join(str(o.get("nombre") or o.get("name") or o) if isinstance(o, dict) else str(o) for o in owners)
+            normalized["owners"] = str(owners).strip()
+
+        muni = _find_val("municipio", "municipality")
+        if muni: normalized["municipality"] = str(muni).strip()
+
+        village = _find_val("vereda", "corregimiento", "village")
+        if village: normalized["village"] = str(village).strip()
+
+        parea = _find_val("area_del_predio", "area_total_del_predio", "area_total_predio", "area_predio", "property_area")
+        if parea: normalized["property_area"] = str(parea).strip()
 
         name = _find_val("nombre_del_plano", "nombre_plano", "plan_name", "codigo_plano")
         if name: normalized["plan_name"] = str(name).strip()

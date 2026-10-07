@@ -276,7 +276,9 @@ class Phase4PipelineOrchestrator:
                                 extractor="plan",
                                 **getattr(self.plan_extractor, "last_telemetry", {}),
                             )
-                    return plan_res.model_dump()
+                    plan_dict = plan_res.model_dump()
+                    plan_dict["source_document"] = filename
+                    return plan_dict
                 except Exception as plan_err:
                     logger.error(f"Error procesando plano '{filename}': {plan_err}", exc_info=True)
                     plan_file_discrepancies.append({

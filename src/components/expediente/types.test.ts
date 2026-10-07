@@ -49,6 +49,6 @@ describe('contrato de datos del prototipo de expediente', () => {
     const rows = createDemoConsolidatedRows()
 
     expect(consolidatedColumns.map((column) => column.key)).toEqual(['field', 'value', 'source'])
-    expect(new Set(rows.map((row) => row.source))).toEqual(new Set(['Títulos', 'Planos', 'Negociación']))
+    expect(new Set(rows.map((row) => row.source))).toEqual(new Set(['Estudio de Títulos', 'Planos', 'Plantilla de negociación']))
   })
 })
