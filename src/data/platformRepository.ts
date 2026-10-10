@@ -563,12 +563,6 @@ export function classifyFileName(name: string): DocumentKind {
   return 'sin_clasificar'
 }
 
-export async function startRemoteBatch(projectId: string, batchId: string) {
-  const { data, error } = await requireSupabase().functions.invoke('create-batch-job', { body: { projectId, batchId } })
-  if (error) throw new Error(error.message)
-  return data as { jobId: string; runId: string; status: string }
-}
-
 export async function cancelRemoteBatch(batchId: string) {
   const client = requireSupabase()
   const { data: job, error } = await client.from('jobs').select('id').eq('batch_id', batchId).in('status', ['queued', 'running']).order('created_at', { ascending: false }).limit(1).maybeSingle()

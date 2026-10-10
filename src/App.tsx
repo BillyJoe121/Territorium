@@ -33,7 +33,6 @@ import {
   loadPlatformState,
   recordRemoteAiExecutionLog,
   reprocessRemoteTask,
-  startRemoteBatch,
   subscribeToProject,
   toggleArchiveRemoteProject,
   updateRemoteAttributes,
@@ -556,13 +555,6 @@ function App() {
 
   async function runBatch(batchId: string) {
     const batch = state.batches.find((item) => item.id === batchId); if (!batch || batch.jobState === 'en_proceso') return
-    if (remote) {
-      setBusyAction(`run:${batchId}`)
-      try { await startRemoteBatch(batch.projectId, batchId); await refresh(true); toast('Trabajo encolado. Puedes continuar usando la plataforma.') }
-      catch (caught) { setError(caught instanceof Error ? caught.message : 'No fue posible iniciar el procesamiento.') }
-      finally { setBusyAction(null) }
-      return
-    }
     const runId = makeId('ejecucion')
     const batchDocs = state.documents.filter((item) => item.batchId === batchId)
     const initialTasks = createDocumentTasksForBatch(batchId, batch.projectId, batchDocs, () => makeId('tarea'))

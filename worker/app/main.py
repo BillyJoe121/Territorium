@@ -11,11 +11,9 @@ from fastapi import FastAPI, HTTPException, Request, status
 
 from openai import AsyncOpenAI
 
-from .ai_provider import OpenAIExtractionProvider
 from .document_ai_revision import process_document_ai_revision
 from .document_comparison import process_comparison_job
 from .expediente_v2 import process_expediente_v2_task
-from .pipeline import process_job
 from .pipeline_v2 import Phase4PipelineOrchestrator
 from .settings import Settings
 from .supabase_gateway import SupabaseGateway
@@ -23,29 +21,6 @@ from .supabase_gateway import SupabaseGateway
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("territorium.worker")
 settings = Settings.from_env()
-
-
-async def worker_loop(stop: asyncio.Event) -> None:
-    if not settings.ready:
-        logger.warning("worker_not_ready missing required configuration")
-        return
-    gateway = SupabaseGateway(settings)
-    provider = OpenAIExtractionProvider(settings)
-    try:
-        while not stop.is_set():
-            try:
-                job = await gateway.claim()
-                if job:
-                    await process_job(gateway, provider, job)
-                    continue
-            except Exception:
-                logger.exception("worker_poll_failed")
-            try:
-                await asyncio.wait_for(stop.wait(), timeout=settings.poll_seconds)
-            except TimeoutError:
-                pass
-    finally:
-        await gateway.close()
 
 
 async def expediente_v2_worker_loop(stop: asyncio.Event) -> None:
@@ -102,13 +77,9 @@ async def expediente_v2_worker_loop(stop: asyncio.Event) -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     stop = asyncio.Event()
-    task = asyncio.create_task(worker_loop(stop)) if settings.enabled else None
     expediente_v2_task = asyncio.create_task(expediente_v2_worker_loop(stop)) if settings.expediente_v2_enabled else None
     yield
     stop.set()
-    if task:
-        with suppress(asyncio.CancelledError):
-            await asyncio.wait_for(task, timeout=10)
     if expediente_v2_task:
         with suppress(asyncio.CancelledError):
             await asyncio.wait_for(expediente_v2_task, timeout=10)

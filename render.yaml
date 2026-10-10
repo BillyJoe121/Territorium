@@ -68,12 +68,8 @@ services:
         value: https://generativelanguage.googleapis.com/v1beta/openai/
       - key: AI_MODEL
         value: gemini-3.8-flash
-      - key: POLL_SECONDS
-        value: 5
       - key: LEASE_SECONDS
         value: 300
-      - key: WORKER_ENABLED
-        value: true
       - key: EXPEDIENTE_V2_WORKER_ENABLED
         value: true
       - key: EXPEDIENTE_V2_POLL_SECONDS

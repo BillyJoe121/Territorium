@@ -29,10 +29,11 @@ React/Vite
   ├─ Supabase Auth
   ├─ Postgres + RLS por expediente
   ├─ Storage privado + URLs firmadas
-  └─ create-batch-job (Edge Function)
-            └─ jobs con lease, idempotencia y reintentos
-                  └─ worker Python / OpenAI Responses
-                        └─ registros + atributos + evidencia + revisión
+  ├─ expediente-analysis-request / document-comparison-request (Edge Functions)
+  │         └─ tareas con lease, idempotencia y reintentos
+  │               └─ worker Python (pipeline v2) / Gemini vía API compatible con OpenAI
+  │                     └─ resultados por grupo + revisión + consolidado
+  └─ manage-users (Edge Function)
 ```
 
 El trabajador carga cada archivo al proveedor de IA solo durante la extracción, solicita salida JSON validada, usa `store=false` y elimina el archivo remoto al terminar. No registra contenido legal en logs.
@@ -47,7 +48,7 @@ $env:PYTHONPATH='worker'
 
 ## Despliegue
 
-- Supabase: aplicar `supabase/migrations/20260917062048_territorium_initial_schema.sql` y desplegar `create-batch-job`.
+- Supabase: aplicar `supabase/migrations/20260917062048_territorium_initial_schema.sql` y desplegar las Edge Functions de `supabase/functions`.
 - Render: conectar el futuro repositorio y crear el Blueprint desde `render.yaml`.
 - Configurar los secretos del worker: `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `OPENAI_API_KEY` y `AI_MODEL`.
 - Configurar `APP_ORIGINS` en la Edge Function con el dominio final.
