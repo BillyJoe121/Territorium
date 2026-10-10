@@ -1,0 +1,158 @@
+/* ===== Proyectos: la pantalla no se desplaza; solo la zona de tarjetas tiene scroll ===== */
+main:has(.projects-management-view) {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* Ocupa el alto que deja la barra superior (y los avisos de conexión), no 100vh. */
+main:has(.projects-management-view) > .page-content {
+  flex: 1 1 auto;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0;
+  padding: 16px clamp(20px, 3.5vw, 48px) 14px !important;
+  overflow: hidden;
+}
+
+/* El formulario de creación se desplaza por dentro si la pantalla es baja. */
+.projects-layout > .form-card {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Margen interior para que el borde de la tarjeta seleccionada y las sombras no se recorten. */
+.projects-management-view .project-grid-scroll-wrap {
+  padding: 4px 10px 14px 4px;
+}
+
+/* Tarjetas un 10 % más pequeñas que el diseño base (≈370 × 245 px): ancho máximo, relleno,
+   tipografía e iconos reducidos en la misma proporción. */
+.projects-management-view .project-grid {
+  grid-template-columns: repeat(auto-fill, minmax(250px, 333px));
+  gap: 13px;
+}
+
+.projects-management-view .project-card {
+  gap: 7px;
+  padding: 13px !important;
+}
+
+.projects-management-view .project-card .project-title {
+  font-size: 13.5px;
+}
+
+.projects-management-view .project-meta-details {
+  gap: 5px;
+}
+
+.projects-management-view .meta-line {
+  gap: 7px;
+  font-size: 11.5px;
+}
+
+.projects-management-view .card-actions .icon-button.small {
+  width: 29px;
+  height: 29px;
+}
+
+.projects-management-view .project-card:hover {
+  transform: none;
+}
+
+/* ===== Visor de archivos: casi todo el alto de la pantalla, movible y redimensionable ===== */
+.expediente-file-preview-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 1050;
+  display: flex;
+  flex-direction: column;
+  width: min(1200px, calc(100vw - 32px));
+  height: calc(100dvh - 24px);
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 24px 64px rgb(24 48 42 / 25%);
+  transform: translate(-50%, -50%);
+  outline: none;
+}
+
+/* Movido o redimensionado: la posición y el tamaño vienen del estilo en línea. */
+.expediente-file-preview-modal.is-floating {
+  transform: none;
+}
+
+.expediente-file-preview-modal > .comparison-original {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* La barra superior es el asa para mover el visor; sus botones conservan su cursor. */
+.expediente-file-preview-modal .comparison-original-header {
+  cursor: grab;
+  user-select: none;
+}
+
+.expediente-file-preview-modal.is-dragging,
+.expediente-file-preview-modal.is-dragging .comparison-original-header {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/* Mientras se mueve o redimensiona, el documento no captura el puntero. */
+.expediente-file-preview-modal.is-dragging .comparison-original-body {
+  pointer-events: none;
+}
+
+.preview-resize-handle {
+  position: absolute;
+  z-index: 3;
+  touch-action: none;
+}
+
+.preview-resize-handle.is-n,
+.preview-resize-handle.is-s { left: 12px; right: 12px; height: 7px; cursor: ns-resize; }
+.preview-resize-handle.is-n { top: 0; }
+.preview-resize-handle.is-s { bottom: 0; }
+.preview-resize-handle.is-e,
+.preview-resize-handle.is-w { top: 12px; bottom: 12px; width: 7px; cursor: ew-resize; }
+.preview-resize-handle.is-e { right: 0; }
+.preview-resize-handle.is-w { left: 0; }
+.preview-resize-handle.is-ne,
+.preview-resize-handle.is-nw,
+.preview-resize-handle.is-se,
+.preview-resize-handle.is-sw { width: 14px; height: 14px; }
+.preview-resize-handle.is-ne { top: 0; right: 0; cursor: nesw-resize; }
+.preview-resize-handle.is-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.preview-resize-handle.is-nw { top: 0; left: 0; cursor: nwse-resize; }
+.preview-resize-handle.is-se { bottom: 0; right: 0; cursor: nwse-resize; }
+
+/* Extracción: "Descargar todos" junto a "Agregar archivos" (borde continuo: no es zona de carga).
+   Los dos con el mismo alto e icono junto al texto (la regla global de <label> lo apilaba). */
+.extraction-upload-row {
+  gap: 8px;
+}
+
+.extraction-upload-row .extraction-upload-button {
+  flex: 1 1 0;
+  flex-direction: row;
+}
+
+.extraction-upload-row .extraction-upload-button > span {
+  display: inline;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.extraction-upload-button.is-download {
+  border-style: solid !important;
+}
+
+.extraction-upload-button:disabled {
+  pointer-events: none;
+  opacity: 0.58;
+}

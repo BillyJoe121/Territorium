@@ -1,0 +1,133 @@
+/*
+ * Legalitica Identical Visual Language for Territorium
+ *
+ * Faithfully ports the exact UI/UX design specifications from Legalitica's
+ * TERRITORIUM_THEME (Vuetify / SCSS) into Territorium (React):
+ * - Primary Palette: #316842 (Verde Tierra), #3A5441 (Aux), #243F30 (Deep)
+ * - Accent: #E97025 (Naranja Territorium with glow)
+ * - Canvas Background: #F2F6F3 (Legalitica .v-main override)
+ * - Surface: #FFFFFF with subtle #E5EAEF borders and elevation shadows
+ * - Sidebar: 256px wide, gradient #18302A -> #1F3D32, white text at 0.82 opacity,
+ *   #E97025 active item with 0 4px 14px rgba(233,112,37,.35) glow, 10px radius
+ * - Topbar: 64px white header, border-bottom 1px solid rgba(0,0,0,0.07), Poppins title
+ * - Typography: Poppins for headings/buttons, Lato for body text
+ *
+ * DO NOT TOUCH reference files in docs/referencia-visual-legalitica/fuente/.
+ */
+
+:root {
+  /* Legalitica Brand Palette */
+  --color-primary: #316842;
+  --color-primary-dark: #3A5441;
+  --color-primary-deep: #243F30;
+  --color-primary-light: #EDF2EE;
+  --color-secondary: #0CB9C5;
+  --color-accent: #E97025;
+  --color-accent-hover: #D25F16;
+  --color-accent-subtle: #FFF3EB;
+  --color-accent-border: #FCD8C1;
+  --color-info: #539BFF;
+  --color-info-subtle: #E8F7FF;
+  --color-success: #13DEB9;
+  --color-success-subtle: #E6FFFA;
+  --color-warning: #FFAE1F;
+  --color-warning-subtle: #FEF5E5;
+  --color-danger: #CF2D45;
+  --color-danger-subtle: #FDEDE8;
+  --color-danger-border: #F8D7DA;
+
+  /* Typography & Neutral Colors */
+  --color-text-primary: #1A1A1A;
+  --color-text-secondary: #4A4A4A;
+  --color-text-muted: #7D8A99;
+  --color-border-subtle: #E5EAEF;
+  --color-border-control: #DFE5EF;
+  --color-border-strong: #C2CAD6;
+  --color-bg-app: #F2F6F3; /* Exact Legalitica .v-main background */
+  --color-surface: #FFFFFF;
+  --color-surface-subtle: #FAFBF9;
+  --color-surface-hover: #F3F6F2;
+  --color-surface-active: #EDF2EE;
+
+  /* Workspace aliases mapped to Legalitica tokens */
+  --ui-canvas: #F2F6F3;
+  --ui-surface: #FFFFFF;
+  --ui-surface-muted: #FAFBF9;
+  --ui-ink: #1A1A1A;
+  --ui-ink-soft: #4A4A4A;
+  --ui-ink-faint: #7D8A99;
+  --ui-line: #E5EAEF;
+  --ui-line-strong: #DFE5EF;
+  --ui-accent: #316842;
+  --ui-accent-strong: #243F30;
+  --ui-accent-soft: #EDF2EE;
+  --ui-danger: #CF2D45;
+  --ui-warning: #FFAE1F;
+  --ui-info: #539BFF;
+  --ui-success: #13DEB9;
+  --ui-radius: 12px;
+  --ui-radius-sm: 8px;
+  --ui-radius-lg: 20px;
+  --ui-shadow: rgba(145, 158, 171, 0.3) 0px 0px 2px 0px, rgba(145, 158, 171, 0.12) 0px 12px 24px -4px;
+  --ui-hero-shadow: 0 8px 32px -8px rgba(49, 104, 66, 0.4);
+
+  /* Layout dimensions */
+  --sidebar-width-expanded: 256px;
+  --sidebar-width-collapsed: 256px;
+  --topbar-height: 64px;
+
+  /* Typography families */
+  --font-body: 'Lato', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-heading: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+html, body, #root {
+  min-height: 100%;
+  background: var(--color-bg-app) !important;
+  font-family: var(--font-body);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-app) !important;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+/* Accessible focus ring using Legalitica primary green */
+:where(button, a, input, select, textarea, [role='button']):focus-visible {
+  outline: 2px solid var(--color-primary) !important;
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-primary);
+  color: #FFFFFF;
+}
+
+/* Legalitica 5px custom scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #C4D3C8;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
+

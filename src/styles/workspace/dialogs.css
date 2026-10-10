@@ -1,0 +1,286 @@
+/* ==========================================================================
+   DIALOGS, MODALS & RADIX OVERLAYS
+   ========================================================================== */
+
+.modal-backdrop,
+.expediente-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000 !important;
+  background: rgba(24, 48, 42, 0.45) !important; /* Legalitica dark forest overlay tint */
+  backdrop-filter: blur(4px) !important;
+}
+
+.modal-card {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  z-index: 1050 !important;
+  width: min(600px, calc(100vw - 32px)) !important;
+  max-height: calc(100dvh - 48px);
+  padding: 24px !important;
+  overflow-y: auto;
+  transform: translate(-50%, -50%) !important;
+  background: #FFFFFF !important;
+  border: 1px solid var(--color-border-subtle) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 24px 64px rgba(24, 48, 42, 0.25) !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+/* Modales de analizar resultados: doble de ancho (1200px), centrados y con scroll interno */
+.expediente-review-modal {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  z-index: 1050 !important;
+  width: min(1200px, calc(100vw - 32px)) !important;
+  max-width: calc(100vw - 32px) !important;
+  height: min(88vh, 860px) !important;
+  max-height: calc(100dvh - 32px) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  background: #FFFFFF !important;
+  border: 1px solid var(--color-border-subtle) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 24px 64px rgba(24, 48, 42, 0.25) !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Resultados (títulos, planos, negociación, consolidado): modal a pantalla completa, con
+   esquinas rectas. inset: 0 ajusta el modal al área visible exacta (100vw incluiría la
+   barra de desplazamiento y lo cortaría por la derecha). */
+.expediente-review-modal.expediente-results-modal {
+  inset: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* Editor de hoja de cálculo (Univer) dentro del modal de resultados */
+.result-spreadsheet {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.result-spreadsheet-frame {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  background: #FFFFFF;
+}
+
+.result-spreadsheet-host,
+.result-spreadsheet-mount {
+  position: absolute;
+  inset: 0;
+}
+
+.result-spreadsheet-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--color-text-muted, #5b6472);
+  font-size: 13px;
+  background: #FFFFFF;
+}
+
+.result-spreadsheet-loading.is-static {
+  position: static;
+  flex: 1 1 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+}
+
+.result-spreadsheet-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: #7a4b00;
+  background: #fff6e0;
+  font-size: 12.5px;
+}
+
+.result-spreadsheet-hint {
+  position: absolute;
+  bottom: 44px;
+  left: 50%;
+  z-index: 60;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.result-spreadsheet-hint span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  color: #FFFFFF;
+  background: rgba(31, 41, 55, 0.92);
+  font-size: 12.5px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.22);
+  white-space: nowrap;
+}
+
+/* Leyenda del resaltado: siempre ocupa su línea, así el cambio de conteos no mueve la hoja. */
+.result-spreadsheet-legend {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  min-height: 20px;
+  color: var(--color-text-muted, #5b6472);
+  font-size: 12px;
+}
+
+.result-spreadsheet-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.result-spreadsheet-legend i {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+}
+
+.result-spreadsheet-legend .is-error i { background: #FDE2E4; box-shadow: inset 0 0 0 1px #D92D20; }
+.result-spreadsheet-legend .is-warning i { background: #FFEBD2; box-shadow: inset 0 0 0 1px #F79009; }
+.result-spreadsheet-legend .is-missing i { background: #FFF6D9; box-shadow: inset 0 0 0 1px #CA8A04; }
+.result-spreadsheet-legend .is-ok { color: #1c6835; }
+.result-spreadsheet-legend-help { color: #8a93a0; }
+
+/* Detalle de la alerta junto al cursor */
+.result-spreadsheet-tip {
+  position: absolute;
+  z-index: 70;
+  max-width: 320px;
+  padding: 7px 10px;
+  border-left: 3px solid #CA8A04;
+  border-radius: 6px;
+  color: #1f2937;
+  background: #FFFFFF;
+  font-size: 12.5px;
+  line-height: 1.4;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.18);
+  pointer-events: none;
+}
+
+.result-spreadsheet-tip.is-error { border-left-color: #D92D20; }
+.result-spreadsheet-tip.is-warning { border-left-color: #F79009; }
+
+/* Hallazgos del cotejo que llevan a su casilla en la hoja: el botón ocupa la fila y repite su rejilla. */
+.plan-linkage-findings li:has(.plan-linkage-finding-button) {
+  display: block;
+  padding: 0;
+}
+
+.plan-linkage-finding-button {
+  display: grid;
+  grid-template-columns: 10px auto minmax(90px, 180px) 1fr;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.plan-linkage-finding-button:hover {
+  background: #f3f7f4;
+}
+
+@media (max-width: 720px) {
+  .plan-linkage-finding-button { grid-template-columns: 10px auto 1fr; }
+}
+
+.result-spreadsheet-errors {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border: 1px solid #f1b8bf;
+  border-radius: 8px;
+  color: #8a1c2b;
+  background: #fdecee;
+  font-size: 12.5px;
+}
+
+.result-spreadsheet-errors ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.expediente-review-modal .expediente-modal-header {
+  padding: 16px 24px !important;
+  margin-bottom: 0 !important;
+  border-bottom: 1px solid var(--color-border-subtle) !important;
+  flex-shrink: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.expediente-review-modal .expediente-modal-body {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  padding: 14px 24px !important;
+  overflow: hidden !important;
+  gap: 10px !important;
+}
+
+.expediente-review-modal .result-table-container {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.expediente-review-modal .expediente-modal-footer {
+  padding: 12px 24px !important;
+  border-top: 1px solid var(--color-border-subtle) !important;
+  flex-shrink: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.expediente-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  margin-bottom: 18px;
+}
+

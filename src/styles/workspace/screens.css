@@ -1,0 +1,246 @@
+/* ==========================================================================
+   TABLES (Vuetify / Easy Data Table exact specs: 50px height, #FAFBF9 header)
+   ========================================================================== */
+
+.telemetry-table,
+.result-data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--font-body);
+}
+
+.telemetry-table th,
+.result-data-table th {
+  height: 50px;
+  padding: 0 16px;
+  background: #FAFBF9 !important;
+  color: var(--color-text-muted) !important;
+  font-family: var(--font-heading) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  border-bottom: 1px solid var(--color-border-subtle) !important;
+  text-align: left;
+}
+
+.telemetry-table td,
+.result-data-table td {
+  height: 50px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  transition: background-color 0.15s ease;
+}
+
+.telemetry-table tr:hover td,
+.result-data-table tr:hover td {
+  background: #F3F6F2 !important;
+}
+
+.table-responsive {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #FFFFFF;
+}
+
+.result-table-scroll {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  background: #FFFFFF;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  scrollbar-color: #cbd5e1 #FAFBF9;
+  scrollbar-width: thin;
+}
+
+.result-table-scroll::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.result-table-scroll::-webkit-scrollbar-track {
+  background: #FAFBF9;
+  border-radius: 4px;
+}
+
+.result-table-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.result-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.result-data-table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 3 !important;
+  background: #FAFBF9 !important;
+}
+
+/* ==========================================================================
+   COMPARADOR DOCUMENTAL STYLING
+   ========================================================================== */
+
+.comparison-kicker {
+  color: #316842 !important;
+  font-family: var(--font-heading) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.1em !important;
+}
+
+.comparison-intro h1 {
+  font-family: var(--font-heading) !important;
+  font-size: clamp(24px, 2.4vw, 32px) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+  color: #1A1A1A !important;
+}
+
+.comparison-step {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #EDF2EE !important;
+  color: #316842 !important;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.comparison-upload {
+  border: 1px dashed #C2CAD6 !important;
+  border-radius: 12px !important;
+  background: #FFFFFF !important;
+  color: #316842 !important;
+  transition: all 0.15s ease !important;
+}
+
+.comparison-upload:hover {
+  border-color: #316842 !important;
+  background: #EDF2EE !important;
+}
+
+.comparison-view-results-btn {
+  border: 1px solid #316842 !important;
+  border-radius: 10px !important;
+  color: #316842 !important;
+  background: #EDF2EE !important;
+  font-family: var(--font-heading) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  transition: all 0.15s ease !important;
+}
+
+.comparison-view-results-btn:hover {
+  background: #316842 !important;
+  color: #FFFFFF !important;
+}
+
+.comparison-status-dot.is-exact {
+  background: #13DEB9 !important;
+  box-shadow: 0 0 6px rgba(19, 222, 185, 0.5) !important;
+}
+
+.comparison-status-dot.is-near {
+  background: #FFAE1F !important;
+  box-shadow: 0 0 6px rgba(255, 174, 31, 0.5) !important;
+}
+
+.comparison-status-dot.is-different {
+  background: #CF2D45 !important;
+  box-shadow: 0 0 6px rgba(207, 45, 69, 0.5) !important;
+}
+
+.comparison-finding-row.is-selected {
+  background: #EDF2EE !important;
+  border-left: 3px solid #316842 !important;
+}
+
+/* ==========================================================================
+   EXPEDIENTES PREDIALES (Project cards, search, sidebar form)
+   ========================================================================== */
+
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.project-card {
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.project-card:hover {
+  border-color: #316842 !important;
+  transform: translateY(-2px);
+  box-shadow: rgba(145, 158, 171, 0.35) 0px 4px 16px 0px !important;
+}
+
+.project-card.selected {
+  border-color: #316842 !important;
+  background: linear-gradient(90deg, #EDF2EE, #FFFFFF 40%) !important;
+}
+
+.project-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #316842;
+}
+
+.project-title {
+  display: block;
+  margin: 12px 0 8px;
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.form-card {
+  border-left: 3px solid #316842 !important;
+}
+
+/* ==========================================================================
+   TELEMETRÍA DE IA
+   ========================================================================== */
+
+.telemetry-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.summary-metric-card {
+  padding: 20px;
+  background: #FFFFFF;
+}
+
+.summary-metric-card h3 {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin: 0 0 8px;
+}
+

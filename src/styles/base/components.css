@@ -1,0 +1,246 @@
+/* =========================================================================
+   Botones Estandarizados
+   ========================================================================= */
+.button, .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 40px;
+  padding: 0 var(--space-4);
+  font-size: 13.5px;
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.button:focus-visible, .btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.button.primary, .btn-primary {
+  background-color: var(--color-accent);
+  color: var(--color-text-inverse);
+}
+
+.button.primary:hover, .btn-primary:hover {
+  background-color: var(--color-accent-hover);
+}
+
+.button.primary:active, .btn-primary:active {
+  background-color: var(--color-accent-active);
+}
+
+.button.secondary {
+  background-color: var(--color-surface);
+  border-color: var(--color-border-subtle);
+  color: var(--color-text-primary);
+}
+
+.button.secondary:hover {
+  background-color: var(--color-surface-hover);
+  border-color: var(--color-border-control);
+}
+
+.button.small, .btn-sm {
+  height: 32px;
+  padding: 0 var(--space-3);
+  font-size: 12.5px;
+  border-radius: var(--radius-sm);
+}
+
+.button:disabled, .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.icon-button {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-subtle);
+  background-color: var(--color-surface);
+  transition: all var(--transition-fast);
+}
+
+.icon-button:hover {
+  background-color: var(--color-surface-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-control);
+}
+
+/* =========================================================================
+   Cards, Paneles y Superficies
+   ========================================================================= */
+.card, .panel {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-subtle);
+}
+
+.section-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.section-title h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.section-title h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+}
+
+/* =========================================================================
+   Badges Semánticos de Estado
+   ========================================================================= */
+.status, .status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.status.pendiente, .status-pill-warning {
+  background-color: var(--color-warning-subtle);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
+}
+
+.status.en_proceso, .status.info {
+  background-color: var(--color-info-subtle);
+  color: var(--color-info);
+  border: 1px solid var(--color-info-border);
+}
+
+.status.requiere_revision, .status.discrepancia, .status-pill-danger {
+  background-color: var(--color-danger-subtle);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
+}
+
+.status.completado, .status.aprobado, .status-pill-success {
+  background-color: var(--color-success-subtle);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-border);
+}
+
+.status.fallido, .status.cancelado, .status.devuelto {
+  background-color: var(--color-danger-subtle);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
+}
+
+/* =========================================================================
+   Tablas y Cifras Tabulares
+   ========================================================================= */
+
+.metric-value, .currency {
+  font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* =========================================================================
+   Banners de Estado y Toasts
+   ========================================================================= */
+.offline-banner {
+  background-color: var(--color-warning-subtle);
+  color: var(--color-warning);
+  border-bottom: 1px solid var(--color-warning-border);
+  padding: var(--space-2) var(--space-8);
+  font-size: 12.5px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.error-banner {
+  background-color: var(--color-danger-subtle);
+  color: var(--color-danger);
+  border-bottom: 1px solid var(--color-danger-border);
+  padding: var(--space-2) var(--space-8);
+  font-size: 12.5px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* =========================================================================
+   Breadcrumbs Estandarizados
+   ========================================================================= */
+nav[aria-label="Migas de pan"] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-8);
+  height: 38px;
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+nav[aria-label="Migas de pan"] button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  padding: 3px 6px;
+  border-radius: var(--radius-xs);
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+nav[aria-label="Migas de pan"] button:hover:not(:disabled) {
+  color: var(--color-accent);
+  background-color: var(--color-surface-subtle);
+}
+
+nav[aria-label="Migas de pan"] button:disabled {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  cursor: default;
+}
+

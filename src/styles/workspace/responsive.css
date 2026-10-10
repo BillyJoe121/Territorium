@@ -1,0 +1,67 @@
+/* ==========================================================================
+   RESPONSIVE BEHAVIOR
+   ========================================================================== */
+
+@media (max-width: 960px) {
+  .app-shell,
+  .app-shell.sidebar-collapsed {
+    display: block !important;
+  }
+
+  .sidebar {
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 60px !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    padding: 10px 16px !important;
+    overflow-x: auto !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  .brand {
+    margin: 0 16px 0 0 !important;
+    padding: 0 16px 0 0 !important;
+    border-bottom: none !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+  }
+
+  .sidebar-context-badge,
+  .sidebar-footer {
+    display: none !important;
+  }
+
+  .sidebar nav {
+    flex-direction: row !important;
+    gap: 8px !important;
+  }
+
+  .sidebar-nav-group {
+    flex-direction: row !important;
+    margin: 0 !important;
+  }
+
+  .sidebar-nav-header {
+    display: none !important;
+  }
+
+  .nav-item {
+    width: auto !important;
+    padding: 0 12px !important;
+    white-space: nowrap !important;
+  }
+
+  .page-content {
+    padding: 20px 16px 40px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+

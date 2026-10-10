@@ -1,0 +1,584 @@
+/* =========================================================================
+   Ficha de expediente 2.0 — Prototipo de extracción y documento final
+   ========================================================================= */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.expediente-prototype {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 100%;
+  min-width: 0;
+}
+
+.expediente-primary-action,
+.expediente-secondary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  line-height: 1.2;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
+}
+
+.expediente-secondary-action {
+  border: 1px solid var(--color-border-control);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.expediente-secondary-action:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-strong);
+}
+
+.expediente-primary-action {
+  border: 1px solid var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
+  box-shadow: 0 1px 2px rgba(36, 89, 211, 0.16);
+}
+
+.expediente-primary-action:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+.expediente-primary-action:disabled,
+.expediente-secondary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.expediente-flow-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px;
+  overflow-x: auto;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-subtle);
+}
+
+.expediente-flow-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: background-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.expediente-flow-tabs button:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.expediente-flow-tabs button.active {
+  background: var(--color-accent-subtle);
+  box-shadow: inset 0 0 0 1px var(--color-accent-border);
+  color: var(--color-accent);
+}
+
+.expediente-tab-counter {
+  min-width: 20px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgba(36, 89, 211, 0.12);
+  color: inherit;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.expediente-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(330px, 0.85fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.expediente-identity-card,
+.expediente-overview-card,
+.extraction-card {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-subtle);
+}
+
+.expediente-identity-card,
+.expediente-overview-card {
+  padding: var(--space-6);
+}
+
+.expediente-section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+
+.expediente-section-heading > div {
+  min-width: 0;
+}
+
+.expediente-section-heading p {
+  margin-bottom: 3px;
+  color: var(--color-text-muted);
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.expediente-section-heading h2 {
+  color: var(--color-text-primary);
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.expediente-section-heading > span,
+.expediente-section-heading > div > span {
+  margin-top: 6px;
+  color: var(--color-text-secondary);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.expediente-identity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin-top: var(--space-6);
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.expediente-identity-grid div {
+  min-width: 0;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.expediente-identity-grid div:nth-child(odd) {
+  border-right: 1px solid var(--color-border-subtle);
+}
+
+.expediente-identity-grid div:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.expediente-identity-grid dt {
+  margin-bottom: 4px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.expediente-identity-grid dd {
+  overflow-wrap: anywhere;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.expediente-stage-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.expediente-stage-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 62px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.expediente-stage-row:last-child {
+  border-bottom: 0;
+}
+
+.expediente-stage-icon,
+.extraction-card-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+.expediente-stage-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.expediente-stage-row strong,
+.expediente-stage-row small {
+  display: block;
+}
+
+.expediente-stage-row strong {
+  color: var(--color-text-primary);
+  font-size: 12.5px;
+}
+
+.expediente-stage-row small {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expediente-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.expediente-status > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+}
+
+.expediente-status.status-approved,
+.expediente-status.status-final {
+  color: var(--color-success);
+}
+
+.expediente-status.status-approved > span,
+.expediente-status.status-final > span {
+  background: var(--color-success);
+}
+
+.expediente-status.status-processing,
+.expediente-status.status-generating,
+.expediente-status.status-reprocessing {
+  color: var(--color-accent);
+}
+
+.expediente-status.status-processing > span,
+.expediente-status.status-generating > span,
+.expediente-status.status-reprocessing > span {
+  background: var(--color-accent);
+}
+
+.expediente-status.status-review_ready,
+.expediente-status.status-available {
+  color: var(--color-info);
+}
+
+.expediente-status.status-review_ready > span,
+.expediente-status.status-available > span {
+  background: var(--color-info);
+}
+
+.expediente-status.status-stale,
+.expediente-status.status-error {
+  color: var(--color-warning);
+}
+
+.expediente-status.status-stale > span,
+.expediente-status.status-error > span {
+  background: var(--color-warning);
+}
+
+.extraction-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.expediente-remote-loading {
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+}
+
+.extraction-upload-button[aria-disabled='true'] {
+  pointer-events: none;
+  opacity: 0.58;
+}
+
+.extraction-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 456px;
+  padding: var(--space-5);
+}
+
+.extraction-card.state-approved {
+  border-color: var(--color-success-border);
+}
+
+.extraction-card.state-stale {
+  border-color: var(--color-warning-border);
+}
+
+.extraction-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.extraction-card-title {
+  display: flex;
+  min-width: 0;
+  gap: var(--space-3);
+}
+
+.extraction-card-icon {
+  width: 38px;
+  height: 38px;
+}
+
+.extraction-card-title h3 {
+  color: var(--color-text-primary);
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.extraction-card-title p {
+  display: -webkit-box;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: 11.5px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.extraction-upload-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+  min-height: 40px;
+  width: 100%;
+  border-radius: var(--radius-md);
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.extraction-upload-row.is-dragging {
+  background: var(--color-accent-subtle);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.extraction-upload-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.extraction-upload-button:hover {
+  background: #e2ebff;
+  border-color: var(--color-accent);
+}
+
+.extraction-file-list {
+  height: 148px;
+  overflow: auto;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-subtle);
+  scrollbar-color: var(--color-border-control) transparent;
+  scrollbar-width: thin;
+}
+
+.extraction-file-list ul {
+  list-style: none;
+}
+
+.extraction-file-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 8px var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+}
+
+.extraction-file-list li:last-child {
+  border-bottom: 0;
+}
+
+.extraction-file-name {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extraction-file-meta {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.extraction-file-remove {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+
+.extraction-file-remove:hover:not(:disabled) {
+  background: var(--color-danger-subtle, #fef2f2);
+  color: var(--color-danger, #ef4444);
+  transform: scale(1.08);
+}
+
+.extraction-file-remove:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.extraction-empty-files {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 100%;
+  padding: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+  text-align: center;
+}
+
+.extraction-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-4);
+}
+
+.extraction-card-actions .expediente-primary-action {
+  flex: 1 1 152px;
+}
+
+.extraction-card-actions .expediente-secondary-action {
+  flex: 1 1 152px;
+}
+
+.extraction-progress {
+  margin-top: var(--space-3);
+}
+
+.extraction-progress-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+
+.extraction-progress-label strong {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.extraction-progress-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-surface-active);
+}
+
+.extraction-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent);
+  transition: width var(--transition-normal);
+}
+
+.extraction-error-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: var(--space-3);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.extraction-error-note {
+  color: var(--color-danger);
+}
+
+.expediente-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(2px);
+}
+

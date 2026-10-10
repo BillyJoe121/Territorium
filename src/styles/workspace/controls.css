@@ -1,0 +1,443 @@
+/* ==========================================================================
+   TOPBAR / WORKSPACE CONTEXT BAR
+   ========================================================================== */
+
+main {
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+  background: var(--color-bg-app) !important;
+  min-width: 0;
+}
+
+.workspace-context-bar {
+  display: flex;
+  height: 64px;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 clamp(20px, 3vw, 40px);
+  background: #FFFFFF !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  z-index: 50;
+}
+
+.workspace-breadcrumbs,
+.workspace-context-actions,
+.workspace-connection {
+  display: inline-flex;
+  align-items: center;
+}
+
+.workspace-breadcrumbs {
+  min-width: 0;
+  gap: 8px;
+  font-family: var(--font-heading);
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.workspace-breadcrumbs span:not(.workspace-breadcrumb-separator) {
+  overflow: hidden;
+  max-width: min(24vw, 280px);
+  text-overflow: ellipsis;
+}
+
+.workspace-breadcrumbs strong {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+}
+
+.workspace-breadcrumb-separator {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.workspace-connection {
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.workspace-connection > span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-warning);
+}
+
+.workspace-connection.is-online > span {
+  background: var(--color-success);
+  box-shadow: 0 0 6px rgba(19, 222, 185, 0.5);
+}
+
+/* ==========================================================================
+   PAGE CANVAS & CONTENT LAYOUT
+   ========================================================================== */
+
+.page-content {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 24px clamp(20px, 3.5vw, 48px) 48px !important;
+  background: var(--color-bg-app) !important;
+  box-sizing: border-box;
+}
+
+.page-header-banner {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.header-eyebrow,
+.eyebrow {
+  display: block;
+  margin: 0 0 6px !important;
+  color: var(--color-primary) !important;
+  font-family: var(--font-heading) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+}
+
+.header-title,
+.page-header-banner h1 {
+  margin: 0 !important;
+  color: var(--color-text-primary) !important;
+  font-family: var(--font-heading) !important;
+  font-size: clamp(22px, 2vw, 28px) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1.25 !important;
+  text-transform: none !important;
+}
+
+.header-description {
+  max-width: 780px;
+  margin: 8px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ==========================================================================
+   BUTTONS (Legalitica style: Poppins 500, #316842 Primary, #E97025 Accent)
+   ========================================================================== */
+
+.button,
+.btn,
+.expediente-primary-action,
+.expediente-secondary-action,
+.comparison-run {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 18px;
+  border-radius: 10px !important;
+  font-family: var(--font-heading) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+}
+
+.button.primary,
+.btn-primary,
+.expediente-primary-action,
+.comparison-run {
+  border: 1px solid #316842 !important;
+  background: #316842 !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 2px 6px rgba(49, 104, 66, 0.2) !important;
+}
+
+.button.primary:hover:not(:disabled),
+.btn-primary:hover:not(:disabled),
+.expediente-primary-action:hover:not(:disabled),
+.comparison-run:hover:not(:disabled) {
+  border-color: #243F30 !important;
+  background: #243F30 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(49, 104, 66, 0.3) !important;
+}
+
+.button.secondary,
+.expediente-secondary-action {
+  border: 1px solid var(--color-border-control) !important;
+  background: #FFFFFF !important;
+  color: var(--color-text-primary) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+}
+
+.button.secondary:hover:not(:disabled),
+.expediente-secondary-action:hover:not(:disabled) {
+  border-color: #316842 !important;
+  background: #F3F6F2 !important;
+  color: #316842 !important;
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  color: var(--color-text-secondary);
+  background: #FFFFFF;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.icon-button:hover:not(:disabled) {
+  border-color: #316842;
+  color: #316842;
+  background: #EDF2EE;
+}
+
+/* ==========================================================================
+   CARDS, PANELS & ELEVATION
+   ========================================================================== */
+
+.card,
+.panel,
+.form-card,
+.project-card,
+.comparison-card,
+.extraction-card,
+.summary-metric-card {
+  background: #FFFFFF !important;
+  border: 1px solid var(--color-border-subtle) !important;
+  border-radius: 12px !important;
+  box-shadow: rgba(145, 158, 171, 0.3) 0px 0px 2px 0px, rgba(145, 158, 171, 0.12) 0px 12px 24px -4px !important;
+}
+
+.card:hover,
+.project-card:hover {
+  border-color: #C2CAD6 !important;
+}
+
+/* Legalitica Welcome Hero Banner */
+
+/* ==========================================================================
+   INPUTS & FORM CONTROLS
+   ========================================================================== */
+
+input[type='text']:not(:where([class*="univer-"], [class*="univer-"] *)),
+input[type='search']:not(:where([class*="univer-"], [class*="univer-"] *)),
+input[type='email']:not(:where([class*="univer-"], [class*="univer-"] *)),
+input[type='password']:not(:where([class*="univer-"], [class*="univer-"] *)),
+input[type='number']:not(:where([class*="univer-"], [class*="univer-"] *)),
+input:not(:where([class*="univer-"], [class*="univer-"] *)):not([type]),
+select:not(:where([class*="univer-"], [class*="univer-"] *)),
+textarea:not(:where([class*="univer-"], [class*="univer-"] *)) {
+  border: 1px solid var(--color-border-control) !important;
+  border-radius: 10px !important;
+  padding: 9px 13px !important;
+  background: #FFFFFF !important;
+  color: var(--color-text-primary) !important;
+  font-family: var(--font-body) !important;
+  font-size: 14px !important;
+  box-shadow: none !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:not(:where([class*="univer-"], [class*="univer-"] *)):focus,
+select:not(:where([class*="univer-"], [class*="univer-"] *)):focus,
+textarea:not(:where([class*="univer-"], [class*="univer-"] *)):focus {
+  border-color: #316842 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(49, 104, 66, 0.15) !important;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  height: 40px;
+  border: 1px solid var(--color-border-control);
+  border-radius: 10px;
+  background: #FFFFFF;
+  transition: all 0.15s ease;
+}
+
+.search-box:focus-within {
+  border-color: #316842;
+  box-shadow: 0 0 0 3px rgba(49, 104, 66, 0.15);
+}
+
+.search-box input {
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+/* ==========================================================================
+   STATUS PILLS, CHIPS & BADGES (Vuetify / Legalitica VChip exact colors)
+   ========================================================================== */
+
+.status,
+.status-pill,
+.badge,
+.comparison-status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 6px !important;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+/* Success status */
+.status.completed,
+.status.completado,
+.status-pill.success,
+.comparison-status-tag.is-exact {
+  background: #E6FFFA !important;
+  color: #0C9D82 !important;
+}
+
+/* Warning status */
+.status.en_proceso,
+.status.requiere_revision,
+.status-pill.warning,
+.comparison-status-tag.is-near {
+  background: #FEF5E5 !important;
+  color: #B57504 !important;
+}
+
+/* Danger / Error status */
+.status.fallido,
+.status.cancelado,
+.comparison-status-tag.is-different {
+  background: #FDEDE8 !important;
+  color: #CF2D45 !important;
+}
+
+/* Info status */
+.status.info,
+.status-pill.info {
+  background: #E8F7FF !important;
+  color: #539BFF !important;
+}
+
+/* Primary Territorium badge */
+.status.pendiente {
+  background: #EDF2EE !important;
+  color: #316842 !important;
+}
+
+/* Status Pills Bar (Filter tabs) */
+.status-pills {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  background: #FFFFFF;
+}
+
+.status-pills .pill {
+  min-height: 32px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.status-pills .pill:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.status-pills .pill.active {
+  background: #EDF2EE !important;
+  color: #316842 !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 3px rgba(49, 104, 66, 0.1) !important;
+}
+
+/* ==========================================================================
+   TABS (Vuetify style: 3px primary slider, Poppins font)
+   ========================================================================== */
+
+.expediente-flow-tabs {
+  display: flex;
+  gap: 0;
+  width: 100%;
+  padding: 0;
+  border-bottom: 2px solid var(--color-border-subtle) !important;
+  background: #FFFFFF;
+  margin-bottom: 20px;
+}
+
+.expediente-flow-tabs button {
+  position: relative;
+  min-height: 46px;
+  padding: 12px 20px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-heading);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.expediente-flow-tabs button:hover {
+  color: #316842;
+  background: #F3F6F2;
+}
+
+.expediente-flow-tabs button.active {
+  color: #316842 !important;
+  font-weight: 600 !important;
+}
+
+.expediente-flow-tabs button.active:after {
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  left: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: #316842 !important;
+  content: '';
+}
+
+.expediente-tab-counter {
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  background: #EDF2EE;
+  color: #316842;
+  font-size: 11px;
+  font-weight: 700;
+}
+

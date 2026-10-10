@@ -1,0 +1,330 @@
+/* ==========================================================================
+   EXPEDIENTE NAV TABS BAR (Back Button '<' + Tabs Row)
+   ========================================================================== */
+
+.expediente-nav-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border-bottom: 2px solid var(--color-border-subtle);
+  background: #FFFFFF;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+
+.expediente-back-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  background: #FFFFFF;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.expediente-back-icon-btn:hover {
+  background: #F3F6F2;
+  color: #316842;
+  border-color: #316842;
+  transform: translateX(-1px);
+}
+
+.expediente-nav-tabs-bar .expediente-flow-tabs {
+  margin-bottom: 0 !important;
+  border-bottom: none !important;
+  width: auto;
+}
+
+.expediente-nav-tabs-bar .expediente-flow-tabs button {
+  min-height: 40px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+}
+
+.expediente-nav-tabs-bar .expediente-flow-tabs button.active:after {
+  bottom: 0;
+}
+
+/* ==========================================================================
+   EXPEDIENTE EXTRACTION VIEW (Compact & Zero Scroll Layout)
+   ========================================================================== */
+
+.page-content:has(.project-detail-layout),
+.page-content:has(.expediente-remote-workspace),
+.page-content:has(.expediente-prototype) {
+  max-width: 100% !important;
+  height: calc(100vh - var(--topbar-height, 56px)) !important;
+  max-height: calc(100vh - var(--topbar-height, 56px)) !important;
+  padding: 6px 20px 8px !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.project-detail-layout,
+.expediente-prototype,
+.expediente-remote-workspace {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+.expediente-extraction-view {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 !important;
+  min-height: 0 !important;
+  gap: 8px !important;
+  overflow: hidden !important;
+}
+
+/* Document upload cards grid */
+.extraction-card-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+  margin-bottom: 12px !important;
+}
+
+/* Individual extraction card (adjusted height +80%) */
+.extraction-card {
+  display: flex !important;
+  flex-direction: column !important;
+  min-width: 0 !important;
+  min-height: 440px !important;
+  height: 440px !important;
+  max-height: 440px !important;
+  padding: 16px 18px !important;
+  background: #FFFFFF !important;
+  border: 1px solid var(--color-border-subtle) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.extraction-card-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  margin-bottom: 10px !important;
+  flex-shrink: 0 !important;
+}
+
+.extraction-card-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  min-width: 0 !important;
+}
+
+.extraction-card-icon {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 8px !important;
+  background: #EDF2EE !important;
+  color: #316842 !important;
+}
+
+.extraction-card-title h3 {
+  font-family: var(--font-heading) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--color-text-primary) !important;
+  margin: 0 !important;
+  line-height: 1.25 !important;
+}
+
+.extraction-card-title p {
+  display: -webkit-box !important;
+  -webkit-box-orient: vertical !important;
+  -webkit-line-clamp: 2 !important;
+  overflow: hidden !important;
+  margin: 2px 0 0 0 !important;
+  font-size: 11.5px !important;
+  color: var(--color-text-muted) !important;
+  line-height: 1.35 !important;
+}
+
+.extraction-upload-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 8px 0 !important;
+  min-height: 36px !important;
+  flex-shrink: 0 !important;
+}
+
+.extraction-upload-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  min-height: 36px !important;
+  padding: 6px 12px !important;
+  border: 1px dashed var(--color-border-subtle) !important;
+  border-radius: 8px !important;
+  background: #FAFBF9 !important;
+  color: var(--color-text-secondary) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  width: 100% !important;
+  transition: all 0.15s ease !important;
+}
+
+.extraction-upload-button:hover {
+  background: #F3F6F2 !important;
+  border-color: #316842 !important;
+  color: #316842 !important;
+}
+
+.extraction-file-list {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 0 !important;
+  min-height: 160px !important;
+  max-height: 200px !important;
+  height: auto !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  border: 1px solid var(--color-border-subtle) !important;
+  border-radius: 8px !important;
+  background: #FAFAFA !important;
+  margin: 6px 0 !important;
+  padding: 4px !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #cbd5e1 #FAFAFA !important;
+}
+
+.extraction-file-list::-webkit-scrollbar {
+  width: 6px !important;
+}
+
+.extraction-file-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+  border-radius: 3px !important;
+}
+
+.extraction-file-list li {
+  min-height: 32px !important;
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+  gap: 6px !important;
+  flex-shrink: 0 !important;
+}
+
+.extraction-empty-files {
+  height: 100% !important;
+  padding: 12px !important;
+  font-size: 12px !important;
+  gap: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--color-text-muted) !important;
+}
+
+.extraction-card-actions {
+  display: flex !important;
+  gap: 8px !important;
+  margin-top: auto !important;
+  padding-top: 8px !important;
+  flex-shrink: 0 !important;
+}
+
+.extraction-card-actions button {
+  min-height: 36px !important;
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+  border-radius: 8px !important;
+}
+
+.extraction-error-note {
+  margin: 4px 0 0 !important;
+  font-size: 11.5px !important;
+  line-height: 1.3 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  flex-shrink: 0 !important;
+}
+
+.extraction-progress {
+  margin-top: 4px !important;
+  flex-shrink: 0 !important;
+}
+
+/* Consolidation Row Bar */
+.extraction-consolidation-bar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 8px 14px !important;
+  background: #FFFFFF !important;
+  border: 1px solid var(--color-border-subtle) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+  flex-shrink: 0 !important;
+  min-height: 46px !important;
+  margin-top: 0 !important;
+}
+
+.extraction-consolidation-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.extraction-consolidation-left .expediente-primary-action {
+  min-height: 34px !important;
+  padding: 6px 14px !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
+}
+
+.extraction-consolidation-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  margin-left: auto !important;
+}
+
+.extraction-consolidation-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.extraction-consolidation-actions button {
+  min-height: 32px !important;
+  padding: 5px 12px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  border-radius: 6px !important;
+}
+
+/* ==========================================================================
+   EXPEDIENTE DOCUMENT FINAL VIEWPORT & VIEWER (FIXED HEIGHT, INNER SCROLL, ZOOM)
+   ========================================================================== */
+
