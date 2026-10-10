@@ -18,9 +18,10 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ValidationNotice } from '../../lib/expedienteResultAdapters'
+import { formatPesosWhileTyping } from '../../lib/negotiatedValue'
 import { READONLY_ROW_FLAG } from '../../lib/planTitleLinking'
 import type { EditableResultRow, ResultColumn } from './types'
 
@@ -46,6 +47,7 @@ interface EditableTableCellInputProps {
   noticeSeverity?: 'error' | 'warning'
   noticeMessage?: string
   placeholder?: string
+  liveFormat?: ResultColumn['liveFormat']
   onCommit: (rowId: string, columnKey: string, value: string) => void
 }
 
@@ -59,17 +61,33 @@ function EditableTableCellInput({
   noticeSeverity,
   noticeMessage,
   placeholder,
+  liveFormat,
   onCommit,
 }: EditableTableCellInputProps) {
   const [localValue, setLocalValue] = useState(initialValue)
   const isComposingRef = useRef(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const pendingCaretRef = useRef<number | null>(null)
 
   useEffect(() => {
     setLocalValue(initialValue)
   }, [initialValue])
 
+  // Tras dar formato, el cursor vuelve a quedar después del dígito que se acaba de escribir.
+  useLayoutEffect(() => {
+    const caret = pendingCaretRef.current
+    if (caret === null || !inputRef.current) return
+    pendingCaretRef.current = null
+    inputRef.current.setSelectionRange(caret, caret)
+  }, [localValue])
+
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const nextVal = event.target.value
+    let nextVal = event.target.value
+    if (liveFormat === 'pesos') {
+      const formatted = formatPesosWhileTyping(nextVal, event.target.selectionStart ?? nextVal.length)
+      nextVal = formatted.text
+      pendingCaretRef.current = formatted.caret
+    }
     setLocalValue(nextVal)
     onCommit(rowId, columnKey, nextVal)
   }
@@ -77,6 +95,7 @@ function EditableTableCellInput({
   return (
     <div className="result-table-cell-wrapper">
       <input
+        ref={inputRef}
         className={`result-table-input ${hasNotice && noticeSeverity ? `has-notice ${noticeSeverity}` : ''}`}
         value={localValue}
         inputMode={inputMode === 'numeric' ? 'decimal' : 'text'}
@@ -259,6 +278,7 @@ export function ResultDataTable({
             noticeSeverity={notice?.severity}
             noticeMessage={notice?.message}
             placeholder={definition.placeholder}
+            liveFormat={definition.liveFormat}
             onCommit={handleCommit}
           />
         )

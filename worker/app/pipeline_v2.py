@@ -18,6 +18,33 @@ from .validation.validator import StructuralValidationEngine, ValidationReport
 
 logger = logging.getLogger("territorium.pipeline_v2")
 
+HEURISTIC_ENGINE = "heuristic-engine"
+
+
+def analysis_engine_summary(document_calls: dict[str, list[dict[str, Any]]], model: str | None) -> dict[str, Any]:
+    """Resume si cada documento se analizó con IA o con las reglas de respaldo.
+
+    `document_calls` asocia cada archivo con la telemetría de sus llamadas al extractor
+    (lista vacía si no se pudo leer texto). Un documento es "ai" si todas sus llamadas usaron
+    la IA, "rules" si ninguna, "mixed" si ambas y "unread" si no hubo llamadas.
+    """
+    documents = []
+    fell_back = False
+    for name, calls in document_calls.items():
+        used_ai = [call.get("used_model") not in (None, "", HEURISTIC_ENGINE) for call in calls]
+        fell_back = fell_back or any(call.get("fallback_triggered") for call in calls)
+        engine = "unread" if not calls else "ai" if all(used_ai) else "rules" if not any(used_ai) else "mixed"
+        documents.append({"name": name, "engine": engine})
+    engines = {d["engine"] for d in documents} - {"unread"}
+    mode = "none" if not engines else "ai" if engines == {"ai"} else "rules" if engines == {"rules"} else "mixed"
+    uses_rules = bool(engines & {"rules", "mixed"})
+    return {
+        "mode": mode,
+        "model": model if engines & {"ai", "mixed"} else None,
+        "rules_reason": ("ai_error" if fell_back else "not_configured") if uses_rules else None,
+        "documents": documents,
+    }
+
 
 class Phase4ExecutionResult:
     def __init__(
@@ -83,6 +110,7 @@ class Phase4PipelineOrchestrator:
         primary_model: str = "gpt-4o",
     ) -> None:
         self.ai_client = ai_client
+        self.primary_model = primary_model
         self.title_extractor = TitleStudyExtractor(ai_client=ai_client, model=primary_model)
         self.plan_extractor = PlanExtractor(ai_client=ai_client, model=primary_model)
         self.negotiation_extractor = NegotiationExtractor()
@@ -148,9 +176,17 @@ class Phase4PipelineOrchestrator:
                         estimated_cost_usd=0.0,
                     )
 
+            # La plantilla se lee con reglas sobre el Excel: este grupo no usa IA.
+            canonical_payload = validated_payload.model_dump()
+            canonical_payload["analysis_engine"] = {
+                "mode": "rules",
+                "model": None,
+                "rules_reason": "spreadsheet",
+                "documents": [{"name": filename, "engine": "rules"}],
+            }
             return Phase4ExecutionResult(
                 group_key="negotiation",
-                canonical_payload=validated_payload.model_dump(),
+                canonical_payload=canonical_payload,
                 validation_report=report,
                 discrepancies=discrepancies,
                 provenance=[{"field": "offers", "source": filename, "cells": validated_payload.cell_references}],
@@ -164,11 +200,13 @@ class Phase4PipelineOrchestrator:
 
             extracted_fragments: list[dict[str, Any]] = []
             file_discrepancies: list[dict[str, Any]] = []
+            title_calls: dict[str, list[dict[str, Any]]] = {name: [] for _, _, name in files}
             parsed_docs_lock = asyncio.Lock()
             extract_sem = asyncio.Semaphore(4)
 
             async def _process_single_title_file(doc_id: str, file_bytes: bytes, filename: str) -> list[dict[str, Any]]:
                 frags: list[dict[str, Any]] = []
+                calls = title_calls[filename]
                 try:
                     doc = self.parse_source_file(file_bytes, filename, document_id=doc_id)
                     async with parsed_docs_lock:
@@ -189,13 +227,16 @@ class Phase4PipelineOrchestrator:
                                 document_name=filename,
                                 location_label=seg.location_summary(),
                             )
+                            # El extractor se comparte entre llamadas concurrentes: se copia ya.
+                            telemetry = dict(getattr(self.title_extractor, "last_telemetry", None) or {})
+                        calls.append(telemetry)
                         if gateway and project_id:
                             with suppress(Exception):
                                 await gateway.record_ai_log(
                                     project_id=project_id,
                                     document_id=doc_id,
                                     extractor="title_study",
-                                    **getattr(self.title_extractor, "last_telemetry", {}),
+                                    **telemetry,
                                 )
                         data_dict = partial.model_dump()
                         data_dict["source_document"] = filename
@@ -235,10 +276,12 @@ class Phase4PipelineOrchestrator:
                 for d in reduced.discrepancies
             ] + file_discrepancies
             provenance_list = [p.model_dump() for p in reduced.provenance]
+            canonical_payload = validated_payload.model_dump()
+            canonical_payload["analysis_engine"] = analysis_engine_summary(title_calls, self.primary_model)
 
             return Phase4ExecutionResult(
                 group_key="titles",
-                canonical_payload=validated_payload.model_dump(),
+                canonical_payload=canonical_payload,
                 validation_report=report,
                 discrepancies=discrepancies_list,
                 provenance=provenance_list,
@@ -252,6 +295,7 @@ class Phase4PipelineOrchestrator:
 
             plans_data: list[dict[str, Any]] = []
             plan_file_discrepancies: list[dict[str, Any]] = []
+            plan_calls: dict[str, list[dict[str, Any]]] = {name: [] for _, _, name in files}
             parsed_docs_lock = asyncio.Lock()
             extract_sem = asyncio.Semaphore(5)
 
@@ -268,13 +312,16 @@ class Phase4PipelineOrchestrator:
                             document_name=filename,
                             location_label="Plano completo",
                         )
+                        # El extractor se comparte entre llamadas concurrentes: se copia ya.
+                        telemetry = dict(getattr(self.plan_extractor, "last_telemetry", None) or {})
+                    plan_calls[filename].append(telemetry)
                     if gateway and project_id:
                         with suppress(Exception):
                             await gateway.record_ai_log(
                                 project_id=project_id,
                                 document_id=doc_id,
                                 extractor="plan",
-                                **getattr(self.plan_extractor, "last_telemetry", {}),
+                                **telemetry,
                             )
                     plan_dict = plan_res.model_dump()
                     plan_dict["source_document"] = filename
@@ -314,9 +361,12 @@ class Phase4PipelineOrchestrator:
                 for d in plan_file_discrepancies
             ]
 
+            canonical_payload = dict(reduced.canonical_payload)
+            canonical_payload["analysis_engine"] = analysis_engine_summary(plan_calls, self.primary_model)
+
             return Phase4ExecutionResult(
                 group_key="plans",
-                canonical_payload=reduced.canonical_payload,
+                canonical_payload=canonical_payload,
                 validation_report=report,
                 discrepancies=discrepancies,
                 provenance=[{"field": "plans", "source": f[2]} for f in files],

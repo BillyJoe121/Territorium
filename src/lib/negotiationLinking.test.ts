@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { EditableResultRow } from '../components/expediente/types'
-import { buildNegotiationLinkage, negotiationAlertCount, NEGOTIATION_STATUS, type LinkedPair } from './negotiationLinking'
+import { buildNegotiationColumns, buildNegotiationLinkage, deriveNegotiationRow, negotiationAlertCount, NEGOTIATION_STATUS, type LinkedPair } from './negotiationLinking'
 import { LINK_STATUS_KEY, READONLY_ROW_FLAG } from './planTitleLinking'
 
 const pairs: LinkedPair[] = [
@@ -42,11 +42,19 @@ describe('buildNegotiationLinkage', () => {
   it('requires a matching negotiated value on every linked row', () => {
     const missing = buildNegotiationLinkage([neg({ negotiatedValueNumbers: '', negotiatedValueLetters: '' })], pairs.slice(0, 1))
     expect(missing.summary.missingValues).toBe(1)
-    expect(missing.alerts.filter((a) => a.kind === 'missing_value').map((a) => a.columnKey)).toEqual(['negotiatedValueNumbers', 'negotiatedValueLetters'])
+    // Las letras se redactan solas: solo la casilla de números es accionable.
+    expect(missing.alerts.filter((a) => a.kind === 'missing_value').map((a) => a.columnKey)).toEqual(['negotiatedValueNumbers'])
 
     const wrong = buildNegotiationLinkage([neg({ negotiatedValueLetters: 'nueve millones de pesos' })], pairs.slice(0, 1))
     expect(wrong.summary.missingValues).toBe(1)
     expect(wrong.alerts.find((a) => a.columnKey === 'negotiatedValueLetters')?.message).toMatch(/9\.000\.000/)
+  })
+
+  it('reports invalid numbers only on the numbers cell', () => {
+    const linkage = buildNegotiationLinkage([deriveNegotiationRow(neg({ negotiatedValueNumbers: '9,628,712' }))], pairs.slice(0, 1))
+    const valueAlerts = linkage.alerts.filter((a) => a.kind === 'invalid_value')
+    expect(valueAlerts.map((a) => a.columnKey)).toEqual(['negotiatedValueNumbers'])
+    expect(valueAlerts[0].message).toMatch(/comas/)
   })
 
   it('flags cadastral id and folder/plan mismatches, accepting NPN vs legacy code', () => {
@@ -60,5 +68,36 @@ describe('buildNegotiationLinkage', () => {
   it('flags offers whose numbers and letters do not match', () => {
     const linkage = buildNegotiationLinkage([neg({ valuesMatch: 'No coinciden: Oferta 2' })], pairs.slice(0, 1))
     expect(linkage.alerts.find((a) => a.columnKey === 'valuesMatch')?.severity).toBe('error')
+  })
+})
+
+describe('negotiated value letters', () => {
+  it('only the numbers are typed; the letters column is read-only', () => {
+    const columns = buildNegotiationColumns()
+    expect(columns.find((c) => c.key === 'negotiatedValueNumbers')?.editable).not.toBe(false)
+    expect(columns.find((c) => c.key === 'negotiatedValueLetters')?.editable).toBe(false)
+  })
+
+  it('writes the letters from the numbers', () => {
+    const row = deriveNegotiationRow(neg({ negotiatedValueNumbers: '93468040', negotiatedValueLetters: '' }))
+    expect(row.negotiatedValueLetters).toBe('Noventa y tres millones cuatrocientos sesenta y ocho mil cuarenta pesos')
+    expect(buildNegotiationLinkage([row], pairs.slice(0, 1)).summary.missingValues).toBe(0)
+  })
+
+  it('replaces hand-written letters that no longer match', () => {
+    const row = deriveNegotiationRow(neg({ negotiatedValueLetters: 'nueve millones de pesos' }))
+    expect(row.negotiatedValueLetters).toBe('Nueve millones seiscientos veintiocho mil setecientos doce pesos')
+  })
+
+  it('clears the letters when the numbers are empty or invalid', () => {
+    expect(deriveNegotiationRow(neg({ negotiatedValueNumbers: '' })).negotiatedValueLetters).toBe('')
+    expect(deriveNegotiationRow(neg({ negotiatedValueNumbers: '9,628,712' })).negotiatedValueLetters).toBe('')
+  })
+
+  it('leaves the rest of the row untouched', () => {
+    const original = neg({})
+    const row = deriveNegotiationRow(original)
+    expect(row).not.toBe(original)
+    expect({ ...row, negotiatedValueLetters: original.negotiatedValueLetters }).toEqual(original)
   })
 })

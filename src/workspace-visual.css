@@ -982,14 +982,14 @@ main {
    INPUTS & FORM CONTROLS
    ========================================================================== */
 
-input[type='text'],
-input[type='search'],
-input[type='email'],
-input[type='password'],
-input[type='number'],
-input:not([type]),
-select,
-textarea {
+input[type='text']:not(:where([class*="univer-"], [class*="univer-"] *)),
+input[type='search']:not(:where([class*="univer-"], [class*="univer-"] *)),
+input[type='email']:not(:where([class*="univer-"], [class*="univer-"] *)),
+input[type='password']:not(:where([class*="univer-"], [class*="univer-"] *)),
+input[type='number']:not(:where([class*="univer-"], [class*="univer-"] *)),
+input:not(:where([class*="univer-"], [class*="univer-"] *)):not([type]),
+select:not(:where([class*="univer-"], [class*="univer-"] *)),
+textarea:not(:where([class*="univer-"], [class*="univer-"] *)) {
   border: 1px solid var(--color-border-control) !important;
   border-radius: 10px !important;
   padding: 9px 13px !important;
@@ -1001,9 +1001,9 @@ textarea {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-input:focus,
-select:focus,
-textarea:focus {
+input:not(:where([class*="univer-"], [class*="univer-"] *)):focus,
+select:not(:where([class*="univer-"], [class*="univer-"] *)):focus,
+textarea:not(:where([class*="univer-"], [class*="univer-"] *)):focus {
   border-color: #316842 !important;
   outline: none !important;
   box-shadow: 0 0 0 3px rgba(49, 104, 66, 0.15) !important;
@@ -2057,31 +2057,6 @@ textarea:focus {
   filter: none !important;
 }
 
-/* Modal Escoger documento a generar */
-.expediente-template-modal {
-  position: fixed !important;
-  top: 50% !important;
-  left: 50% !important;
-  z-index: 1050 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  width: min(880px, calc(100vw - 32px)) !important;
-  max-width: calc(100vw - 32px) !important;
-  height: min(88vh, 820px) !important;
-  max-height: calc(100dvh - 32px) !important;
-  padding: 0 !important;
-  overflow: hidden !important;
-  transform: translate(-50%, -50%) !important;
-  margin: 0 !important;
-  background: #FFFFFF !important;
-  border: 1px solid var(--color-border-subtle) !important;
-  border-radius: 16px !important;
-  box-shadow: 0 24px 64px rgba(24, 48, 42, 0.25) !important;
-  outline: none !important;
-  opacity: 1 !important;
-  filter: none !important;
-}
-
 /* Modales de analizar resultados: doble de ancho (1200px), centrados y con scroll interno */
 .expediente-review-modal {
   position: fixed !important;
@@ -2102,6 +2077,193 @@ textarea:focus {
   box-shadow: 0 24px 64px rgba(24, 48, 42, 0.25) !important;
   display: flex !important;
   flex-direction: column !important;
+}
+
+/* Resultados (títulos, planos, negociación, consolidado): modal a pantalla completa, con
+   esquinas rectas. inset: 0 ajusta el modal al área visible exacta (100vw incluiría la
+   barra de desplazamiento y lo cortaría por la derecha). */
+.expediente-review-modal.expediente-results-modal {
+  inset: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* Editor de hoja de cálculo (Univer) dentro del modal de resultados */
+.result-spreadsheet {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.result-spreadsheet-frame {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  background: #FFFFFF;
+}
+
+.result-spreadsheet-host,
+.result-spreadsheet-mount {
+  position: absolute;
+  inset: 0;
+}
+
+.result-spreadsheet-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--color-text-muted, #5b6472);
+  font-size: 13px;
+  background: #FFFFFF;
+}
+
+.result-spreadsheet-loading.is-static {
+  position: static;
+  flex: 1 1 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+}
+
+.result-spreadsheet-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: #7a4b00;
+  background: #fff6e0;
+  font-size: 12.5px;
+}
+
+.result-spreadsheet-hint {
+  position: absolute;
+  bottom: 44px;
+  left: 50%;
+  z-index: 60;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.result-spreadsheet-hint span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  color: #FFFFFF;
+  background: rgba(31, 41, 55, 0.92);
+  font-size: 12.5px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.22);
+  white-space: nowrap;
+}
+
+/* Leyenda del resaltado: siempre ocupa su línea, así el cambio de conteos no mueve la hoja. */
+.result-spreadsheet-legend {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  min-height: 20px;
+  color: var(--color-text-muted, #5b6472);
+  font-size: 12px;
+}
+
+.result-spreadsheet-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.result-spreadsheet-legend i {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+}
+
+.result-spreadsheet-legend .is-error i { background: #FDE2E4; box-shadow: inset 0 0 0 1px #D92D20; }
+.result-spreadsheet-legend .is-warning i { background: #FFEBD2; box-shadow: inset 0 0 0 1px #F79009; }
+.result-spreadsheet-legend .is-missing i { background: #FFF6D9; box-shadow: inset 0 0 0 1px #CA8A04; }
+.result-spreadsheet-legend .is-ok { color: #1c6835; }
+.result-spreadsheet-legend-help { color: #8a93a0; }
+
+/* Detalle de la alerta junto al cursor */
+.result-spreadsheet-tip {
+  position: absolute;
+  z-index: 70;
+  max-width: 320px;
+  padding: 7px 10px;
+  border-left: 3px solid #CA8A04;
+  border-radius: 6px;
+  color: #1f2937;
+  background: #FFFFFF;
+  font-size: 12.5px;
+  line-height: 1.4;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.18);
+  pointer-events: none;
+}
+
+.result-spreadsheet-tip.is-error { border-left-color: #D92D20; }
+.result-spreadsheet-tip.is-warning { border-left-color: #F79009; }
+
+/* Hallazgos del cotejo que llevan a su casilla en la hoja: el botón ocupa la fila y repite su rejilla. */
+.plan-linkage-findings li:has(.plan-linkage-finding-button) {
+  display: block;
+  padding: 0;
+}
+
+.plan-linkage-finding-button {
+  display: grid;
+  grid-template-columns: 10px auto minmax(90px, 180px) 1fr;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.plan-linkage-finding-button:hover {
+  background: #f3f7f4;
+}
+
+@media (max-width: 720px) {
+  .plan-linkage-finding-button { grid-template-columns: 10px auto 1fr; }
+}
+
+.result-spreadsheet-errors {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border: 1px solid #f1b8bf;
+  border-radius: 8px;
+  color: #8a1c2b;
+  background: #fdecee;
+  font-size: 12.5px;
+}
+
+.result-spreadsheet-errors ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
 }
 
 .expediente-review-modal .expediente-modal-header {
@@ -2466,65 +2628,6 @@ textarea:focus {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-}
-
-/* ===== Visor DOCX de solo lectura (documento final) ===== */
-.document-docx-viewer {
-  display: flex !important;
-  flex-direction: column !important;
-  flex: 1 1 0% !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
-  background: #f1f5f9 !important;
-}
-
-.document-docx-pages {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-.document-docx-viewport {
-  position: relative;
-  flex: 1 1 0%;
-  min-height: 0;
-  overflow: auto;
-  padding: 24px 16px 48px;
-  background: #e2e8f0;
-  outline: none;
-  scrollbar-width: thin;
-}
-
-.document-docx-scaler {
-  width: max-content;
-  margin: 0 auto;
-}
-
-/* docx-preview pinta su propio fondo y sombras; aquí se integran con el visor. */
-.document-docx-container .docx-wrapper {
-  background: transparent !important;
-  padding: 0 !important;
-  gap: 18px;
-}
-
-.document-docx-container .docx-wrapper > section.docx {
-  margin-bottom: 18px !important;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.18) !important;
-}
-
-.document-docx-loading {
-  position: absolute;
-  inset: 16px auto auto 50%;
-  transform: translateX(-50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: #fff;
-  font-size: 12.5px;
-  color: var(--color-text-secondary);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-  z-index: 1;
 }
 
 /* ===== Planos: compuerta por estudio de títulos ===== */
@@ -2906,28 +3009,6 @@ textarea:focus {
   opacity: 1;
 }
 
-.template-predio-select {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 12px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-}
-
-.template-predio-select select {
-  flex: 1;
-  max-width: 560px;
-  height: 34px;
-  padding: 4px 10px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 8px;
-  background: #fff;
-  font-size: 13px;
-  color: var(--color-text-primary);
-}
-
 /* ===== Casillas largas: se recortan con "…" y se leen completas al pasar el cursor ===== */
 .result-data-table .result-table-text {
   display: block;
@@ -2974,4 +3055,768 @@ textarea:focus {
 
 .result-cell-preview.is-above {
   transform: translateY(-100%);
+}
+
+/* ===== Modal con panel lateral (consolidado: hoja 5/6, documentos generados 1/6) ===== */
+.expediente-review-modal .expediente-modal-body > .review-main {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.expediente-review-modal .expediente-modal-body.has-side-panel {
+  flex-direction: row !important;
+  gap: 12px !important;
+}
+
+.expediente-review-modal .expediente-modal-body.has-side-panel > .review-main {
+  flex: 5 1 0;
+}
+
+.expediente-review-modal .expediente-modal-body > .review-side {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 220px;
+  min-height: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--color-border-subtle);
+  padding-left: 12px;
+}
+
+@media (max-width: 900px) {
+  .expediente-review-modal .expediente-modal-body.has-side-panel { flex-direction: column !important; }
+  .expediente-review-modal .expediente-modal-body > .review-side { flex: 0 0 auto; max-height: 40%; border-left: 0; border-top: 1px solid var(--color-border-subtle); padding: 8px 0 0; }
+}
+
+/* Panel lateral plegable. Ancho fijo para que los títulos de las secciones se lean completos;
+   la hoja toma el resto. Se pliega con una muesca (pestaña) arriba, pegada a la línea divisoria. */
+.expediente-review-modal .expediente-modal-body > .review-side {
+  position: relative;
+  flex: 0 0 clamp(280px, 22%, 340px);
+  flex-direction: column;
+  padding-left: 10px;
+  overflow: hidden;
+}
+
+.expediente-review-modal .expediente-modal-body > .review-side.is-collapsed {
+  flex: 0 0 26px;
+  min-width: 0;
+  padding-left: 0;
+}
+
+@media (max-width: 900px) {
+  .expediente-review-modal .expediente-modal-body > .review-side { flex: 0 0 auto; max-height: 40%; }
+}
+
+.review-side-toggle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 0 7px 7px 0;
+  color: #ffffff;
+  background: #316842;
+  cursor: pointer;
+}
+
+.review-side-toggle:hover {
+  background: #243f30;
+}
+
+.review-side-toggle:focus-visible {
+  outline: 2px solid #316842;
+  outline-offset: 2px;
+}
+
+.review-side-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* El título del panel deja sitio a la muesca. */
+.review-side-content .generated-documents-header {
+  min-height: 28px;
+  padding-left: 22px;
+}
+
+/* Cabecera de los modales de resultados: título, resumen y leyenda de la hoja en una línea,
+   para dejar más alto a la tabla. */
+.expediente-review-modal .expediente-modal-header {
+  gap: 16px;
+  padding: 10px 24px !important;
+}
+
+.review-header-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  min-width: 0;
+}
+
+.review-header-main > h2 {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.review-header-legend .result-spreadsheet-legend {
+  min-height: 0;
+}
+
+.plan-linkage-panel.is-inline {
+  position: relative;
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+
+.plan-linkage-panel.is-inline .plan-linkage-header {
+  gap: 6px;
+  padding: 0;
+}
+
+.plan-linkage-panel.is-inline .plan-linkage-counts {
+  margin-left: 0;
+}
+
+/* El detalle de excluidos flota sobre la hoja en lugar de empujarla. */
+.plan-linkage-panel.is-inline .plan-linkage-findings {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  width: min(640px, 80vw);
+  max-height: 280px;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px -8px rgb(20 40 25 / 28%);
+}
+
+/* Pie del modal: generar documentos a la izquierda, junto al estado del borrador */
+.expediente-review-modal .expediente-modal-footer:has(> .review-footer-tools) {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.review-footer-tools ~ .expediente-modal-footer-actions {
+  margin-left: auto;
+}
+
+.review-footer-tools {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.document-generation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.document-generation-split {
+  display: inline-flex;
+  align-items: stretch;
+  min-height: 38px;
+  border: 1px solid #316842;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #316842;
+}
+
+.document-generation-run,
+.document-generation-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 0;
+  color: #ffffff;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.document-generation-split.has-selection .document-generation-trigger {
+  padding: 0 10px;
+  border-left: 1px solid rgb(255 255 255 / 30%);
+}
+
+.document-generation-run:hover:not(:disabled),
+.document-generation-trigger:hover:not(:disabled),
+.document-generation-trigger[data-state="open"] {
+  background: #243f30;
+}
+
+.document-generation-run:focus-visible,
+.document-generation-trigger:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: -4px;
+}
+
+.document-generation-run:disabled,
+.document-generation-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.document-generation-chevron {
+  transition: transform 0.15s ease;
+}
+
+.document-generation-trigger[data-state="open"] .document-generation-chevron {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .document-generation-chevron { transition: none; }
+}
+
+.document-generation-menu {
+  z-index: 1200;
+  min-width: 300px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 6px;
+  border: 1px solid var(--color-border-subtle, #dfe6e1);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px -8px rgb(20 40 25 / 28%);
+}
+
+.document-generation-menu-label {
+  padding: 6px 8px 4px;
+  color: #5b6472;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.document-generation-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 8px;
+  border-radius: 7px;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+
+.document-generation-option > svg:first-child {
+  flex: none;
+  margin-top: 1px;
+  color: #1f4d36;
+}
+
+.document-generation-option[data-highlighted] {
+  background: #eef6f1;
+}
+
+.document-generation-option[data-disabled] {
+  color: #8a93a0;
+  cursor: default;
+}
+
+.document-generation-option[data-disabled] > svg:first-child {
+  color: #8a93a0;
+}
+
+.document-generation-option-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.document-generation-option-text small {
+  color: #5b6472;
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.document-generation-soon {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 10px;
+  color: #5b6472;
+  background: #eef0f3;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.document-generation-check {
+  flex: none;
+  margin-top: 1px;
+  color: #316842;
+}
+
+.document-generation-template {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  overflow: hidden;
+  color: #1f4d36;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-generation-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 0;
+  color: var(--color-text-muted, #5b6472);
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.document-generation-clear:hover {
+  color: #1f2937;
+  text-decoration: underline;
+}
+
+/* Panel "Documentos generados": una sección plegable por tipo de documento */
+.generated-documents {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.generated-documents-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.generated-documents-header h3 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.generated-documents-refresh,
+.generated-documents-icon-button {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  color: #1f4d36;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.generated-documents-icon-button:hover:not(:disabled),
+.generated-documents-refresh:hover:not(:disabled) {
+  border-color: #316842;
+}
+
+.generated-documents-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.generated-documents-error {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: #8a1c2b;
+  background: #fdecee;
+  font-size: 11.5px;
+}
+
+.generated-documents-section {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #316842;
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+/* Cada sección es una franja verde (como los botones principales) que se despliega. */
+.generated-documents-section-header {
+  display: flex;
+  align-items: stretch;
+  color: #ffffff;
+  background: #316842;
+}
+
+.generated-documents-section-toggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.generated-documents-section-toggle:hover,
+.generated-documents-section-header .generated-documents-icon-button:hover:not(:disabled) {
+  background: #243f30;
+}
+
+.generated-documents-section-toggle:focus-visible,
+.generated-documents-section-header .generated-documents-icon-button:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: -3px;
+}
+
+.generated-documents-section-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generated-documents-count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  color: #ffffff;
+  background: rgb(255 255 255 / 20%);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Descargar todos, dentro de la franja verde. */
+.generated-documents-section-header .generated-documents-icon-button {
+  width: 36px;
+  height: auto;
+  border: 0;
+  border-left: 1px solid rgb(255 255 255 / 25%);
+  border-radius: 0;
+  color: #ffffff;
+  background: transparent;
+}
+
+.generated-documents-section-header .generated-documents-icon-button:disabled {
+  opacity: 0.45;
+}
+
+.generated-documents-section.is-upcoming {
+  border-color: #6f8a79;
+}
+
+.generated-documents-section.is-upcoming .generated-documents-section-header {
+  background: #6f8a79;
+}
+
+.generated-documents-section-body {
+  padding: 4px 10px 8px;
+  background: #ffffff;
+}
+
+.generated-documents-section-body .generated-documents-empty {
+  padding-top: 6px;
+}
+
+.generated-documents-empty {
+  margin: 0;
+  color: #6b7280;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.generated-documents-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.generated-documents-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 6px;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.generated-documents-list li:last-child {
+  border-bottom: 0;
+}
+
+.generated-document-name {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generated-document-meta {
+  overflow: hidden;
+  color: #8a93a0;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generated-document-actions {
+  display: inline-flex;
+  gap: 2px;
+}
+
+/* Vista de una acción por fila (p. ej. comparador de un plano) dentro del modal de resultados */
+.expediente-review-modal.is-action-panel .expediente-modal-body > .review-main,
+.expediente-review-modal.is-action-panel .expediente-modal-body > .review-side,
+.expediente-review-modal.is-action-panel .expediente-modal-footer {
+  display: none !important;
+}
+
+.expediente-review-modal .expediente-modal-body > .review-action-panel {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Resumen del proyecto: documentos finales generados por tipo */
+.expediente-stage-row.is-final-documents {
+  align-items: start;
+  padding-block: 12px;
+}
+
+.final-document-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 4px 16px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.final-document-counts li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+}
+
+.final-document-counts li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.final-document-counts li b {
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.final-document-counts li.is-upcoming b {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+/* ===== Proyectos: la pantalla no se desplaza; solo la zona de tarjetas tiene scroll ===== */
+main:has(.projects-management-view) {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* Ocupa el alto que deja la barra superior (y los avisos de conexión), no 100vh. */
+main:has(.projects-management-view) > .page-content {
+  flex: 1 1 auto;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0;
+  padding: 16px clamp(20px, 3.5vw, 48px) 14px !important;
+  overflow: hidden;
+}
+
+/* El formulario de creación se desplaza por dentro si la pantalla es baja. */
+.projects-layout > .form-card {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Margen interior para que el borde de la tarjeta seleccionada y las sombras no se recorten. */
+.projects-management-view .project-grid-scroll-wrap {
+  padding: 4px 10px 14px 4px;
+}
+
+/* Tarjetas un 10 % más pequeñas que el diseño base (≈370 × 245 px): ancho máximo, relleno,
+   tipografía e iconos reducidos en la misma proporción. */
+.projects-management-view .project-grid {
+  grid-template-columns: repeat(auto-fill, minmax(250px, 333px));
+  gap: 13px;
+}
+
+.projects-management-view .project-card {
+  gap: 7px;
+  padding: 13px !important;
+}
+
+.projects-management-view .project-card .project-title {
+  font-size: 13.5px;
+}
+
+.projects-management-view .project-meta-details {
+  gap: 5px;
+}
+
+.projects-management-view .meta-line {
+  gap: 7px;
+  font-size: 11.5px;
+}
+
+.projects-management-view .card-actions .icon-button.small {
+  width: 29px;
+  height: 29px;
+}
+
+.projects-management-view .project-card:hover {
+  transform: none;
+}
+
+/* ===== Visor de archivos: casi todo el alto de la pantalla, movible y redimensionable ===== */
+.expediente-file-preview-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 1050;
+  display: flex;
+  flex-direction: column;
+  width: min(1200px, calc(100vw - 32px));
+  height: calc(100dvh - 24px);
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 24px 64px rgb(24 48 42 / 25%);
+  transform: translate(-50%, -50%);
+  outline: none;
+}
+
+/* Movido o redimensionado: la posición y el tamaño vienen del estilo en línea. */
+.expediente-file-preview-modal.is-floating {
+  transform: none;
+}
+
+.expediente-file-preview-modal > .comparison-original {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* La barra superior es el asa para mover el visor; sus botones conservan su cursor. */
+.expediente-file-preview-modal .comparison-original-header {
+  cursor: grab;
+  user-select: none;
+}
+
+.expediente-file-preview-modal.is-dragging,
+.expediente-file-preview-modal.is-dragging .comparison-original-header {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/* Mientras se mueve o redimensiona, el documento no captura el puntero. */
+.expediente-file-preview-modal.is-dragging .comparison-original-body {
+  pointer-events: none;
+}
+
+.preview-resize-handle {
+  position: absolute;
+  z-index: 3;
+  touch-action: none;
+}
+
+.preview-resize-handle.is-n,
+.preview-resize-handle.is-s { left: 12px; right: 12px; height: 7px; cursor: ns-resize; }
+.preview-resize-handle.is-n { top: 0; }
+.preview-resize-handle.is-s { bottom: 0; }
+.preview-resize-handle.is-e,
+.preview-resize-handle.is-w { top: 12px; bottom: 12px; width: 7px; cursor: ew-resize; }
+.preview-resize-handle.is-e { right: 0; }
+.preview-resize-handle.is-w { left: 0; }
+.preview-resize-handle.is-ne,
+.preview-resize-handle.is-nw,
+.preview-resize-handle.is-se,
+.preview-resize-handle.is-sw { width: 14px; height: 14px; }
+.preview-resize-handle.is-ne { top: 0; right: 0; cursor: nesw-resize; }
+.preview-resize-handle.is-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.preview-resize-handle.is-nw { top: 0; left: 0; cursor: nwse-resize; }
+.preview-resize-handle.is-se { bottom: 0; right: 0; cursor: nwse-resize; }
+
+/* Extracción: "Descargar todos" junto a "Agregar archivos" (borde continuo: no es zona de carga).
+   Los dos con el mismo alto e icono junto al texto (la regla global de <label> lo apilaba). */
+.extraction-upload-row {
+  gap: 8px;
+}
+
+.extraction-upload-row .extraction-upload-button {
+  flex: 1 1 0;
+  flex-direction: row;
+}
+
+.extraction-upload-row .extraction-upload-button > span {
+  display: inline;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.extraction-upload-button.is-download {
+  border-style: solid !important;
+}
+
+.extraction-upload-button:disabled {
+  pointer-events: none;
+  opacity: 0.58;
 }

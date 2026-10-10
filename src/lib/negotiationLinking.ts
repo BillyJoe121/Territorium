@@ -3,11 +3,11 @@
  *
  * Cada fila de la plantilla es un predio. Se vincula por FMI con la pareja aprobada en
  * planos; se señalan las parejas sin negociación, las negociaciones sin pareja y los datos
- * que no coinciden. El valor negociado (números y letras) es obligatorio por cada fila
- * vinculada y ambos deben coincidir.
+ * que no coinciden. El valor negociado es obligatorio por cada fila vinculada: se escribe
+ * en números y las letras se redactan solas a partir de ellos.
  */
 import type { EditableResultRow, ResultColumn } from '../components/expediente/types'
-import { checkNegotiatedValue, NEGOTIATED_LETTERS_EXAMPLE, NEGOTIATED_NUMBERS_EXAMPLE } from './negotiatedValue'
+import { checkNegotiatedValue, NEGOTIATED_NUMBERS_EXAMPLE, negotiatedValueLetters } from './negotiatedValue'
 import {
   cadastralKey,
   isEmptyValue,
@@ -82,22 +82,27 @@ export function buildNegotiationColumns(): ResultColumn[] {
     pairColumn('p_owners', 'Estudio · Propietarios', 240),
     { key: 'negCadastralId', label: 'Cédula catastral (negociación)', editable: false, width: 210 },
     pairColumn('p_cadastralId', 'Estudio · Cédula catastral', 210),
-    { key: 'firstOfferNumbers', label: 'Oferta 1 (números)', inputMode: 'numeric', width: 150 },
+    { key: 'firstOfferNumbers', label: 'Oferta 1 (números)', inputMode: 'numeric', liveFormat: 'pesos', width: 150 },
     { key: 'firstOfferLetters', label: 'Oferta 1 (letras)', width: 300 },
-    { key: 'secondOfferNumbers', label: 'Oferta 2 (números)', inputMode: 'numeric', width: 150 },
+    { key: 'secondOfferNumbers', label: 'Oferta 2 (números)', inputMode: 'numeric', liveFormat: 'pesos', width: 150 },
     { key: 'secondOfferLetters', label: 'Oferta 2 (letras)', width: 300 },
-    { key: 'thirdOfferNumbers', label: 'Oferta 3 (números)', inputMode: 'numeric', width: 150 },
-    { key: 'thirdOfferLetters', label: 'Oferta 3 (letras)', width: 300 },
+    { key: 'thirdOfferNumbers', label: 'Oferta 3 (números)', inputMode: 'numeric', liveFormat: 'pesos', width: 150, optional: true },
+    { key: 'thirdOfferLetters', label: 'Oferta 3 (letras)', width: 300, optional: true },
     { key: 'valuesMatch', label: '¿Ofertas coinciden?', editable: false, width: 170 },
     {
-      key: 'negotiatedValueNumbers', label: 'Valor negociado (números)', inputMode: 'numeric', width: 190, required: true,
-      placeholder: NEGOTIATED_NUMBERS_EXAMPLE, hint: `Obligatorio. Ejemplo: ${NEGOTIATED_NUMBERS_EXAMPLE} o 93468040. Sin comas, decimales ni guiones.`,
+      key: 'negotiatedValueNumbers', label: 'Valor negociado (números)', inputMode: 'numeric', liveFormat: 'pesos', width: 190, required: true,
+      placeholder: NEGOTIATED_NUMBERS_EXAMPLE, hint: `Obligatorio. Ejemplo: ${NEGOTIATED_NUMBERS_EXAMPLE} o 93468040. Sin comas, decimales ni guiones. El valor en letras se completa solo.`,
     },
     {
-      key: 'negotiatedValueLetters', label: 'Valor negociado (letras)', width: 420, required: true,
-      placeholder: NEGOTIATED_LETTERS_EXAMPLE, hint: 'Obligatorio. Solo palabras con un espacio entre ellas, terminando en "pesos". Debe coincidir con el valor en números.',
+      key: 'negotiatedValueLetters', label: 'Valor negociado (letras)', editable: false, width: 420,
+      hint: 'Se redacta automáticamente a partir del valor en números.',
     },
   ]
+}
+
+/** Redacta el valor negociado en letras a partir del valor en números. */
+export function deriveNegotiationRow(row: EditableResultRow): EditableResultRow {
+  return { ...row, negotiatedValueLetters: negotiatedValueLetters(String(row.negotiatedValueNumbers ?? '')) }
 }
 
 const PLAN_CODE = /[A-Z]{3}-[A-Z]{3}-\d{3}[A-Z]?/
@@ -172,20 +177,21 @@ export function buildNegotiationLinkage(negotiationRows: EditableResultRow[], pa
     }
 
     // Valor negociado: obligatorio y coincidente en cada fila vinculada.
+    // Las letras dependen de los números: mientras la cifra falte o sea inválida, solo se
+    // señala la casilla de números, que es la única que la persona puede corregir.
     const numbers = String(row.negotiatedValueNumbers ?? '')
     const letters = String(row.negotiatedValueLetters ?? '')
-    if (!numbers.trim() && !letters.trim()) {
+    if (!numbers.trim()) {
       summary.missingValues++
-      const message = `Ingresa el valor negociado de ${row.propertyCode || row.negFolio} en números y en letras.`
+      const message = `Ingresa el valor negociado de ${row.propertyCode || row.negFolio} en números; el valor en letras se completa solo.`
       alerts.push({ rowId: row.id, columnKey: 'negotiatedValueNumbers', kind: 'missing_value', severity: 'error', message })
-      alerts.push({ rowId: row.id, columnKey: 'negotiatedValueLetters', kind: 'missing_value', severity: 'error', message })
       continue
     }
     const check = checkNegotiatedValue(numbers, letters)
     if (!check.ok) {
       summary.missingValues++
       if (check.numbersError) alerts.push({ rowId: row.id, columnKey: 'negotiatedValueNumbers', kind: 'invalid_value', severity: 'error', message: check.numbersError })
-      if (check.lettersError) alerts.push({ rowId: row.id, columnKey: 'negotiatedValueLetters', kind: 'invalid_value', severity: 'error', message: check.lettersError })
+      else if (check.lettersError) alerts.push({ rowId: row.id, columnKey: 'negotiatedValueLetters', kind: 'invalid_value', severity: 'error', message: check.lettersError })
     }
   }
 

@@ -1,6 +1,6 @@
 import { ChangeEvent, FormEvent, Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { Activity, AlertTriangle, Archive, ArrowRight, CheckCircle, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Cloud, FilePlus2, FileSpreadsheet, FileText, FolderKanban, Landmark, LoaderCircle, LogOut, Plus, RotateCcw, Scale, Shield, SlidersHorizontal, Trash2, UploadCloud, WifiOff, X, XCircle } from 'lucide-react'
-import { Toaster, toast as sonnerToast } from 'sonner'
+import { ToastLayer, toast as sonnerToast } from './components/ui/ToastLayer'
 import { StatusPill } from './components/ui/StatusPill'
 import { ThemeToggle } from './components/ui/ThemeToggle'
 import { ExcelExportConfigModal } from './components/ui/ExcelExportConfigModal'
@@ -1271,7 +1271,7 @@ function App() {
             toast(`Libro Excel personalizado generado con ${config.selectedSheets.length} hojas (US-266).`)
           }}
         />
-        <Toaster richColors position="top-right" />
+        <ToastLayer />
       </div>
     )}
   </SessionGuard>

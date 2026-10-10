@@ -78,15 +78,18 @@ describe('contrato de repositorio del expediente v2', () => {
     expect(consVer?.scope).toBe('consolidated')
   })
 
-  it('versiona el documento y rechaza un guardado concurrente obsoleto', async () => {
+  it('reabre un consolidado aprobado como nueva versión en borrador con el mismo contenido', async () => {
     const repository = new DemoExpedienteV2Repository(new Map([['project-1', snapshot]]))
-    const first = await repository.saveDocument('project-1', { type: 'doc', content: [] }, null, 'Versión inicial')
-    const second = await repository.saveDocument('project-1', { type: 'doc', content: [{ type: 'paragraph' }] }, first.id, 'Edición manual')
+    await repository.consolidate('project-1')
+    const first = await repository.getConsolidatedResultVersion('project-1')
+    await repository.approveResult(first!.id)
 
-    expect(second.versionNumber).toBe(2)
-    expect(second.parentDocumentVersionId).toBe(first.id)
-    await expect(
-      repository.saveDocument('project-1', { type: 'doc', content: [] }, first.id, 'Intento obsoleto'),
-    ).rejects.toThrow(EditConflictError)
+    const reopenedId = await repository.reopenConsolidatedVersion('project-1', { correspondencia: [{ id: 'corr-1', B: '350-1' }], edit_locked: false })
+    const latest = await repository.getConsolidatedResultVersion('project-1')
+
+    expect(latest?.id).toBe(reopenedId)
+    expect(latest?.status).toBe('draft')
+    expect(latest?.versionNumber).toBe(first!.versionNumber + 1)
+    expect(latest?.payload).toEqual({ correspondencia: [{ id: 'corr-1', B: '350-1' }], edit_locked: false })
   })
 })

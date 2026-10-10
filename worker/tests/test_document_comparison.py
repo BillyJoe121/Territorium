@@ -106,6 +106,31 @@ class DocumentComparisonTests(unittest.IsolatedAsyncioTestCase):
             await compare_documents(client, 'test-model', self.left, self.right)
         self.assertEqual(create.await_count, 1)
 
+    async def test_gemini_invalid_key_400_is_an_auth_failure(self):
+        class ProviderError(Exception):
+            status_code = 400
+            body = [{'error': {'code': 400, 'message': 'API key not valid. Please pass a valid API key.', 'status': 'INVALID_ARGUMENT',
+                               'details': [{'reason': 'API_KEY_INVALID'}]}}]
+
+        create = AsyncMock(side_effect=ProviderError('Error code: 400 - API key not valid'))
+        client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+        with self.assertRaisesRegex(ValueError, '^AI_AUTH_FAILED$'):
+            await compare_documents(client, 'test-model', self.left, self.right)
+        self.assertEqual(create.await_count, 1)
+
+    async def test_other_rejections_log_status_without_provider_message(self):
+        class ProviderError(Exception):
+            status_code = 400
+            body = {'error': {'code': 400, 'message': 'secret details', 'status': 'FAILED_PRECONDITION'}}
+
+        create = AsyncMock(side_effect=ProviderError('secret details'))
+        client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+        with self.assertLogs('app.document_comparison', level='WARNING') as logs:
+            with self.assertRaisesRegex(ValueError, '^AI_REQUEST_REJECTED$'):
+                await compare_documents(client, 'test-model', self.left, self.right)
+        self.assertIn('status=400 provider_status=FAILED_PRECONDITION', logs.output[0])
+        self.assertNotIn('secret', logs.output[0])
+
     async def test_rate_limit_is_retried_and_classified(self):
         class ProviderError(Exception):
             status_code = 429

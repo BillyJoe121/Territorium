@@ -1,9 +1,9 @@
 /**
  * Valor negociado de la Plantilla de negociación.
  *
- * El profesional ingresa manualmente el valor en números (pesos) y en letras.
- * La verificación es determinística e instantánea: se genera la redacción
- * canónica en español del número y se compara con el texto ingresado sin
+ * El profesional ingresa el valor en números (pesos); el valor en letras se redacta
+ * solo con `negotiatedValueLetters`. La verificación es determinística: se genera la
+ * redacción canónica en español del número y se compara con el texto guardado sin
  * distinguir mayúsculas/minúsculas. Tildes, espacios y ortografía sí cuentan.
  */
 
@@ -69,6 +69,25 @@ export function amountToSpanishWords(amount: number): string {
 
 export function formatPesos(amount: number): string {
   return `$ ${amount.toLocaleString('es-CO', { maximumFractionDigits: 0 }).replace(/,/g, '.')}`
+}
+
+/**
+ * Formato mientras se escribe el valor en números: "93468040" → "$ 93.468.040".
+ * Devuelve también dónde dejar el cursor (después del mismo dígito que tenía antes).
+ * Si el texto trae algo distinto de dígitos, puntos, espacios o "$" (comas, letras) se
+ * deja igual, para que la validación explique el error en vez de alterar la cifra.
+ */
+export function formatPesosWhileTyping(raw: string, caret = raw.length): { text: string; caret: number } {
+  if (/[^\d.$\s]/.test(raw)) return { text: raw, caret }
+  const allDigits = raw.replace(/\D/g, '')
+  const digits = allDigits.replace(/^0+(?=\d)/, '').slice(0, String(MAX_AMOUNT).length)
+  if (!digits) return { text: '', caret: 0 }
+  const leadingZeros = allDigits.length - allDigits.replace(/^0+(?=\d)/, '').length
+  const digitsBefore = Math.min(digits.length, Math.max(0, raw.slice(0, caret).replace(/\D/g, '').length - leadingZeros))
+  const text = `$ ${digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
+  let position = 2
+  for (let seen = 0; seen < digitsBefore; position++) if (/\d/.test(text[position])) seen++
+  return { text, caret: position }
 }
 
 export type AmountParseResult = { ok: true; amount: number } | { ok: false; error: string }
@@ -144,6 +163,12 @@ export interface NegotiatedValueCheck {
 }
 
 const capitalize = (text: string) => (text ? text[0].toUpperCase() + text.slice(1) : text)
+
+/** Redacción en letras del valor en números, o vacío mientras la cifra no sea válida. */
+export function negotiatedValueLetters(numbersInput: string): string {
+  const parsed = parseNegotiatedAmount(numbersInput)
+  return parsed.ok ? capitalize(amountToSpanishWords(parsed.amount)) : ''
+}
 
 export function checkNegotiatedValue(numbersInput: string, lettersInput: string): NegotiatedValueCheck {
   const parsed = parseNegotiatedAmount(numbersInput)

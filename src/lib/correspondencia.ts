@@ -112,15 +112,30 @@ export function excelColumnName(index: number): string {
   return name
 }
 
-/** Columnas del modal: letra (posición en el Excel exportado) + encabezado de la plantilla. */
+/**
+ * Encabezados repetidos en la plantilla: en el modal cada columna necesita un nombre propio
+ * (la hoja reconoce las columnas por su encabezado). BD contiene la oferta 3 en letras.
+ */
+const DISTINCT_LABELS: Partial<Record<string, string>> = {
+  AU: 'CIUDAD DE EXPEDICION CC (ENCARGADO BIENES INMUEBLES)',
+  AX: 'CIUDAD DE EXPEDICION CC (APODERADO)',
+  BD: 'VALOR OFERTA 3 (LETRAS)',
+}
+
+/**
+ * Columnas del modal: encabezado de la plantilla; la letra que tendrá en el Excel exportado va en
+ * la ayuda (la hoja muestra sus propias letras y empieza con la columna Selección).
+ */
 export function correspondenciaTableColumns(): ResultColumn[] {
   return CORRESPONDENCIA_COLUMNS.map((c, index) => ({
     key: c.letter,
-    label: `${excelColumnName(index)} · ${c.header}`,
+    label: DISTINCT_LABELS[c.letter] ?? c.header,
     width: ['Q', 'P', 'S'].includes(c.letter) ? 320 : c.header.includes('(LETRAS)') || c.letter === 'BD' ? 340 : c.header.length > 28 ? 230 : 170,
     editable: c.source !== 'calculado',
     broadcast: c.source === 'proyecto',
-    hint: SOURCE_LABEL[c.source],
+    // La tercera oferta no siempre existe en la plantilla de negociación.
+    optional: c.letter === 'BC' || c.letter === 'BD',
+    hint: `Columna ${excelColumnName(index)} del Excel CORRESPONDENCIA · ${SOURCE_LABEL[c.source]}`,
   }))
 }
 

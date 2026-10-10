@@ -170,6 +170,23 @@ def validate_comparison(raw: Any, left: CanonicalDocument, right: CanonicalDocum
     }
 
 
+def _provider_error(exc: Exception) -> dict[str, Any]:
+    """Error del proveedor (OpenAI o Gemini por su API compatible), sin asumir su forma."""
+    body = getattr(exc, 'body', None)
+    if isinstance(body, list) and body:
+        body = body[0]
+    if isinstance(body, dict) and isinstance(body.get('error'), dict):
+        return body['error']
+    return body if isinstance(body, dict) else {}
+
+
+def _is_invalid_key(exc: Exception, error: dict[str, Any]) -> bool:
+    # Gemini responde 400 (no 401) cuando la clave no es válida, venció o fue revocada.
+    reasons = {str(item.get('reason', '')) for item in error.get('details', []) if isinstance(item, dict)}
+    text = f"{error.get('message', '')} {exc}".lower()
+    return bool(reasons & {'API_KEY_INVALID', 'API_KEY_EXPIRED'}) or 'api key not valid' in text or 'api key expired' in text
+
+
 async def compare_documents(ai_client: Any, model: str, left: CanonicalDocument, right: CanonicalDocument) -> dict[str, Any]:
     if ai_client is None:
         raise ValueError('AI_NOT_CONFIGURED')
@@ -216,7 +233,14 @@ async def compare_documents(ai_client: Any, model: str, left: CanonicalDocument,
             elif connection_failure:
                 code = 'AI_CONNECTION_FAILED'
             elif isinstance(status, int) and status >= 400:
-                code = 'AI_REQUEST_REJECTED'
+                error = _provider_error(exc)
+                if _is_invalid_key(exc, error):
+                    code = 'AI_AUTH_FAILED'
+                else:
+                    code = 'AI_REQUEST_REJECTED'
+                    # Solo el código HTTP y el estado corto del proveedor: nunca su mensaje ni el contenido.
+                    provider_status = re.sub(r'[^A-Z_]', '', str(error.get('status', '')))[:40] or 'desconocido'
+                    logger.warning('comparison_ai_rejected status=%s provider_status=%s model=%s', status, provider_status, model)
             else:
                 raise
             raise ValueError(code) from exc

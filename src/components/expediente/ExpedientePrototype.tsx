@@ -1,4 +1,3 @@
-import * as Dialog from '@radix-ui/react-dialog'
 import type { JSONContent } from '@tiptap/react'
 import {
   AlertTriangle,
@@ -14,20 +13,16 @@ import {
   FileText,
   LayoutList,
   LoaderCircle,
-  MapPin,
   PencilLine,
   Play,
-  RefreshCcw,
   RotateCcw,
   Sparkles,
   Trash2,
   Upload,
-  X,
 } from 'lucide-react'
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { toast } from 'sonner'
+import { ChangeEvent, useEffect, useMemo, useState } from 'react'
+import { toast } from '../ui/ToastLayer'
 import { DocumentPrototypeEditor } from './DocumentPrototypeEditor'
-import { ResultDataTable } from './ResultDataTable'
 import { ReviewDialog } from './ReviewDialog'
 import { FilePreviewDialog, type FilePreviewTarget } from './FilePreviewDialog'
 import { AiRevisionDialog } from './AiRevisionDialog'
@@ -50,7 +45,6 @@ import {
   type AiRevisionProposal,
 } from '../../lib/expedienteAiRevisionGuard'
 import { AiRevisionProposalModal } from './AiRevisionProposalModal'
-import { ChooseDocumentTemplateModal } from './ChooseDocumentTemplateModal'
 import {
   OFFICIAL_FINAL_DOCUMENT_TEMPLATES,
   type ExpedienteDocumentTemplate,
@@ -312,11 +306,7 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
   const [documentState, setDocumentState] = useState<FinalDocumentState>({ status: 'blocked', progress: 0, version: 1 })
   const [documentContent, setDocumentContent] = useState<JSONContent>(initialDocumentContent)
   const [documentDirty, setDocumentDirty] = useState(false)
-  const [chooseTemplateOpen, setChooseTemplateOpen] = useState(false)
-  const [activeTemplate, setActiveTemplate] = useState<ExpedienteDocumentTemplate>(
-    OFFICIAL_FINAL_DOCUMENT_TEMPLATES[0],
-  )
-  const [isGeneratingDoc, setIsGeneratingDoc] = useState(false)
+  const activeTemplate: ExpedienteDocumentTemplate = OFFICIAL_FINAL_DOCUMENT_TEMPLATES[0]
   const [isExportingDocx, setIsExportingDocx] = useState(false)
   const [aiDialogOpen, setAiDialogOpen] = useState(false)
   const [currentProposal, setCurrentProposal] = useState<AiRevisionProposal | null>(null)
@@ -326,11 +316,6 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
 
   const approvedGroups = useMemo(() => Object.values(groups).filter((group) => group.status === 'approved').length, [groups])
   const allGroupsApproved = approvedGroups === 3
-  const isConsolidatedReady = Boolean(
-    masterRecord ||
-    consolidation.status === 'approved' ||
-    consolidation.status === 'review_ready',
-  )
   const selectedGroup = activeGroup ? groups[activeGroup] : null
 
   useEffect(() => {
@@ -552,38 +537,6 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
     setNotice(`Consolidado aprobado. Se compiló el documento final "${activeTemplate.name}".`)
   }
 
-  const handleSelectDocumentTemplate = (template: ExpedienteDocumentTemplate) => {
-    let master = masterRecord
-    if (!master) {
-      const titlesPayload = adaptTableRowsToPayload('titles', groups.titles.rows)
-      const plansPayload = adaptTableRowsToPayload('plans', groups.plans.rows)
-      const negPayload = adaptTableRowsToPayload('negotiation', groups.negotiation.rows)
-      master = consolidateApprovedGroups({
-        titlesApprovedPayload: titlesPayload,
-        titlesVersionId: `titles-v${groups.titles.resultVersion}`,
-        plansApprovedPayload: plansPayload,
-        plansVersionId: `plans-v${groups.plans.resultVersion}`,
-        negotiationApprovedPayload: negPayload,
-        negotiationVersionId: `negotiation-v${groups.negotiation.resultVersion}`,
-      })
-      setMasterRecord(master)
-    }
-
-    const compiled = compileConsolidatedToTiptap(master, {
-      template,
-      projectCode: project.id,
-      projectName: project.name,
-      compiledBy: project.clientName,
-    })
-    setDocumentContent(compiled.content)
-    setDocumentDirty(false)
-    setActiveTemplate(template)
-    setDocumentState({ status: 'editable', progress: 100, version: 1, updatedAt: now() })
-    setView('document')
-    setChooseTemplateOpen(false)
-    setNotice(`Documento oficial generado exitosamente con la plantilla "${template.name}".`)
-  }
-
   const handleDownloadDocx = async () => {
     let master = masterRecord
     if (!master) {
@@ -801,20 +754,6 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
                 {consolidation.status === 'stale' ? 'Actualizar consolidado' : 'Consolidar resultados'}
               </button>
 
-              <button
-                type="button"
-                className="expediente-secondary-action choose-document-btn"
-                disabled={!isConsolidatedReady}
-                onClick={() => setChooseTemplateOpen(true)}
-                title={
-                  !isConsolidatedReady
-                    ? 'Debes consolidar los resultados para habilitar la selección de plantilla'
-                    : 'Escoger documento oficial a generar con los datos consolidados'
-                }
-              >
-                <FileText size={16} />
-                <span>Escoger documento a generar</span>
-              </button>
             </div>
 
             <div className="extraction-consolidation-right">
@@ -868,10 +807,6 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
               <DocumentPrototypeEditor content={documentContent} onChange={(next) => { setDocumentContent(next); setDocumentDirty(true); setDocumentState((current) => current.status === 'final' ? { ...current, status: 'editable' } : current) }} />
               <div className="document-workspace-actions">
                 <div>
-                  <button type="button" className="expediente-secondary-action" onClick={() => setChooseTemplateOpen(true)}>
-                    <RefreshCcw size={16} />
-                    <span>Cambiar plantilla</span>
-                  </button>
                   <button type="button" className="expediente-secondary-action" disabled={!documentDirty} onClick={saveDocument}><Check size={16} />Guardar versión</button>
                   <button type="button" className="expediente-secondary-action" onClick={() => setAiDialogOpen(true)}><Sparkles size={16} />Solicitar cambios a IA</button>
                 </div>
@@ -938,13 +873,6 @@ export function ExpedientePrototype({ project, onBack }: { project: Project; onB
         onOpenChange={setProposalModalOpen}
         onAccept={acceptAiProposal}
         onDiscard={discardAiProposal}
-      />
-      <ChooseDocumentTemplateModal
-        open={chooseTemplateOpen}
-        onOpenChange={setChooseTemplateOpen}
-        initialTemplateId={activeTemplate.id}
-        isGenerating={isGeneratingDoc}
-        onSelectTemplate={handleSelectDocumentTemplate}
       />
       <FilePreviewDialog target={previewTarget} onClose={() => setPreviewTarget(null)} />
     </div>

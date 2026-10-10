@@ -26,7 +26,7 @@ const labelOf = (rows: EditableResultRow[]) => new Map(rows.map((row) => [
 ]))
 
 function findingsOf<K extends string>(
-  alerts: { rowId: string; kind: K; message: string }[],
+  alerts: { rowId: string; columnKey: string; kind: K; message: string }[],
   rows: EditableResultRow[],
   kinds: Record<K, [string, LinkageTone]>,
 ): LinkageFinding[] {
@@ -37,12 +37,15 @@ function findingsOf<K extends string>(
     tone: kinds[alert.kind][1],
     rowLabel: labels.get(alert.rowId) ?? alert.rowId,
     message: alert.message,
+    target: { rowId: alert.rowId, columnKey: alert.columnKey },
   }))
 }
 
 const chip = (count: number, label: string, tone: LinkageTone): LinkageChip[] => (count > 0 ? [{ label: `${count} ${label}`, tone }] : [])
 
-export function PlanLinkagePanel({ linkage }: { linkage: PlanTitleLinkage }) {
+type SelectAlert = (rowId: string, columnKey: string) => void
+
+export function PlanLinkagePanel({ linkage, onSelectAlert }: { linkage: PlanTitleLinkage; onSelectAlert?: SelectAlert }) {
   const { summary } = linkage
   return (
     <LinkagePanel
@@ -57,11 +60,12 @@ export function PlanLinkagePanel({ linkage }: { linkage: PlanTitleLinkage }) {
         ...chip(summary.duplicates, 'FMI repetido', 'near'),
       ]}
       findings={findingsOf(linkage.alerts, linkage.rows, PLAN_KIND)}
+      onSelect={onSelectAlert ? (target) => onSelectAlert(target.rowId, target.columnKey) : undefined}
     />
   )
 }
 
-export function NegotiationLinkagePanel({ linkage }: { linkage: NegotiationLinkage }) {
+export function NegotiationLinkagePanel({ linkage, onSelectAlert }: { linkage: NegotiationLinkage; onSelectAlert?: SelectAlert }) {
   const { summary } = linkage
   return (
     <LinkagePanel
@@ -76,6 +80,7 @@ export function NegotiationLinkagePanel({ linkage }: { linkage: NegotiationLinka
         ...chip(summary.duplicates, 'FMI repetido', 'near'),
       ]}
       findings={findingsOf(linkage.alerts, linkage.rows, NEGOTIATION_KIND)}
+      onSelect={onSelectAlert ? (target) => onSelectAlert(target.rowId, target.columnKey) : undefined}
     />
   )
 }

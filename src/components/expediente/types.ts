@@ -37,10 +37,21 @@ export interface ResultColumn {
   placeholder?: string
   /** Casilla obligatoria (se marca con * en el encabezado). */
   required?: boolean
+  /** Puede quedar vacía sin señalarse como dato faltante (p. ej. una tercera oferta). */
+  optional?: boolean
+  /**
+   * Columna fija en la A de la hoja de cálculo: casillas de selección de filas o un botón por
+   * fila (p. ej. "Comparar"). Sus celdas quedan vacías en los datos.
+   */
+  kind?: 'selection' | 'action'
+  /** Texto del botón de cada fila en una columna de acción. */
+  actionLabel?: string
   /** Dato común a todas las filas: editarlo en una fila lo aplica a todas. */
   broadcast?: boolean
   /** Ayuda corta que se muestra al pasar sobre el encabezado. */
   hint?: string
+  /** Formato aplicado mientras se escribe: 'pesos' → "$ 93.468.040". */
+  liveFormat?: 'pesos'
 }
 
 export interface DocumentGroup {

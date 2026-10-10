@@ -3,8 +3,10 @@ import {
   amountToSpanishWords,
   checkNegotiatedValue,
   formatPesos,
+  formatPesosWhileTyping,
   NEGOTIATED_LETTERS_EXAMPLE,
   NEGOTIATED_NUMBERS_EXAMPLE,
+  negotiatedValueLetters,
   parseNegotiatedAmount,
   spanishWordsToAmount,
 } from './negotiatedValue'
@@ -86,5 +88,64 @@ describe('checkNegotiatedValue', () => {
     const result = checkNegotiatedValue('2,000,000', 'dos millones de pesos')
     expect(result.numbersError).toMatch(/comas/)
     expect(result.ok).toBe(false)
+  })
+})
+
+describe('negotiatedValueLetters', () => {
+  it.each(['93468040', '93.468.040', '$ 93.468.040'])('writes %s in words, capitalized and passing the check', (input) => {
+    const letters = negotiatedValueLetters(input)
+    expect(letters).toBe(NEGOTIATED_LETTERS_EXAMPLE)
+    expect(checkNegotiatedValue(input, letters).ok).toBe(true)
+  })
+
+  it('follows each keystroke while digits are typed', () => {
+    expect(negotiatedValueLetters('9')).toBe('Nueve pesos')
+    expect(negotiatedValueLetters('93')).toBe('Noventa y tres pesos')
+    expect(negotiatedValueLetters('93468')).toBe('Noventa y tres mil cuatrocientos sesenta y ocho pesos')
+    expect(negotiatedValueLetters('1000000')).toBe('Un millón de pesos')
+    expect(negotiatedValueLetters('1')).toBe('Un peso')
+  })
+
+  it.each(['', '   ', '0', '93,468,040', '93.46', 'abc'])('stays empty for %j', (input) => {
+    expect(negotiatedValueLetters(input)).toBe('')
+  })
+})
+
+describe('formatPesosWhileTyping', () => {
+  it('agrega el signo de pesos y los puntos de miles y millones', () => {
+    expect(formatPesosWhileTyping('9').text).toBe('$ 9')
+    expect(formatPesosWhileTyping('9346').text).toBe('$ 9.346')
+    expect(formatPesosWhileTyping('93468040').text).toBe('$ 93.468.040')
+    expect(formatPesosWhileTyping('$ 93.468.0405').text).toBe('$ 934.680.405')
+    expect(formatPesosWhileTyping('1000000000').text).toBe('$ 1.000.000.000')
+  })
+
+  it('el resultado sigue siendo un valor negociado válido', () => {
+    const { text } = formatPesosWhileTyping('93468040')
+    expect(parseNegotiatedAmount(text)).toEqual({ ok: true, amount: 93_468_040 })
+  })
+
+  it('al borrar todo queda vacío y quita ceros a la izquierda', () => {
+    expect(formatPesosWhileTyping('').text).toBe('')
+    expect(formatPesosWhileTyping('$ ').text).toBe('')
+    expect(formatPesosWhileTyping('0045').text).toBe('$ 45')
+  })
+
+  it('no toca lo que no es una cifra para que la validación lo explique', () => {
+    expect(formatPesosWhileTyping('93,5').text).toBe('93,5')
+    expect(formatPesosWhileTyping('noventa').text).toBe('noventa')
+  })
+
+  it('conserva el cursor después del mismo dígito', () => {
+    // Se escribe un 7 entre "93" y "468": "$ 937.468" con el cursor tras el 7.
+    const typed = '$ 937.468'
+    const result = formatPesosWhileTyping(typed, 5)
+    expect(result.text).toBe('$ 937.468')
+    expect(result.caret).toBe(5)
+    // "93468" + "0" al final: el cursor queda al final del texto formateado.
+    const end = formatPesosWhileTyping('$ 93.4680', 9)
+    expect(end).toEqual({ text: '$ 934.680', caret: 9 })
+    // Borrar el punto no deja el cursor desfasado: "$ 9346" con el cursor tras el 9.
+    expect(formatPesosWhileTyping('$ 9346', 3)).toEqual({ text: '$ 9.346', caret: 3 })
   })
 })

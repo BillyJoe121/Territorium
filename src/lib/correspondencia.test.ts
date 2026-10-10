@@ -3,6 +3,7 @@ import {
   buildCorrespondencia,
   CORRESPONDENCIA_COLUMNS,
   correspondenciaRowToMasterRecord,
+  correspondenciaTableColumns,
   decimalWords,
   defaultProjectConstants,
   deriveCorrespondenciaRow,
@@ -106,5 +107,14 @@ describe('CORRESPONDENCIA', () => {
     expect(record.negotiated_value).toBe('$ 9.628.712')
     expect(record.owners).toContain('MARTHA LUCÍA BERNAL DE GARZÓN (CC 38.244.519)')
     expect(record.easement_area).toBe('3374,06')
+  })
+})
+
+describe('correspondenciaTableColumns', () => {
+  it('gives every column a distinct header (the sheet matches columns by header)', () => {
+    const labels = correspondenciaTableColumns().map((column) => column.label)
+    expect(new Set(labels).size).toBe(labels.length)
+    expect(labels[0]).toBe('CARPETA')
+    expect(correspondenciaTableColumns()[0].hint).toMatch(/^Columna A del Excel CORRESPONDENCIA/)
   })
 })

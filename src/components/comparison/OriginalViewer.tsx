@@ -4,6 +4,7 @@ import * as pdfjs from 'pdfjs-dist'
 import { renderAsync } from 'docx-preview'
 import type { ComparisonDocument, Evidence, MatchStatus } from '../../data/documentComparison'
 import { downloadComparisonOriginal } from '../../data/documentComparison'
+import { downloadBlob } from '../../lib/download'
 import { clearEvidence, highlightEvidence } from './highlight'
 import { renderXlsxPreview, XLSX_MIME } from './xlsxPreview'
 import './document-comparison.css'
@@ -19,7 +20,7 @@ interface Props {
   status?: MatchStatus | null
   side?: 'left' | 'right'
   activeFieldLabel?: string
-  /** 'preview': solo zoom, páginas y cerrar; sin título, ubicación ni descarga. */
+  /** 'preview': solo páginas, zoom, descargar y cerrar; sin título ni ubicación de evidencias. */
   variant?: 'comparison' | 'preview'
   /** Origen alterno del archivo (p. ej. un File local); por defecto se descarga del bucket. */
   loadBlob?: () => Promise<Blob>
@@ -221,11 +222,7 @@ export function OriginalViewer({
   }, [zoom])
 
   const download = () => {
-    if (!blob) return
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url; anchor.download = source.original_name; anchor.click()
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    if (blob) downloadBlob(blob, source.original_name)
   }
 
   const zoomIn = () => setZoom((prev) => Math.min(2.5, Math.round((prev + 0.1) * 10) / 10))
@@ -267,6 +264,9 @@ export function OriginalViewer({
         <div>{pageControls}</div>
         <div className="comparison-header-actions">
           {zoomBar}
+          <button type="button" className="comparison-action-btn" onClick={download} disabled={!blob} aria-label={`Descargar ${source.original_name}`} title="Descargar documento">
+            <Download size={14} />
+          </button>
           {onClose && (
             <button type="button" className="comparison-action-btn" onClick={onClose} title="Cerrar" aria-label="Cerrar visualizador">
               <X size={15} />

@@ -158,7 +158,7 @@ main { min-width: 0; background: var(--ui-canvas); }
 .text-button:hover { color: var(--ui-accent-strong); background: transparent; border-bottom-color: currentColor; }
 
 .project-picker, .project-picker label { color: var(--ui-ink-faint); font-size: 10px; font-weight: 650; letter-spacing: .03em; text-transform: uppercase; }
-.project-picker select, select, .form-control, input, textarea, .kind-select, .role-select-label select, .bulk-classify select {
+.project-picker select, select:not(:where([class*="univer-"], [class*="univer-"] *)), .form-control, input:not(:where([class*="univer-"], [class*="univer-"] *)), textarea:not(:where([class*="univer-"], [class*="univer-"] *)), .kind-select, .role-select-label select, .bulk-classify select {
   min-height: 38px;
   border: 1px solid var(--ui-line-strong) !important;
   border-radius: var(--ui-radius-sm) !important;
@@ -169,7 +169,7 @@ main { min-width: 0; background: var(--ui-canvas); }
   transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
 }
 input::placeholder, textarea::placeholder { color: var(--ui-ink-faint); opacity: .8; }
-input:focus, textarea:focus, select:focus, .form-control:focus {
+input:not(:where([class*="univer-"], [class*="univer-"] *)):focus, textarea:not(:where([class*="univer-"], [class*="univer-"] *)):focus, select:not(:where([class*="univer-"], [class*="univer-"] *)):focus, .form-control:focus {
   border-color: var(--ui-accent) !important;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 16%, transparent) !important;
 }
@@ -368,6 +368,11 @@ kbd { color: var(--ui-ink-soft) !important; background: var(--ui-surface-muted) 
   font-family: inherit !important;
   font-size: 13.5px !important;
   line-height: 1.4 !important;
+}
+
+/* Con un modal abierto, Radix desactiva el puntero fuera de él: los avisos siguen siendo pulsables. */
+[data-sonner-toast][data-visible="true"] {
+  pointer-events: auto;
 }
 
 [data-sonner-toast] [data-close-button] {

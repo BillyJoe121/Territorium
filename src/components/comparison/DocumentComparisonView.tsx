@@ -1,148 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, CircleAlert, Eye, FilePlus2, Files, LoaderCircle, Scale, Trash2, UploadCloud } from 'lucide-react'
-import { toast } from 'sonner'
+import { ArrowRight, CircleAlert, Eye, FilePlus2, Files, LoaderCircle, Scale, Trash2, UploadCloud } from 'lucide-react'
+import { toast } from '../ui/ToastLayer'
 import { dataMode } from '../../lib/supabase'
 import type { Project } from '../../types'
 import {
   describeComparisonError, listComparisonDocuments, listComparisonJobs, requestComparison, retireComparisonDocument,
-  uploadComparisonDocument, type ComparisonDocument, type ComparisonJob, type ComparedField,
+  uploadComparisonDocument, type ComparisonDocument, type ComparisonJob,
 } from '../../data/documentComparison'
-import { OriginalViewer } from './OriginalViewer'
+import { ComparisonResults, jobText } from './ComparisonResults'
 import './document-comparison.css'
 
-export type VisualStatus = 'exact' | 'near' | 'different' | 'absent'
-
-const SPANISH_MONTHS: Record<string, number> = {
-  enero: 1, ene: 1,
-  febrero: 2, feb: 2,
-  marzo: 3, mar: 3,
-  abril: 4, abr: 4,
-  mayo: 5, may: 5,
-  junio: 6, jun: 6,
-  julio: 7, jul: 7,
-  agosto: 8, ago: 8,
-  septiembre: 9, setiembre: 9, sep: 9,
-  octubre: 10, oct: 10,
-  noviembre: 11, nov: 11,
-  diciembre: 12, dic: 12,
-}
-
-export function parseSpanishDate(str: string): { year: number; month: number; day: number } | null {
-  if (!str) return null
-  const clean = str.trim().toLowerCase().replace(/,/g, ' ').replace(/\s+/g, ' ')
-
-  // Format: "15 de marzo de 2024" or "15 de marzo del 2024" or "15 marzo 2024"
-  const textMatch = clean.match(/^(\d{1,2})\s+(?:de\s+)?([a-záéíóú]+)(?:\s+(?:de|del))?\s+(\d{4})$/i)
-  if (textMatch) {
-    const day = parseInt(textMatch[1], 10)
-    const monthName = textMatch[2].normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    const month = SPANISH_MONTHS[monthName]
-    const year = parseInt(textMatch[3], 10)
-    if (month && day >= 1 && day <= 31 && year >= 1900 && year <= 2100) {
-      return { year, month, day }
-    }
-  }
-
-  // Format: "15/03/2024" or "15-03-2024" (DD/MM/YYYY)
-  const slashMatch = clean.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
-  if (slashMatch) {
-    const day = parseInt(slashMatch[1], 10)
-    const month = parseInt(slashMatch[2], 10)
-    const year = parseInt(slashMatch[3], 10)
-    if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900 && year <= 2100) {
-      return { year, month, day }
-    }
-  }
-
-  // ISO Format: "2024-03-15" (YYYY-MM-DD)
-  const isoMatch = clean.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/)
-  if (isoMatch) {
-    const year = parseInt(isoMatch[1], 10)
-    const month = parseInt(isoMatch[2], 10)
-    const day = parseInt(isoMatch[3], 10)
-    if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900 && year <= 2100) {
-      return { year, month, day }
-    }
-  }
-
-  return null
-}
-
-export function areValuesSemanticallyEqual(a: string, b: string): boolean {
-  if (a === b) return true
-
-  const normA = a.trim().replace(/\s+/g, ' ')
-  const normB = b.trim().replace(/\s+/g, ' ')
-
-  // 1. Case-insensitive equality (e.g. ALL CAPS vs Title Case)
-  if (normA.toLowerCase() === normB.toLowerCase()) {
-    return true
-  }
-
-  // 2. Date equality (e.g. "15 de marzo de 2024" vs "15/03/2024")
-  const dateA = parseSpanishDate(normA)
-  const dateB = parseSpanishDate(normB)
-  if (dateA && dateB) {
-    return dateA.year === dateB.year && dateA.month === dateB.month && dateA.day === dateB.day
-  }
-
-  // 3. Monetary / pure number format equality (e.g. "$ 10.000.000" vs "10.000.000")
-  const cleanDigitsA = normA.replace(/[$\s,.]/g, '')
-  const cleanDigitsB = normB.replace(/[$\s,.]/g, '')
-  if (cleanDigitsA && cleanDigitsB && cleanDigitsA === cleanDigitsB && /^\d+$/.test(cleanDigitsA)) {
-    return true
-  }
-
-  return false
-}
-
-export function getFieldVisualStatus(field: ComparedField): VisualStatus {
-  const leftVal = field.left?.value?.trim() ?? ''
-  const rightVal = field.right?.value?.trim() ?? ''
-
-  if (!leftVal || !rightVal) {
-    return 'absent'
-  }
-
-  // If semantically equal (case insensitivity, date equivalents, formatting) -> exact
-  if (areValuesSemanticallyEqual(leftVal, rightVal)) {
-    return 'exact'
-  }
-
-  // If both are dates but they differ in day/month/year -> different
-  const dateA = parseSpanishDate(leftVal)
-  const dateB = parseSpanishDate(rightVal)
-  if (dateA && dateB && (dateA.year !== dateB.year || dateA.month !== dateB.month || dateA.day !== dateB.day)) {
-    return 'different'
-  }
-
-  return field.status
-}
-
-const statusText: Record<VisualStatus, string> = {
-  exact: 'Coincide exactamente',
-  near: 'Coincidencia cercana',
-  different: 'No coincide (valores distintos)',
-  absent: 'No coincide (no encontrado en un documento)',
-}
-const jobText = { queued: 'En cola', running: 'Analizando', completed: 'Terminado', failed: 'Falló' }
-const errorText: Record<string, string> = {
-  SOURCE_NOT_FOUND: 'Uno de los originales ya no está disponible. Vuelva a seleccionar los documentos.',
-  SOURCE_DOWNLOAD_FAILED: 'No se pudo descargar un original desde el almacenamiento. Vuelva a intentar.',
-  UNSUPPORTED_FORMAT: 'Uno de los originales no es PDF ni DOCX.',
-  NO_EXTRACTABLE_TEXT: 'No hay texto extraíble. Un PDF escaneado requiere OCR antes de compararse.',
-  DOCUMENT_TOO_LONG: 'El texto excede el límite de esta primera versión (60 000 caracteres por documento).',
-  NO_VERIFIABLE_FIELDS: 'La IA no encontró atributos con citas comprobables en los originales.',
-  INVALID_AI_RESPONSE: 'La IA devolvió una respuesta inválida. Intente de nuevo.',
-  AI_NOT_CONFIGURED: 'El proveedor de IA no está configurado en el worker.',
-  AI_RATE_LIMITED: 'El proveedor de IA limitó las solicitudes. Espere un momento y vuelva a intentar.',
-  AI_AUTH_FAILED: 'El proveedor de IA rechazó la clave del worker. Revise su configuración.',
-  AI_MODEL_UNAVAILABLE: 'El modelo de IA configurado no está disponible para esta clave.',
-  AI_PROVIDER_UNAVAILABLE: 'El proveedor de IA tuvo un error temporal. Vuelva a intentar.',
-  AI_CONNECTION_FAILED: 'El worker no pudo comunicarse con el proveedor de IA. Vuelva a intentar.',
-  AI_REQUEST_REJECTED: 'El proveedor de IA rechazó la solicitud. Revise su configuración.',
-  WORKER_RETRIES_EXHAUSTED: 'El worker se interrumpió varias veces durante este análisis.',
-}
+// Pantalla de resultados compartida con el modal de planos; se reexportan sus utilidades.
+export { areValuesSemanticallyEqual, getFieldVisualStatus, parseSpanishDate, type VisualStatus } from './ComparisonResults'
 
 function shortName(document: ComparisonDocument | undefined) {
   return document?.document_label || document?.original_name || 'Archivo retirado'
@@ -161,8 +30,6 @@ export function DocumentComparisonView({
   const [leftId, setLeftId] = useState('')
   const [rightId, setRightId] = useState('')
   const [activeJobId, setActiveJobId] = useState('')
-  const [activeFieldKey, setActiveFieldKey] = useState('')
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -225,22 +92,8 @@ export function DocumentComparisonView({
   const shownRightId = activeJob?.right_document_id ?? rightId
   const left = documents.find((document) => document.id === shownLeftId)
   const right = documents.find((document) => document.id === shownRightId)
-  const fields = activeJob?.result?.fields ?? []
-  const activeField = fields.find((field) => field.key === activeFieldKey) ?? null
   const canCompare = leftId && rightId && leftId !== rightId && !busy && remote && !loadError
   const recentJobs = useMemo(() => jobs.slice(0, 8), [jobs])
-
-  const visualCounts = useMemo(() => {
-    let exact = 0, near = 0, different = 0, absent = 0
-    for (const f of fields) {
-      const s = getFieldVisualStatus(f)
-      if (s === 'exact') exact++
-      else if (s === 'near') near++
-      else if (s === 'different') different++
-      else if (s === 'absent') absent++
-    }
-    return { exact, near, different, absent }
-  }, [fields])
 
   const upload = async (files: FileList | null) => {
     if (!files?.length) return
@@ -263,7 +116,7 @@ export function DocumentComparisonView({
 
   const compare = async () => {
     if (!canCompare) return
-    setBusy(true); setError(null); setActiveFieldKey('')
+    setBusy(true); setError(null)
     try {
       const jobId = await requestComparison(leftId, rightId)
       setActiveJobId(jobId)
@@ -290,142 +143,7 @@ export function DocumentComparisonView({
   }
 
   if (screen === 'results' && activeJob) {
-    return (
-      <div className="comparison-workspace is-results-screen">
-        <section className="comparison-results" aria-live="polite">
-          <div className="comparison-results-toolbar">
-            <div className="comparison-toolbar-left">
-              <button
-                type="button"
-                className="comparison-back-btn"
-                onClick={() => setScreen('setup')}
-                title="Volver a la selección de documentos"
-              >
-                <ArrowLeft size={13} />
-                <span>Volver al comparador</span>
-              </button>
-              <div className="comparison-toolbar-separator" aria-hidden="true" />
-              <div className="comparison-toolbar-title-group">
-                <span className="comparison-kicker-tag"><Scale size={12} /> ANÁLISIS</span>
-                <h2 className="comparison-toolbar-title">Lectura paralela</h2>
-                <span className={`comparison-job-status is-${activeJob.status}`}>
-                  {activeJob.status === 'completed' ? <CheckCircle2 size={13} /> : activeJob.status === 'failed' ? <CircleAlert size={13} /> : <LoaderCircle size={13} className="spin" />}
-                  {jobText[activeJob.status]}
-                </span>
-              </div>
-            </div>
-
-            {activeJob.result && (
-              <div className="comparison-counts">
-                <span className="is-exact">{visualCounts.exact} exactos</span>
-                <span className="is-near">{visualCounts.near} cercanos</span>
-                {visualCounts.different > 0 && <span className="is-different">{visualCounts.different} distintos</span>}
-                {visualCounts.absent > 0 && <span className="is-absent">{visualCounts.absent} no encontrados</span>}
-              </div>
-            )}
-          </div>
-
-          {activeJob.status === 'failed' && <div className="comparison-error" role="alert">{errorText[activeJob.error_code ?? ''] ?? 'No se pudo completar. Intente de nuevo o revise el worker.'}</div>}
-          {activeJob.result && Object.values(activeJob.result.documents).some((document) => document.scan_status !== 'textual') && <div className="comparison-notice" role="status"><CircleAlert size={17} />Algunas páginas pueden no tener texto extraíble. El cotejo solo cubre la evidencia que pudo leerse; revise también las páginas escaneadas.</div>}
-
-          <div className="comparison-review-grid">
-            <aside className="comparison-findings">
-              <div className="comparison-findings-heading">
-                <strong>Atributos detectados</strong>
-                <span>{fields.length}</span>
-              </div>
-              {fields.length ? (
-                <ul className="comparison-findings-list">
-                  {fields.map((field: ComparedField) => {
-                    const isSelected = field.key === activeFieldKey
-                    const isExpanded = expandedKeys.has(field.key)
-                    const visualStatus = getFieldVisualStatus(field)
-                    return (
-                      <li key={field.key} className={`comparison-finding-item ${isSelected ? 'is-selected' : ''} ${isExpanded ? 'is-expanded' : ''}`}>
-                        <div className={`comparison-finding-row ${isSelected ? 'is-selected' : ''}`}>
-                          <button
-                            type="button"
-                            className="comparison-finding-select"
-                            onClick={() => setActiveFieldKey(field.key)}
-                            aria-pressed={isSelected}
-                          >
-                            <span className={`comparison-status-dot is-${visualStatus}`} aria-hidden="true" />
-                            <span className="comparison-finding-title" title={field.label}>{field.label}</span>
-                          </button>
-                          <button
-                            type="button"
-                            className={`comparison-toggle-arrow ${isExpanded ? 'is-open' : ''}`}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setExpandedKeys((prev) => {
-                                const next = new Set(prev)
-                                if (next.has(field.key)) next.delete(field.key)
-                                else next.add(field.key)
-                                return next
-                              })
-                            }}
-                            title={isExpanded ? 'Ocultar detalles' : 'Ver detalles'}
-                            aria-label={isExpanded ? `Ocultar detalles de ${field.label}` : `Ver detalles de ${field.label}`}
-                          >
-                            <ChevronDown size={14} />
-                          </button>
-                        </div>
-
-                        {isExpanded && (
-                          <div className="comparison-finding-details">
-                            <div className="comparison-detail-attribute">
-                              <span className="comparison-detail-attribute-label">Atributo completo</span>
-                              <strong className="comparison-detail-full-name">{field.label}</strong>
-                            </div>
-                            <div className="comparison-detail-status">
-                              <span className={`comparison-status-tag is-${visualStatus}`}>
-                                {visualStatus === 'absent'
-                                  ? (!field.left?.value ? 'No encontrado en Doc A' : !field.right?.value ? 'No encontrado en Doc B' : statusText.absent)
-                                  : statusText[visualStatus]}
-                              </span>
-                            </div>
-                            <div className="comparison-values">
-                              <div className="comparison-value-row">
-                                <span className="comparison-val-label">Doc A:</span>
-                                <span className={`comparison-val-text ${!field.left?.value ? 'is-missing' : ''}`} title={field.left?.value ?? 'No encontrado'}>
-                                  {field.left?.value ?? 'No encontrado'}
-                                </span>
-                              </div>
-                              <div className="comparison-value-row">
-                                <span className="comparison-val-label">Doc B:</span>
-                                <span className={`comparison-val-text ${!field.right?.value ? 'is-missing' : ''}`} title={field.right?.value ?? 'No encontrado'}>
-                                  {field.right?.value ?? 'No encontrado'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              ) : (
-                <p className="comparison-empty">Los atributos aparecerán aquí cuando termine el análisis.</p>
-              )}
-              {activeJob.result && <p className="comparison-review-note">{activeJob.result.disclaimer}</p>}
-            </aside>
-
-            <div className="comparison-originals">
-              {left ? (
-                <OriginalViewer key={left.id} document={left} evidence={activeField?.left ?? null} status={activeField?.status ?? null} side="left" activeFieldLabel={activeField?.label} />
-              ) : (
-                <div className="comparison-missing">El documento A ya no está en la lista activa.</div>
-              )}
-              {right ? (
-                <OriginalViewer key={right.id} document={right} evidence={activeField?.right ?? null} status={activeField?.status ?? null} side="right" activeFieldLabel={activeField?.label} />
-              ) : (
-                <div className="comparison-missing">El documento B ya no está en la lista activa.</div>
-              )}
-            </div>
-          </div>
-        </section>
-      </div>
-    )
+    return <ComparisonResults key={activeJob.id} job={activeJob} left={left} right={right} onBack={() => setScreen('setup')} />
   }
 
   return (
@@ -461,9 +179,9 @@ export function DocumentComparisonView({
         <section className="comparison-card comparison-pair">
           <div className="comparison-card-heading"><div><span className="comparison-step">02</span><h2>Elegir el par</h2></div><span>Uno contra uno</span></div>
           <div className="comparison-selects">
-            <label>Documento A<select value={leftId} disabled={!remote || busy} onChange={(event) => { setLeftId(event.target.value); setActiveJobId(''); setActiveFieldKey('') }}><option value="">Seleccione el primer archivo</option>{activeDocuments.map((document) => <option key={document.id} value={document.id}>{shortName(document)}</option>)}</select></label>
+            <label>Documento A<select value={leftId} disabled={!remote || busy} onChange={(event) => { setLeftId(event.target.value); setActiveJobId('') }}><option value="">Seleccione el primer archivo</option>{activeDocuments.map((document) => <option key={document.id} value={document.id}>{shortName(document)}</option>)}</select></label>
             <ArrowRight size={18} aria-hidden="true" />
-            <label>Documento B<select value={rightId} disabled={!remote || busy} onChange={(event) => { setRightId(event.target.value); setActiveJobId(''); setActiveFieldKey('') }}><option value="">Seleccione el segundo archivo</option>{activeDocuments.filter((document) => document.id !== leftId).map((document) => <option key={document.id} value={document.id}>{shortName(document)}</option>)}</select></label>
+            <label>Documento B<select value={rightId} disabled={!remote || busy} onChange={(event) => { setRightId(event.target.value); setActiveJobId('') }}><option value="">Seleccione el segundo archivo</option>{activeDocuments.filter((document) => document.id !== leftId).map((document) => <option key={document.id} value={document.id}>{shortName(document)}</option>)}</select></label>
           </div>
           {leftId && rightId && leftId === rightId && <p className="comparison-validation">Seleccione dos archivos distintos.</p>}
           <div className="comparison-pair-actions">
@@ -494,7 +212,6 @@ export function DocumentComparisonView({
                     className={job.id === activeJobId ? 'is-active' : ''}
                     onClick={() => {
                       setActiveJobId(job.id)
-                      setActiveFieldKey('')
                       setScreen('results')
                     }}
                   >
