@@ -5,7 +5,6 @@ from typing import Any
 import openpyxl
 from pydantic import BaseModel, Field
 
-from ..models.canonical import FragmentLocator, UnitType
 
 
 def _normalize_text(text: str) -> str:

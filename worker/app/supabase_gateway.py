@@ -30,57 +30,6 @@ class SupabaseGateway:
         response.raise_for_status()
         return response
 
-    async def claim_document_ai_revision(self) -> Any | None:
-        try:
-            response = await self._request(
-                "POST",
-                "/rest/v1/rpc/claim_next_expediente_document_ai_revision",
-                json={"p_worker_name": self.settings.worker_name},
-            )
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 400:
-                # La función SQL no existe aún en la BD (script APLICAR_EN_SUPABASE_EXPEDIENTE_V2.sql
-                # pendiente de ejecutar en el dashboard de Supabase). Se omite sin traceback.
-                logger.warning(
-                    "claim_next_expediente_document_ai_revision → 400 (función SQL no disponible). "
-                    "Ejecuta APLICAR_EN_SUPABASE_EXPEDIENTE_V2.sql en el dashboard de Supabase."
-                )
-                return None
-            raise
-        rows = response.json()
-        if not rows:
-            return None
-        from .document_ai_revision import DocumentAiRevisionTask
-        row = rows[0]
-        return DocumentAiRevisionTask(
-            id=row["id"],
-            project_id=row["project_id"],
-            source_document_version_id=row["source_document_version_id"],
-            source_content=row["source_content"],
-            user_comment=row["user_comment"],
-            lease_token=row["lease_token"],
-            attempt_count=row["attempt_count"],
-        )
-
-    async def complete_document_ai_revision(
-        self,
-        revision_id: str,
-        lease_token: str,
-        proposed_content: dict[str, Any] | None = None,
-        error_code: str | None = None,
-    ) -> bool:
-        response = await self._request(
-            "POST",
-            "/rest/v1/rpc/complete_expediente_document_ai_revision",
-            json={
-                "p_revision_id": revision_id,
-                "p_lease_token": lease_token,
-                "p_proposed_content": proposed_content,
-                "p_error_code": error_code,
-            },
-        )
-        return bool(response.json())
-
     async def download(self, storage_path: str) -> bytes:
         response = await self._request("GET", f"/storage/v1/object/authenticated/source-documents/{quote(storage_path, safe='/')}")
         return response.content

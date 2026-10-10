@@ -11,7 +11,6 @@ from fastapi import FastAPI, HTTPException, Request, status
 
 from openai import AsyncOpenAI
 
-from .document_ai_revision import process_document_ai_revision
 from .document_comparison import process_comparison_job
 from .expediente_v2 import process_expediente_v2_task
 from .pipeline_v2 import Phase4PipelineOrchestrator
@@ -51,10 +50,6 @@ async def expediente_v2_worker_loop(stop: asyncio.Event) -> None:
                     for pending_exec in pending_extractions:
                         from .expediente_v2 import trigger_phase4_extraction_if_ready
                         await trigger_phase4_extraction_if_ready(gateway, pending_exec, orchestrator)
-                    continue
-                revision = await gateway.claim_document_ai_revision()
-                if revision:
-                    await process_document_ai_revision(gateway, revision, ai_client, settings.ai_model)
                     continue
                 comparison = await gateway.claim_comparison_job()
                 if comparison:
@@ -373,33 +368,3 @@ async def _execute_queue_execution(body: QueueExecutionBody) -> dict[str, Any]:
         }
     finally:
         await gateway.close()
-
-
-
-class ExportDocxRequest(BaseModel):
-    template_id: str
-    record: dict[str, Any]
-
-
-@app.post("/api/documents/export-docx")
-async def export_docx_endpoint(req: ExportDocxRequest):
-    from fastapi.responses import StreamingResponse
-    from .document_export import generate_populated_docx
-
-    try:
-        stream = generate_populated_docx(req.template_id, req.record)
-        name_map = {
-            "tpl-escritura-publica": "ESCRITURA_TOL_ANZ_045_CONSOLIDADA.docx",
-            "tpl-descripcion-linderos": "ID02_DESCRIPCION_LINDEROS_CONSOLIDADA.docx",
-            "tpl-minuta-tipo": "MINUTA_TIPO_TERRITORIUM_CONSOLIDADA.docx",
-        }
-        filename = name_map.get(req.template_id, "DOCUMENTO_CONSOLIDADO.docx")
-        return StreamingResponse(
-            stream,
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
-    except Exception as exc:
-        logger.exception("export_docx_failed")
-        raise HTTPException(status_code=500, detail=str(exc))
-

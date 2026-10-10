@@ -1,8 +1,6 @@
-import asyncio
-from typing import Any, Callable, Coroutine
+from typing import Any
 from pydantic import BaseModel, Field
 
-from ..models.canonical import FragmentLocator
 
 
 class FieldDiscrepancy(BaseModel):
@@ -31,24 +29,8 @@ class ReducedExtractionResult(BaseModel):
 
 class HierarchicalReducer:
     """
-    Executes tasks with bounded concurrency (asyncio.Semaphore)
-    and reduces partial extraction results into a unified canonical record (HU-V2-037).
+    Reduces partial extraction results into a unified canonical record (HU-V2-037).
     """
-    def __init__(self, max_concurrency: int = 3) -> None:
-        self.semaphore = asyncio.Semaphore(max_concurrency)
-
-    async def execute_concurrent(
-        self,
-        tasks: list[Callable[[], Coroutine[Any, Any, dict[str, Any]]]],
-    ) -> list[dict[str, Any]]:
-        """Executes a list of coroutine factories with bounded concurrency."""
-        async def _bounded_exec(task_fn: Callable[[], Coroutine[Any, Any, dict[str, Any]]]) -> dict[str, Any]:
-            async with self.semaphore:
-                return await task_fn()
-
-        results = await asyncio.gather(*[_bounded_exec(t) for t in tasks], return_exceptions=False)
-        return results
-
     def reduce_titles(self, partial_results: list[dict[str, Any]]) -> ReducedExtractionResult:
         """
         Reduces title extraction fragments into a single canonical title study record.

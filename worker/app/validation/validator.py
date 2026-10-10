@@ -1,4 +1,3 @@
-from typing import Any
 from pydantic import BaseModel, Field
 
 from ..extractors.negotiation_schema import NegotiationExtractionPayload

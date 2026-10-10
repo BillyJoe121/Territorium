@@ -5,7 +5,6 @@ import re
 import time
 from typing import Any
 
-from ..models.canonical import DocumentFragment
 from .title_schema import PropertyOwner, TitleStudyPayload
 
 logger = logging.getLogger("territorium.extractors.title")

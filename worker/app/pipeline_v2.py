@@ -68,35 +68,6 @@ class Phase4ExecutionResult:
         serialized = json.dumps(self.canonical_payload, sort_keys=True)
         return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
-    def to_output_record(self, execution_id: str, project_id: str, group_id: str) -> dict[str, Any]:
-        """
-        Formats the output payload according to the public.expediente_execution_outputs schema.
-        """
-        full_payload = {
-            "canonical_data": self.canonical_payload,
-            "validation_report": self.validation_report.model_dump(),
-            "discrepancies": self.discrepancies,
-            "provenance": self.provenance,
-            "documents_summary": [
-                {
-                    "document_id": doc.document_id,
-                    "original_name": doc.original_name,
-                    "sha256": doc.sha256,
-                    "page_count": doc.page_count,
-                    "scan_status": doc.overall_scan_status.value,
-                }
-                for doc in self.parsed_documents
-            ],
-        }
-        return {
-            "execution_id": execution_id,
-            "project_id": project_id,
-            "group_id": group_id,
-            "payload": full_payload,
-            "payload_sha256": hashlib.sha256(json.dumps(full_payload, sort_keys=True).encode("utf-8")).hexdigest(),
-        }
-
-
 class Phase4PipelineOrchestrator:
     """
     Production orchestrator for Phase 4 (HU-V2-034 to HU-V2-041):
@@ -106,7 +77,6 @@ class Phase4PipelineOrchestrator:
     def __init__(
         self,
         ai_client: Any | None = None,
-        max_concurrency: int = 3,
         primary_model: str = "gpt-4o",
     ) -> None:
         self.ai_client = ai_client
@@ -114,7 +84,7 @@ class Phase4PipelineOrchestrator:
         self.title_extractor = TitleStudyExtractor(ai_client=ai_client, model=primary_model)
         self.plan_extractor = PlanExtractor(ai_client=ai_client, model=primary_model)
         self.negotiation_extractor = NegotiationExtractor()
-        self.reducer = HierarchicalReducer(max_concurrency=max_concurrency)
+        self.reducer = HierarchicalReducer()
         self.validator = StructuralValidationEngine()
 
     def parse_source_file(

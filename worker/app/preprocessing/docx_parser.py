@@ -1,7 +1,6 @@
 import hashlib
 import io
 import uuid
-from typing import BinaryIO
 
 import docx
 from docx.oxml.text.paragraph import CT_P

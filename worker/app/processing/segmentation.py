@@ -1,5 +1,3 @@
-import uuid
-from typing import Any
 from pydantic import BaseModel, Field
 
 from ..models.canonical import CanonicalDocument, DocumentFragment, FragmentLocator

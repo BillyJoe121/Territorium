@@ -46,16 +46,6 @@ class Phase4EndToEndTests(unittest.TestCase):
         self.assertIn("1.485.142", result.canonical_payload["first_offer_numbers"])
         self.assertEqual(result.canonical_payload["property_code"], "TOL-ANZ-103")
 
-        # Test formatting for Supabase outputs
-        record = result.to_output_record(
-            execution_id="exec-123",
-            project_id="proj-456",
-            group_id="group-789",
-        )
-        self.assertEqual(record["execution_id"], "exec-123")
-        self.assertIn("canonical_data", record["payload"])
-        self.assertTrue(len(record["payload_sha256"]) == 64)
-
     def test_e2e_real_plan_pdf(self) -> None:
         target_path = None
         for root, _, files in os.walk(self.base_real_dir):

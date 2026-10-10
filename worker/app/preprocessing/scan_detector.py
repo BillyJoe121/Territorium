@@ -1,5 +1,5 @@
 from typing import Any
-from ..models.canonical import CanonicalDocument, PageScanInfo, ScanClassification
+from ..models.canonical import CanonicalDocument, ScanClassification
 
 
 class ScanAnalysisResult:

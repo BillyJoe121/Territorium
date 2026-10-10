@@ -4,7 +4,6 @@ import asyncio
 from app.extractors.title_extractor import TitleStudyExtractor
 from app.extractors.title_schema import TitleStudyPayload, PropertyOwner
 from app.extractors.plan_extractor import PlanExtractor
-from app.extractors.plan_schema import PlanExtractionPayload
 from app.processing.hierarchical_reducer import HierarchicalReducer
 from app.validation.validator import StructuralValidationEngine
 
