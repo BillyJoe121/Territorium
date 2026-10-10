@@ -24,7 +24,3 @@ export function loadState(): PlatformState {
 export function saveState(state: PlatformState) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
 }
-
-export function resetState() {
-  localStorage.removeItem(STORAGE_KEY)
-}

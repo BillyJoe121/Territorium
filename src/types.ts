@@ -169,7 +169,6 @@ export type TextOrigin = 'native' | 'ocr' | 'hybrid' | 'exception'
 export type PreprocessingStatus = 'ready' | 'needs_ocr' | 'ocr_in_progress' | 'ocr_completed' | 'exception' | 'corrupt'
 
 export type TaskStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'blocked'
-export type ExtractionStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'requires_review' | 'blocked'
 export type DependencyStatus = 'ready' | 'waiting' | 'blocked'
 export type ExceptionCategory =
   | 'permanent_unreadable'
@@ -206,32 +205,6 @@ export interface DocumentTask {
   updatedAt: string
 }
 
-export interface BatchItem {
-  id: string
-  file: File
-  name: string
-  size: number
-  mimeType: string
-  sha256?: string
-  kind: DocumentKind
-  propertyCode: string
-  errors: string[]
-  warnings: string[]
-  isDuplicate: boolean
-  duplicateSource?: 'batch' | 'project'
-  duplicateTargetName?: string
-  duplicateDecision?: DuplicateDecision
-  pageCount?: number
-  isScanned?: boolean
-  needsOcr?: boolean
-  ocrApplied?: boolean
-  isEncrypted?: boolean
-  textOrigin?: TextOrigin
-  workingText?: string
-  preprocessingStatus?: PreprocessingStatus
-  exceptionReason?: string
-}
-
 export interface ManifestSummary {
   totalFiles: number
   validFiles: number
@@ -244,15 +217,6 @@ export interface ManifestSummary {
   duplicatesCount: number
   unresolvedDuplicates: number
   canProcess: boolean
-}
-
-export interface ProjectMember {
-  userId: string
-  projectId: string
-  email?: string
-  role: ProjectRole
-  createdAt: string
-  isActive?: boolean
 }
 
 export interface Project {
@@ -418,7 +382,6 @@ export interface PromptTestResult {
 }
 
 export type ProjectStatusOverall = 'sin_lotes' | 'en_carga' | 'en_revision' | 'aprobado' | 'exportado' | 'archivado'
-export type VisualDensity = 'comfortable' | 'compact'
 
 export type TemplateKey = 'oferta_economica' | 'acta_acuerdo' | 'bitacora' | 'poder' | 'promesa' | 'escritura'
 
@@ -573,153 +536,6 @@ export interface PlatformState {
   generatedDocs?: GeneratedDocument[]
   changeHistory?: AttributeChangeHistoryItem[]
   snapshots?: ProjectSnapshot[]
-}
-
-export interface UploadProgress {
-  fileName: string
-  percent: number
-  completedFiles: number
-  totalFiles: number
-}
-
-// ==========================================
-// TIPOS P2: CAPACIDADES AVANZADAS EMPRESARIALES
-// ==========================================
-
-export type SsoProvider = 'azure_ad' | 'okta' | 'google_workspace' | 'saml2'
-
-export interface SsoConfiguration {
-  id: string
-  projectId?: string
-  providerName: SsoProvider
-  entityId: string
-  metadataUrl?: string
-  clientId: string
-  clientSecret?: string
-  issuer: string
-  defaultRole: UserRole
-  roleClaimMapping: Record<string, UserRole>
-  isActive: boolean
-}
-
-export interface ElectronicSignatureRecord {
-  id: string
-  documentId: string
-  projectId: string
-  propertyCode: string
-  provider: 'docusign' | 'certicamara' | 'internal_otp'
-  envelopeId: string
-  signerEmail: string
-  signerName: string
-  signerRole: string
-  documentSha256: string
-  timestampToken?: string
-  status: 'pending' | 'signed' | 'declined' | 'expired'
-  certificateDetails?: Record<string, unknown>
-  signedAt?: string
-  createdAt: string
-}
-
-export interface ManifestImportRow {
-  propertyCode: string
-  expectedDocumentType: string
-  expectedFileName?: string
-  presumedOwner?: string
-  notes?: string
-  isMatched?: boolean
-  matchedFile?: string
-}
-
-export interface ManifestImportResult {
-  totalRows: number
-  matchedRows: number
-  unmatchedRows: number
-  rows: ManifestImportRow[]
-  discrepancies: string[]
-}
-
-export type ServitudeType = 'transito' | 'vuelo_linea' | 'acceso' | 'subestacion'
-
-export interface PropertyValuationInput {
-  propertyCode: string
-  commercialCadastralValue: number
-  areaAffectedM2: number
-  totalAreaM2: number
-  servitudeType: ServitudeType
-  hasImprovements: boolean
-  improvementsValue?: number
-}
-
-export interface NegotiationFormulaRule {
-  id: string
-  name: string
-  servitudeCoefficients: Record<ServitudeType, number> // Factor según tipo (ej. vuelo 0.35, transito 0.60)
-  voluntaryAgreementBonusPercent: number // Bonificación por firma voluntaria (ej. 10%)
-  negotiationMarginPercent: number // Margen entre oferta inicial y techo (ej. 15%)
-  minOfferCapUsd?: number
-  maxOfferCapUsd?: number
-}
-
-export interface OfferLadderResult {
-  propertyCode: string
-  baseDamageValue: number
-  initialOffer: number
-  negotiatedOffer: number
-  finalOffer: number
-  voluntaryBonus: number
-  ruleApplied: string
-  calculationDetails: string[]
-}
-
-export interface CustomDynamicTemplate {
-  id: string
-  projectId: string
-  templateKey: string
-  name: string
-  description?: string
-  format: 'txt' | 'docx' | 'xlsx'
-  rawContent: string
-  detectedPlaceholders: string[]
-  fieldMappings: Record<string, string> // placeholder -> attributeKey
-  isActive: boolean
-  version: number
-  createdBy?: string | null
-  createdAt: string
-  updatedAt: string
-}
-
-export type CorporateNotificationChannel = 'teams' | 'slack' | 'email_smtp' | 'whatsapp'
-
-export interface CorporateNotificationPayload {
-  projectId: string
-  eventType: 'batch_blocked' | 'budget_alert' | 'system_degraded' | 'all_approved' | 'security_anomaly'
-  title: string
-  message: string
-  urgency: 'low' | 'medium' | 'high' | 'critical'
-  metadata?: Record<string, unknown>
-  timestamp: string
-}
-
-export interface NotificationChannelConfig {
-  id: string
-  projectId?: string
-  channelType: CorporateNotificationChannel
-  webhookUrl?: string
-  targetRecipients: string[]
-  eventsSubscribed: string[]
-  isEnabled: boolean
-}
-
-export type CapacityAlertLevel = 'normal' | 'warning_70' | 'critical_85' | 'exhausted_95'
-
-export interface CapacityQuotaStatus {
-  serviceName: 'openai' | 'gemini' | 'supabase_storage' | 'worker_pool'
-  currentUsage: number
-  capacityLimit: number
-  unit: 'tokens' | 'megabytes' | 'active_jobs' | 'usd'
-  percentConsumed: number
-  alertLevel: CapacityAlertLevel
-  recommendation: string
 }
 
 

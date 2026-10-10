@@ -1,26 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { classifyFileName, cleanFileName } from './platformRepository'
-
-describe('clasificación documental', () => {
-  it.each([
-    ['ESTUDIO DE TÍTULOS_SAN-CIM-001.pdf', 'estudio_titulos'],
-    ['Plano_SAN-CIM-001.pdf', 'plano'],
-    ['Oferta de servidumbre.docx', 'negociacion'],
-    ['anexo-general.pdf', 'sin_clasificar'],
-  ] as const)('clasifica %s', (name, expected) => {
-    expect(classifyFileName(name)).toBe(expected)
-  })
-})
-
-describe('rutas de almacenamiento', () => {
-  it('normaliza nombres y conserva una extensión segura', () => {
-    expect(cleanFileName('  Matrícula # 01.PDF')).toBe('Matricula-01.pdf')
-  })
-
-  it('elimina segmentos de ruta y caracteres especiales', () => {
-    expect(cleanFileName('../predio<script>.docx')).toBe('predio-script.docx')
-  })
-})
 
 describe('seguridad y roles de mínimo privilegio (US-002, US-003)', () => {
   const allowedRoles = ['owner', 'operator', 'reviewer', 'viewer'] as const

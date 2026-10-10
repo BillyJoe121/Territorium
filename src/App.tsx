@@ -1,90 +1,27 @@
-import { ChangeEvent, FormEvent, Suspense, lazy, useCallback, useEffect, useState } from 'react'
-import { Activity, AlertTriangle, Archive, ArrowRight, CheckCircle, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Cloud, FilePlus2, FileSpreadsheet, FileText, FolderKanban, Landmark, LoaderCircle, LogOut, Plus, RotateCcw, Scale, Shield, SlidersHorizontal, Trash2, UploadCloud, WifiOff, X, XCircle } from 'lucide-react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
+import { Activity, AlertTriangle, ChevronLeft, ChevronRight, FolderKanban, LoaderCircle, LogOut, Scale, WifiOff, X, XCircle } from 'lucide-react'
 import { ToastLayer, toast as sonnerToast } from './components/ui/ToastLayer'
-import { StatusPill } from './components/ui/StatusPill'
 import { ThemeToggle } from './components/ui/ThemeToggle'
-import { ExcelExportConfigModal } from './components/ui/ExcelExportConfigModal'
-import { TemplateEditorWithVariables } from './components/TemplateEditorWithVariables'
 import { ProjectDetailView } from './components/views/ProjectDetailView'
-import { ProcessingMonitorView } from './components/views/ProcessingMonitorView'
-import { DiscrepanciesView } from './components/views/DiscrepanciesView'
-import { NegotiationView } from './components/views/NegotiationView'
-import { DeliverablesView } from './components/views/DeliverablesView'
 import { TelemetryView } from './components/views/TelemetryView'
-import { PageHeader } from './components/common/PageHeader'
-import { EmptyState as NewEmptyState } from './components/common/EmptyState'
 import { dataMode, isSupabaseConfigured } from './lib/supabase'
-import { loadState, resetState, saveState } from './lib/storage'
+import { loadState, saveState } from './lib/storage'
 import { useAuth } from './auth/AuthContext'
 import { AuthScreen } from './auth/AuthScreen'
 import { SessionGuard } from './auth/SessionGuard'
-import { IngestionView } from './components/IngestionView'
 import { ProjectsManagementView } from './components/ProjectsManagementView'
-import { ReviewStationView } from './components/ReviewStationView'
-import { DynamicTemplateEditor } from './components/DynamicTemplateEditor'
-import { convertPropertyRecordToMasterRecord, type PropertyMasterRecord } from './lib/masterRecordReconciliation'
-import { downloadMasterRecordsXlsx } from './lib/excel'
 import {
-  activateRemotePromptVersion,
-  cancelRemoteBatch,
   createRemoteProject,
-  createRemotePromptVersion,
-  getSignedDocumentUrl,
   loadPlatformState,
   recordRemoteAiExecutionLog,
-  reprocessRemoteTask,
   subscribeToProject,
   toggleArchiveRemoteProject,
-  updateRemoteAttributes,
-  updateRemoteExtractorConfig,
   updateRemoteProject,
-  updateRemoteReview,
-  uploadRemoteBatch,
 } from './data/platformRepository'
-import { createDocumentTasksForBatch, createReprocessTask, evaluateTaskDependencies } from './lib/taskOrchestration'
-import {
-  activatePromptVersion,
-  createAiExecutionLog,
-  createNextPromptVersion,
-  DEFAULT_EXTRACTOR_CONFIGS,
-  DEFAULT_PROMPT_VERSIONS,
-} from './lib/extractorConfig'
-import type {
-  AiExecutionLog,
-  AuditEvent,
-  Batch,
-  BatchItem,
-  DocumentKind,
-  DocumentTask,
-  ExtractorConfig,
-  JobState,
-  ManifestSummary,
-  PlatformState,
-  Project,
-  PromptVersion,
-  PropertyRecord,
-  ReviewState,
-  ReviewTask,
-  SourceDocument,
-  UploadProgress,
-  VisualDensity,
-  ProjectMetadataInput,
-} from './types'
+import { DEFAULT_EXTRACTOR_CONFIGS, DEFAULT_PROMPT_VERSIONS } from './lib/extractorConfig'
+import type { AiExecutionLog, AuditEvent, PlatformState, Project, ProjectMetadataInput } from './types'
 
-export type Screen =
-  | 'comparador'
-  | 'expedientes'
-  | 'proyecto_detalle'
-  | 'telemetria'
-  | 'carga'
-  | 'monitor'
-  | 'discrepancias'
-  | 'revision'
-  | 'negociacion'
-  | 'formatos_editor'
-  | 'exportar'
-  | 'papelera'
-  | 'lotes_nuevo'
+export type Screen = 'comparador' | 'expedientes' | 'proyecto_detalle' | 'telemetria'
 
 const DocumentComparisonView = lazy(() => import('./components/comparison/DocumentComparisonView').then((module) => ({ default: module.DocumentComparisonView })))
 
@@ -111,33 +48,13 @@ const navGroups: NavGroup[] = [
   },
 ]
 
-const projectScopedScreens: Screen[] = [
-  'carga',
-  'monitor',
-  'discrepancias',
-  'revision',
-  'negociacion',
-  'exportar',
-  'formatos_editor',
-  'lotes_nuevo',
-  'proyecto_detalle',
-]
-const screenRequiresProject = (screen: Screen) => projectScopedScreens.includes(screen)
+const screenRequiresProject = (screen: Screen) => screen === 'proyecto_detalle'
 
 const screenLabels: Record<Screen, { title: string; eyebrow: string }> = {
   comparador: { title: 'Comparador Documental', eyebrow: 'COTEJO DE ORIGINALES' },
   expedientes: { title: 'Proyectos', eyebrow: 'INVENTARIO DE PROYECTOS' },
   proyecto_detalle: { title: 'Ficha del Proyecto', eyebrow: 'DETALLE Y ETAPAS OPERATIVAS' },
   telemetria: { title: 'Telemetría de IA', eyebrow: 'OBSERVABILIDAD Y COSTOS EN TIEMPO REAL' },
-  carga: { title: 'Ingesta y Manifiesto', eyebrow: 'RECEPCIÓN DOCUMENTAL' },
-  monitor: { title: 'Monitor de Procesamiento', eyebrow: 'PIPELINE EN TIEMPO REAL' },
-  discrepancias: { title: 'Excepciones y Conflictos', eyebrow: 'CONCILIACIÓN FÍSICA Y JURÍDICA' },
-  revision: { title: 'Estación de Revisión Humana', eyebrow: 'CERTIFICACIÓN DE ATRIBUTOS' },
-  negociacion: { title: 'Negociación y Afectaciones', eyebrow: 'CATASTRO, AVALÚOS Y COMPENSACIÓN' },
-  formatos_editor: { title: 'Plantillas y Minutas', eyebrow: 'GENERACIÓN DOCUMENTAL' },
-  exportar: { title: 'Entregables y Cierre', eyebrow: 'MATRICES EXCEL Y DOCUMENTOS' },
-  papelera: { title: 'Papelera de Reciclaje', eyebrow: 'RECUPERACIÓN SEGURA' },
-  lotes_nuevo: { title: 'Carga de Lote Asistida', eyebrow: 'INGESTA A PANTALLA COMPLETA' },
 }
 
 const navShortLabels: Partial<Record<Screen, string>> = {
@@ -146,18 +63,8 @@ const navShortLabels: Partial<Record<Screen, string>> = {
   telemetria: 'Telemetría',
 }
 
-const kindLabels: Record<DocumentKind, string> = { estudio_titulos: 'Estudio de títulos', plano: 'Plano', linderos: 'Linderos / Cabida', negociacion: 'Negociación', soporte: 'Soporte', sin_clasificar: 'Sin clasificar' }
-const stateLabels: Record<JobState, string> = { pendiente: 'Pendiente', en_proceso: 'En proceso', requiere_revision: 'Requiere revisión', completado: 'Completado', fallido: 'Fallido', cancelado: 'Cancelado' }
 const makeId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`
 const date = () => new Date().toISOString()
-
-function classify(name: string): DocumentKind {
-  const lower = name.toLowerCase()
-  if (/(estudio|titulo|título|matricula|matrícula)/.test(lower)) return 'estudio_titulos'
-  if (/(plano|topogr|cartogr|levantamiento)/.test(lower)) return 'plano'
-  if (/(oferta|negocia|avalúo|avaluo|servidumbre)/.test(lower)) return 'negociacion'
-  return 'sin_clasificar'
-}
 
 function Brand() {
   return (
@@ -172,7 +79,7 @@ function Brand() {
 }
 
 function App() {
-  const { user, loading: authLoading, status: authStatus, signOut, isRecovery } = useAuth()
+  const { user, status: authStatus, signOut, isRecovery } = useAuth()
   const remote = dataMode === 'supabase'
   const [screen, setScreen] = useState<Screen>('comparador')
   const [state, setState] = useState<PlatformState>(() =>
@@ -195,11 +102,7 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(remote)
   const [busyAction, setBusyAction] = useState<string | null>(null)
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
   const [online, setOnline] = useState(navigator.onLine)
-  const [lastSync, setLastSync] = useState<Date | null>(null)
-  const [density, setDensity] = useState<VisualDensity>('comfortable')
-  const [isExcelConfigModalOpen, setIsExcelConfigModalOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   // US-209: Scroll Restoration al navegar entre vistas
@@ -227,31 +130,7 @@ function App() {
       }
       const parts = hash.replace('#/app/', '').split('?')
       const targetScreen = parts[0] as Screen
-      const validScreens: Screen[] = [
-        'comparador',
-        'expedientes',
-        'proyecto_detalle',
-        'telemetria',
-        'carga',
-        'monitor',
-        'discrepancias',
-        'revision',
-        'negociacion',
-        'formatos_editor',
-        'exportar',
-        'papelera',
-        'lotes_nuevo',
-      ]
-      const legacyReplacedScreens: Screen[] = [
-        'monitor',
-        'revision',
-        'formatos_editor',
-        'exportar',
-        'carga',
-        'lotes_nuevo',
-        'negociacion',
-        'discrepancias',
-      ]
+      const validScreens: Screen[] = ['comparador', 'expedientes', 'proyecto_detalle', 'telemetria']
 
       if (parts[0] === 'inicio') {
         setScreen('comparador')
@@ -266,12 +145,6 @@ function App() {
       if (parts[0] === 'usuarios' || parts[0] === 'trazabilidad') {
         setScreen('expedientes')
         window.location.hash = '#/app/expedientes'
-        return
-      }
-      if (legacyReplacedScreens.includes(targetScreen)) {
-        setScreen('proyecto_detalle')
-        window.location.hash = '#/app/proyecto_detalle'
-        toast('La navegación se unificó en la Ficha del Proyecto (un predio, una gestión).')
         return
       }
       if (validScreens.includes(targetScreen)) {
@@ -292,23 +165,6 @@ function App() {
       window.location.hash = `#/app/${screen}`
     }
   }, [screen])
-
-  // HU-V2-053: Redirección de pantallas obsoletas a la Ficha del Proyecto unificada
-  useEffect(() => {
-    const legacyReplacedScreens: Screen[] = [
-      'monitor',
-      'revision',
-      'formatos_editor',
-      'exportar',
-      'carga',
-      'lotes_nuevo',
-      'negociacion',
-      'discrepancias',
-    ]
-    if (legacyReplacedScreens.includes(screen)) {
-      setScreen(activeProjectId ? 'proyecto_detalle' : 'expedientes')
-    }
-  }, [screen, activeProjectId])
 
   const activeProject = state.projects.find((project) => project.id === activeProjectId)
   const clearProjectContext = () => {
@@ -345,7 +201,7 @@ function App() {
     if (!remote || !user) return
     if (!silent) setLoading(true)
     try {
-      const next = await loadPlatformState(); setState(next); setError(null); setLastSync(new Date())
+      const next = await loadPlatformState(); setState(next); setError(null)
       setActiveProjectId((current) => next.projects.some((project) => project.id === current) ? current : next.projects[0]?.id ?? '')
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'No fue posible sincronizar los datos.') }
     finally { setLoading(false) }
@@ -459,269 +315,6 @@ function App() {
     }
   }
 
-  async function handleUploadBatch(
-    items: BatchItem[],
-    expectedProperties: string[],
-    manifestSummary: ManifestSummary
-  ) {
-    if (!activeProject || items.length === 0) return
-    const activeItems = items.filter((it) => it.duplicateDecision !== 'omit')
-    if (!activeItems.length) return
-
-    if (remote) {
-      setBusyAction('upload')
-      setUploadProgress({
-        fileName: activeItems[0].name,
-        percent: 0,
-        completedFiles: 0,
-        totalFiles: activeItems.length,
-      })
-      try {
-        await uploadRemoteBatch(
-          activeProject.id,
-          activeItems.map((it) => ({
-            ...it,
-            file: it.file,
-            kind: it.kind,
-            propertyCode: it.propertyCode,
-            duplicateDecision: it.duplicateDecision,
-          })),
-          'sin_clasificar',
-          setUploadProgress,
-          expectedProperties,
-          manifestSummary
-        )
-        await refresh(true)
-        toast(`${activeItems.length} archivo(s) cargado(s) y verificado(s) según manifiesto.`)
-      } catch (caught) {
-        setError(caught instanceof Error ? caught.message : 'No fue posible cargar el lote.')
-      } finally {
-        setBusyAction(null)
-        setUploadProgress(null)
-      }
-      return
-    }
-
-    // Modo local seguro
-    const batchId = makeId('lote')
-    const documents: SourceDocument[] = activeItems.map((item) => ({
-      id: makeId('documento'),
-      projectId: activeProject.id,
-      batchId,
-      name: item.name,
-      kind: item.kind,
-      size: item.size,
-      uploadedAt: date(),
-      propertyCode: item.propertyCode || null,
-      duplicateDecision: item.duplicateDecision || null,
-      sha256: item.sha256 || null,
-      pageCount: item.pageCount ?? null,
-      isScanned: item.isScanned ?? null,
-      needsOcr: item.needsOcr ?? null,
-      ocrApplied: item.ocrApplied ?? false,
-      textOrigin: item.textOrigin ?? 'native',
-      isEncrypted: item.isEncrypted ?? false,
-      workingText: item.workingText ?? null,
-      preprocessingStatus: item.preprocessingStatus ?? 'ready',
-      exceptionReason: item.exceptionReason ?? null,
-    }))
-    const batch: Batch = {
-      id: batchId,
-      projectId: activeProject.id,
-      name: `Lote ${new Date().toLocaleDateString('es-CO')}`,
-      createdAt: date(),
-      jobState: 'pendiente',
-      progress: 0,
-      runId: null,
-      error: null,
-      expectedProperties,
-      manifestSummary,
-    }
-    update({
-      ...state,
-      batches: [batch, ...state.batches],
-      documents: [...state.documents, ...documents],
-      audit: [
-        ...state.audit,
-        audit(
-          activeProject.id,
-          'Lote cargado con manifiesto',
-          `${documents.length} documento(s) validados; ${expectedProperties.length} predio(s) esperados.`
-        ),
-      ],
-    })
-    toast(`${documents.length} archivo(s) añadido(s) con manifiesto verificado. Confirma el lote para procesarlo.`)
-  }
-
-  async function runBatch(batchId: string) {
-    const batch = state.batches.find((item) => item.id === batchId); if (!batch || batch.jobState === 'en_proceso') return
-    const runId = makeId('ejecucion')
-    const batchDocs = state.documents.filter((item) => item.batchId === batchId)
-    const initialTasks = createDocumentTasksForBatch(batchId, batch.projectId, batchDocs, () => makeId('tarea'))
-    const evaluatedTasks = evaluateTaskDependencies(initialTasks)
-
-    update({
-      ...state,
-      batches: state.batches.map((item) => item.id === batchId ? { ...item, jobState: 'en_proceso', progress: 15, runId, error: null } : item),
-      tasks: [
-        ...(state.tasks ?? []).filter((t) => t.batchId !== batchId),
-        ...evaluatedTasks,
-      ],
-      audit: [...state.audit, audit(batch.projectId, 'Procesamiento iniciado', `Ejecución ${runId}; ${evaluatedTasks.length} tarea(s) generada(s).`)]
-    })
-
-    window.setTimeout(() => {
-      setState((current) => {
-        const currentBatch = current.batches.find((item) => item.id === batchId)
-        if (!currentBatch || currentBatch.jobState === 'cancelado' || currentBatch.runId !== runId) return current
-
-        const currentTasks = (current.tasks ?? []).filter((t) => t.batchId === batchId)
-        const finalTasks = currentTasks.map((task) => {
-          if (task.status === 'failed' || task.status === 'blocked') return task
-          return {
-            ...task,
-            status: 'completed' as const,
-            completedAt: date(),
-            tokensUsed: 1200,
-          }
-        })
-        const evaluatedFinalTasks = evaluateTaskDependencies(finalTasks).map((t) =>
-          t.dependencyStatus === 'ready' && t.status === 'queued'
-            ? { ...t, status: 'completed' as const, completedAt: date(), tokensUsed: 1100 }
-            : t
-        )
-
-        const source = current.documents.find((item) => item.batchId === batchId)
-        const record: PropertyRecord | undefined = source ? { id: makeId('predio'), projectId: batch.projectId, sourceDocumentId: source.id, name: source.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '), folio: 'POR VALIDAR', municipality: activeProject?.municipality ?? 'Por definir', reviewState: 'pendiente', confidence: 0.5, updatedAt: date(), fields: { 'Documento fuente': source.name, 'Tipo documental': kindLabels[source.kind], 'Estado de extracción': 'Salida local de demostración — conectar worker IA', 'Matrícula inmobiliaria': 'POR VALIDAR', 'Área': 'POR VALIDAR', 'Linderos': 'POR VALIDAR' } } : undefined
-        const task: ReviewTask | undefined = record ? { id: makeId('revision'), recordId: record.id, title: 'Confirmar datos extraídos', reason: 'La ejecución local no interpreta documentos. Ejecute el worker con IA configurada para resultados reales.', severity: 'media', state: 'pendiente' } : undefined
-
-        const newLogs: AiExecutionLog[] = evaluatedFinalTasks
-          .filter((t) => t.status === 'completed')
-          .map((t) =>
-            createAiExecutionLog({
-              projectId: batch.projectId,
-              batchId: batch.id,
-              taskId: t.id,
-              documentId: t.sourceDocumentId,
-              extractorKey: t.extractorKey,
-              requestedModel: 'gpt-4o',
-              usedModel: 'gpt-4o',
-              fallbackTriggered: false,
-              status: 'success',
-              latencyMs: 1650,
-              promptTokens: 1800,
-              completionTokens: 420,
-            })
-          )
-
-        const next = {
-          ...current,
-          batches: current.batches.map((item) => item.id === batchId ? { ...item, jobState: 'requiere_revision' as JobState, progress: 100 } : item),
-          tasks: [
-            ...(current.tasks ?? []).filter((t) => t.batchId !== batchId),
-            ...evaluatedFinalTasks,
-          ],
-          aiLogs: [...newLogs, ...(current.aiLogs || [])],
-          records: record ? [...current.records, record] : current.records,
-          reviews: task ? [...current.reviews, task] : current.reviews,
-          audit: [...current.audit, audit(batch.projectId, 'Procesamiento terminado', `Tareas: ${evaluatedFinalTasks.filter((t) => t.status === 'completed').length} completadas, ${evaluatedFinalTasks.filter((t) => t.status === 'failed' || t.status === 'blocked').length} excepciones.`)]
-        }
-        saveState(next)
-        return next
-      })
-      toast('Lote finalizado. Salida y tareas listas para revisión.')
-    }, 1200)
-  }
-
-  async function handleUpdateConfig(config: ExtractorConfig) {
-    if (remote) {
-      setBusyAction(`config:${config.extractorKey}`)
-      try {
-        await updateRemoteExtractorConfig(config)
-        await refresh(true)
-        toast('Configuración de extractor guardada en servidor.')
-      } catch (caught) {
-        setError(caught instanceof Error ? caught.message : 'No fue posible guardar la configuración.')
-      } finally {
-        setBusyAction(null)
-      }
-      return
-    }
-    const currentConfigs = state.extractorConfigs || DEFAULT_EXTRACTOR_CONFIGS
-    const updated = currentConfigs.map((c) => (c.extractorKey === config.extractorKey ? config : c))
-    update({
-      ...state,
-      extractorConfigs: updated,
-      audit: [
-        ...state.audit,
-        audit(activeProjectId, 'Extractor configurado', `Configuración actualizada para ${config.extractorKey}`),
-      ],
-    })
-    toast('Configuración guardada localmente.')
-  }
-
-  async function handleCreatePromptVersion(input: {
-    extractorKey: 'title_study' | 'plan' | 'negotiation'
-    name: string
-    prompt: string
-    schema: Record<string, unknown>
-    setActive?: boolean
-  }) {
-    if (remote) {
-      setBusyAction('create-prompt')
-      try {
-        await createRemotePromptVersion(input)
-        await refresh(true)
-        toast('Nueva versión de prompt registrada inmutablemente.')
-      } catch (caught) {
-        setError(caught instanceof Error ? caught.message : 'No fue posible crear la versión de prompt.')
-      } finally {
-        setBusyAction(null)
-      }
-      return
-    }
-    const res = createNextPromptVersion(state.promptVersions || DEFAULT_PROMPT_VERSIONS, input)
-    update({
-      ...state,
-      promptVersions: res.updatedList,
-      audit: [
-        ...state.audit,
-        audit(
-          activeProjectId,
-          'Prompt versionado',
-          `Se creó la versión v${res.newVersion.version} para ${input.extractorKey}`
-        ),
-      ],
-    })
-    toast(`Versión v${res.newVersion.version} registrada inmutablemente.`)
-  }
-
-  async function handleActivatePromptVersion(versionId: string, extractorKey: string) {
-    if (remote) {
-      setBusyAction(`activate-prompt:${versionId}`)
-      try {
-        await activateRemotePromptVersion(versionId, extractorKey)
-        await refresh(true)
-        toast('Versión de prompt activada para nuevos lotes.')
-      } catch (caught) {
-        setError(caught instanceof Error ? caught.message : 'No fue posible activar la versión.')
-      } finally {
-        setBusyAction(null)
-      }
-      return
-    }
-    const updated = activatePromptVersion(state.promptVersions || DEFAULT_PROMPT_VERSIONS, versionId)
-    update({
-      ...state,
-      promptVersions: updated,
-      audit: [
-        ...state.audit,
-        audit(activeProjectId, 'Prompt activado', `Se activó la versión de prompt ${versionId}`),
-      ],
-    })
-    toast('Versión activada para nuevos lotes.')
-  }
-
   async function handleRecordAiLog(log: AiExecutionLog) {
     const enrichedLog: AiExecutionLog = {
       ...log,
@@ -740,70 +333,6 @@ function App() {
     }
   }
 
-  async function handleReprocessTask(taskId: string) {
-    const task = (state.tasks ?? []).find((t) => t.id === taskId)
-    if (!task) return
-    if (remote) {
-      setBusyAction(`reprocess:${taskId}`)
-      try {
-        await reprocessRemoteTask(taskId, activeProjectId)
-        await refresh(true)
-        toast('Tarea encolada para reproceso.')
-      } catch (caught) {
-        setError(caught instanceof Error ? caught.message : 'No fue posible reprocesar la tarea.')
-      } finally {
-        setBusyAction(null)
-      }
-      return
-    }
-
-    const reprocessed = createReprocessTask(task)
-    const updatedTasks = (state.tasks ?? []).map((t) => (t.id === taskId ? reprocessed : t))
-    update({
-      ...state,
-      tasks: updatedTasks,
-      audit: [
-        ...state.audit,
-        audit(
-          activeProjectId,
-          'Reproceso de tarea',
-          `Reproceso selectivo de tarea ${task.extractorKey} para documento.`
-        ),
-      ],
-    })
-    toast('Tarea reiniciada para reproceso.')
-  }
-
-  async function cancelBatch(batchId: string) {
-    const batch = state.batches.find((item) => item.id === batchId); if (!batch) return
-    if (remote) { setBusyAction(`cancel:${batchId}`); try { await cancelRemoteBatch(batchId); await refresh(true); toast('Trabajo cancelado.') } catch (caught) { setError(caught instanceof Error ? caught.message : 'No fue posible cancelar.') } finally { setBusyAction(null) }; return }
-    update({ ...state, batches: state.batches.map((item) => item.id === batchId ? { ...item, jobState: 'cancelado', error: null } : item), audit: [...state.audit, audit(batch.projectId, 'Procesamiento cancelado', `La ejecución ${batch.runId ?? 'sin iniciar'} fue cancelada.`)] }); toast('Lote cancelado.')
-  }
-
-  async function updateReview(recordId: string, reviewState: ReviewState) {
-    const record = state.records.find((item) => item.id === recordId); if (!record) return
-    if (remote) { setBusyAction(`review:${recordId}`); try { await updateRemoteReview(recordId, reviewState); await refresh(true); toast(`Registro ${reviewState}.`) } catch (caught) { setError(caught instanceof Error ? caught.message : 'No fue posible guardar la revisión.') } finally { setBusyAction(null) }; return }
-    update({ ...state, records: state.records.map((item) => item.id === recordId ? { ...item, reviewState, updatedAt: date() } : item), reviews: state.reviews.map((item) => item.recordId === recordId ? { ...item, state: reviewState } : item), audit: [...state.audit, audit(record.projectId, `Registro ${reviewState}`, `Se actualizó la revisión de ${record.name}.`)] }); toast(`Registro ${reviewState}.`)
-  }
-
-  async function saveAttributes(recordId: string, fields: Record<string, string>) {
-    if (remote) { setBusyAction(`attributes:${recordId}`); try { await updateRemoteAttributes(recordId, fields); await refresh(true); toast('Correcciones guardadas con trazabilidad.') } catch (caught) { setError(caught instanceof Error ? caught.message : 'No fue posible guardar las correcciones.') } finally { setBusyAction(null) }; return }
-    update({ ...state, records: state.records.map((record) => record.id === recordId ? { ...record, fields, reviewState: 'pendiente', updatedAt: date() } : record) })
-  }
-
-  async function openSource(record: PropertyRecord) {
-    const source = state.documents.find((document) => document.id === record.sourceDocumentId)
-    if (!source?.storagePath) { setError('El documento fuente no está disponible en el modo actual.'); return }
-    try { const url = await getSignedDocumentUrl(source.storagePath); window.open(url, '_blank', 'noopener,noreferrer') }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'No fue posible abrir la fuente.') }
-  }
-
-  const projectBatches = state.batches.filter((batch) => batch.projectId === activeProjectId)
-  const projectRecords = state.records.filter((record) => record.projectId === activeProjectId)
-  const pendingReviews = state.reviews.filter((review) => projectRecords.some((record) => record.id === review.recordId) && review.state === 'pendiente')
-  const masterRecords: PropertyMasterRecord[] = projectRecords.map((r) =>
-    convertPropertyRecordToMasterRecord(r, state.documents.filter((d) => d.projectId === activeProjectId))
-  )
   const content = {
     expedientes: (
       <ProjectsManagementView
@@ -820,14 +349,7 @@ function App() {
       />
     ),
     proyecto_detalle: activeProject ? (
-      <ProjectDetailView
-        project={activeProject}
-        batches={projectBatches}
-        records={projectRecords}
-        reviews={state.reviews.filter((r) => projectRecords.some((rec) => rec.id === r.recordId))}
-        documents={state.documents.filter((doc) => doc.projectId === activeProjectId)}
-        onNavigate={(targetScreen: any) => setScreen(targetScreen)}
-      />
+      <ProjectDetailView project={activeProject} onBack={() => setScreen('expedientes')} />
     ) : (
       <ProjectRequired onSelect={() => setScreen('expedientes')} />
     ),
@@ -864,165 +386,6 @@ function App() {
         })()}
       </Suspense>
     ),
-    carga: activeProject ? (
-      <IngestionView
-        project={activeProject!}
-        batches={projectBatches}
-        documents={state.documents.filter((doc) => doc.projectId === activeProjectId)}
-        tasks={state.tasks?.filter((task) => task.projectId === activeProjectId)}
-        onUploadBatch={handleUploadBatch}
-        onRunBatch={runBatch}
-        onCancelBatch={cancelBatch}
-        onReprocessTask={handleReprocessTask}
-        busyAction={busyAction}
-        uploadProgress={uploadProgress}
-      />
-    ) : (
-      <ProjectRequired onSelect={() => setScreen('expedientes')} />
-    ),
-    monitor: activeProject ? (
-      <ProcessingMonitorView
-        project={activeProject}
-        batches={projectBatches}
-        tasks={state.tasks?.filter((t) => t.projectId === activeProjectId) || []}
-        onReprocessTask={handleReprocessTask}
-        onCancelBatch={cancelBatch}
-        onNavigateToReview={() => setScreen('revision')}
-      />
-    ) : (
-      <ProjectRequired onSelect={() => setScreen('expedientes')} />
-    ),
-    discrepancias: activeProject ? (
-      <DiscrepanciesView
-        records={masterRecords}
-        projectName={activeProject.name}
-        onResolveDiscrepancy={async (recordId, attrKey, resolvedValue, justification) => {
-          await saveAttributes(recordId, { [attrKey]: resolvedValue })
-          update({
-            ...state,
-            audit: [
-              audit(
-                activeProjectId,
-                'Discrepancia Resuelta',
-                `Atributo ${attrKey} resuelto a: "${resolvedValue}". Justificación: ${justification}`
-              ),
-              ...state.audit,
-            ],
-          })
-          toast('Discrepancia resuelta y registrada en auditoría forense.')
-        }}
-        onOpenEvidence={async (docId: string) => {
-          const doc = state.documents.find((d) => d.id === docId)
-          if (doc?.storagePath) {
-            try {
-              const url = await getSignedDocumentUrl(doc.storagePath)
-              window.open(url, '_blank', 'noopener,noreferrer')
-            } catch {
-              toast('No fue posible abrir documento fuente.')
-            }
-          } else {
-            toast('Documento disponible localmente.')
-          }
-        }}
-      />
-    ) : (
-      <ProjectRequired onSelect={() => setScreen('expedientes')} />
-    ),
-    revision: activeProject ? (
-      <ReviewStationView
-        records={masterRecords}
-        documents={state.documents.filter((doc) => doc.projectId === activeProjectId)}
-        activeUserEmail={user?.email ?? 'usuario@territorium.com'}
-        canReview={!remote || ['owner', 'operator', 'reviewer'].includes(activeProject?.role ?? '')}
-        onUpdateRecord={async (updated) => {
-          const activeFields: Record<string, string> = {}
-          for (const attr of Object.values(updated.attributes)) {
-            activeFields[attr.label] = attr.activeValue
-          }
-          await saveAttributes(updated.id, activeFields)
-          if (updated.reviewState !== 'pendiente') {
-            await updateReview(updated.id, updated.reviewState)
-          }
-        }}
-        onOpenSignedUrl={async (docId) => {
-          const doc = state.documents.find((d) => d.id === docId)
-          if (doc?.storagePath) {
-            const url = await getSignedDocumentUrl(doc.storagePath)
-            window.open(url, '_blank', 'noopener,noreferrer')
-          } else {
-            toast('Documento disponible únicamente en almacenamiento local.')
-          }
-        }}
-        onNotice={toast}
-        onError={(msg) => setError(msg)}
-      />
-    ) : (
-      <ProjectRequired onSelect={() => setScreen('expedientes')} />
-    ),
-    negociacion: activeProject ? (
-      <NegotiationView
-        records={projectRecords}
-        projectName={activeProject.name}
-        onUpdateRecord={async (recordId: string, updatedFields: Record<string, string>) => {
-          await saveAttributes(recordId, updatedFields)
-          toast('Ficha de negociación actualizada.')
-        }}
-      />
-    ) : (
-      <ProjectRequired onSelect={() => setScreen('expedientes')} />
-    ),
-    formatos_editor: activeProject ? (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--color-border-subtle)' }}>
-          <div>
-            <p className="eyebrow">EDITOR DE MINUTAS Y ESCRITURAS</p>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Editor de Plantillas Jurídicas</h2>
-            <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-              Inserte variables dinámicas para estandarizar la generación de minutas de servidumbre.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => setScreen('exportar')}
-          >
-            Volver a Entregables
-          </button>
-        </div>
-        <TemplateEditorWithVariables onNotice={toast} />
-        <DynamicTemplateEditor projectId={activeProjectId} />
-      </div>
-    ) : (
-      <ProjectRequired onSelect={() => setScreen('expedientes')} />
-    ),
-    exportar: activeProject ? (
-      <DeliverablesView
-        records={masterRecords}
-        projectName={activeProject.name}
-        userEmail={user?.email ?? 'operador@territorium.com'}
-        onDownloadExcel={async (criteria: 'approved_only' | 'all') => {
-          try {
-            await downloadMasterRecordsXlsx(masterRecords, {
-              projectName: activeProject?.name,
-              batchId: projectBatches[0]?.id ?? 'LOTE-ACTIVO',
-              batchVersion: 1,
-              userEmail: user?.email,
-              inclusionCriteria: criteria === 'approved_only' ? 'only_approved' : 'all',
-            })
-            toast(`Libro CORRESPONDENCIA descargado (${criteria}).`)
-          } catch (caught) {
-            setError(caught instanceof Error ? caught.message : 'No fue posible generar el Excel.')
-          }
-        }}
-        onDownloadZip={async (criteria: 'approved_only' | 'all') => {
-          toast(`Paquete ZIP documental preparado (${criteria}).`)
-        }}
-        onNavigateToTemplates={() => setScreen('formatos_editor')}
-        onNavigateToReviews={() => setScreen('revision')}
-      />
-    ) : (
-      <ProjectRequired onSelect={() => setScreen('expedientes')} />
-    ),
     telemetria: (
       <TelemetryView
         aiLogs={state.aiLogs || []}
@@ -1031,90 +394,6 @@ function App() {
         promptVersions={state.promptVersions || DEFAULT_PROMPT_VERSIONS}
         isLocalMode={dataMode === 'local'}
       />
-    ),
-    papelera: (
-      <div className="card space-y-4" style={{ padding: '24px' }}>
-        <div className="section-title">
-          <div>
-            <p className="eyebrow">RECUPERACIÓN Y SEGURIDAD</p>
-            <h2>Papelera de Proyectos</h2>
-            <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-              Proyectos archivados o retirados de la bandeja activa. Puede restaurarlos en cualquier momento.
-            </p>
-          </div>
-        </div>
-        {state.projects.filter((p) => p.isArchived).length > 0 ? (
-          <div className="space-y-2">
-            {state.projects
-              .filter((p) => p.isArchived)
-              .map((p) => (
-                <div
-                  key={p.id}
-                  className="p-3 border rounded-xl flex items-center justify-between"
-                  style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border-subtle)' }}
-                >
-                  <div>
-                    <strong style={{ color: 'var(--color-text-primary)' }}>{p.name}</strong>
-                    <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                      {p.municipality}, {p.department} · Archivado el{' '}
-                      {p.archivedAt ? new Date(p.archivedAt).toLocaleDateString('es-CO') : 'recientemente'}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={async () => {
-                      await handleToggleArchiveProject(p.id, false)
-                      toast(`Proyecto ${p.name} restaurado con éxito.`)
-                    }}
-                  >
-                    <RotateCcw size={14} /> Restaurar Proyecto
-                  </button>
-                </div>
-              ))}
-          </div>
-        ) : (
-          <NewEmptyState
-            title="Papelera vacía"
-            description="No hay proyectos archivados o en espera de purga en este momento."
-            icon={<Trash2 size={24} />}
-          />
-        )}
-      </div>
-    ),
-    lotes_nuevo: activeProject ? (
-      <div className="card space-y-4" style={{ padding: '24px' }}>
-        <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--color-border-subtle)' }}>
-          <div>
-            <p className="eyebrow">ASISTENTE DE INGESTA DOCUMENTAL</p>
-            <h2>Carga de Nuevo Lote: {activeProject.name}</h2>
-            <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-              Arrastre o seleccione archivos jurídicos y técnicos para validación de integridad y manifiesto.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => setScreen('proyecto_detalle')}
-          >
-            <X size={14} /> Cancelar y Volver
-          </button>
-        </div>
-        <IngestionView
-          project={activeProject}
-          batches={projectBatches}
-          documents={state.documents.filter((doc) => doc.projectId === activeProjectId)}
-          tasks={state.tasks?.filter((task) => task.projectId === activeProjectId)}
-          onUploadBatch={handleUploadBatch}
-          onRunBatch={runBatch}
-          onCancelBatch={cancelBatch}
-          onReprocessTask={handleReprocessTask}
-          busyAction={busyAction}
-          uploadProgress={uploadProgress}
-        />
-      </div>
-    ) : (
-      <ProjectRequired onSelect={() => setScreen('expedientes')} />
     ),
   }[screen]
 
@@ -1131,7 +410,7 @@ function App() {
     {authStatus === 'unauthenticated' || isRecovery ? (
       <AuthScreen initialMode={isRecovery ? 'update_password' : 'signin'} />
     ) : (
-      <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${density === 'compact' ? 'density-compact' : 'density-comfortable'}`}>
+      <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
         <aside className="sidebar">
           <div className="sidebar-header">
             <Brand />
@@ -1255,19 +534,11 @@ function App() {
           {error && <div className="error-banner" role="alert"><AlertTriangle size={17} /><span>{error}</span><button onClick={() => setError(null)} aria-label="Cerrar error"><X size={15} /></button></div>}
           <section className="page-content">{loading && !state.projects.length ? <div className="loading-card"><LoaderCircle className="spin" />Cargando información protegida…</div> : content}</section>
         </main>
-        <ExcelExportConfigModal
-          open={isExcelConfigModalOpen}
-          onOpenChange={setIsExcelConfigModalOpen}
-          totalProperties={masterRecords.length}
-          onConfirmExport={async (config) => {
-            toast(`Libro Excel personalizado generado con ${config.selectedSheets.length} hojas (US-266).`)
-          }}
-        />
         <ToastLayer />
       </div>
     )}
   </SessionGuard>
 }
 
-function ProjectRequired({ onSelect, title = 'Selecciona un proyecto para continuar' }: { onSelect: () => void; title?: string }) { return <div className="empty-page project-required"><FolderKanban size={34} /><h2>{title}</h2><p>La carga, revisión, exportación y gestión de participantes trabajan sobre el contexto de un proyecto.</p><button className="button primary" onClick={onSelect}>Ir a proyectos</button></div> }
+function ProjectRequired({ onSelect, title = 'Selecciona un proyecto para continuar' }: { onSelect: () => void; title?: string }) { return <div className="empty-page project-required"><FolderKanban size={34} /><h2>{title}</h2><p>La extracción, los resultados y los documentos finales trabajan sobre el contexto de un proyecto.</p><button className="button primary" onClick={onSelect}>Ir a proyectos</button></div> }
 export default App
