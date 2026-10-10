@@ -161,22 +161,6 @@ export function defaultProjectConstants(projectName?: string): ProjectConstants 
   }
 }
 
-const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-
-/** "15/10/2024", "2024/10/15" o "2024-10-15" → "quince (15) de octubre de 2024". */
-export function formatLongDate(value: string): string {
-  const text = String(value ?? '').trim()
-  let day: number | undefined
-  let month: number | undefined
-  let year: number | undefined
-  let m = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/.exec(text)
-  if (m) [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])]
-  m = m ? m : /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/.exec(text)
-  if (m && day === undefined) [day, month, year] = [Number(m[1]), Number(m[2]), Number(m[3])]
-  if (!day || !month || !year || month > 12 || day > 31) return text
-  return `${spanishIntegerWords(day, false)} (${String(day).padStart(2, '0')}) de ${MESES[month - 1]} de ${year}`
-}
-
 /** "3.374,06 m²", "3374,06", "3374.06" → 3374.06 */
 export function parseDecimal(value: string | number | undefined | null): number | null {
   if (value === undefined || value === null) return null

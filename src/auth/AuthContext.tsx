@@ -1,6 +1,6 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
-import { dataMode, requireSupabase, supabase } from '../lib/supabase'
+import { requireSupabase, supabase } from '../lib/supabase'
 
 import type { SessionStatus } from '../types'
 
@@ -20,37 +20,17 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
-const LOCAL_AUTH_STORAGE_KEY = 'territorium.local-authenticated'
-
-function getLocalAuthenticationState() {
-  if (typeof window === 'undefined') return true
-  try {
-    return window.localStorage.getItem(LOCAL_AUTH_STORAGE_KEY) !== 'false'
-  } catch {
-    return true
-  }
-}
-
-function saveLocalAuthenticationState(authenticated: boolean) {
-  try {
-    window.localStorage.setItem(LOCAL_AUTH_STORAGE_KEY, String(authenticated))
-  } catch {
-    // The local workspace remains usable when browser storage is unavailable.
-  }
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
-  const [loading, setLoading] = useState(dataMode === 'supabase')
+  const [loading, setLoading] = useState(true)
   const [isExpired, setIsExpired] = useState(false)
   const [isRecovery, setIsRecovery] = useState(() => {
     if (typeof window === 'undefined') return false
     return window.location.hash.includes('type=recovery')
   })
-  const [localAuthenticated, setLocalAuthenticated] = useState(() => dataMode === 'local' && getLocalAuthenticationState())
 
   useEffect(() => {
-    if (dataMode !== 'supabase' || !supabase) { setLoading(false); return }
+    if (!supabase) { setLoading(false); return }
     let mounted = true
 
     // Si la URL contiene access_token y refresh_token (o code de PKCE), establecer la sesión explícitamente
@@ -115,10 +95,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const status: SessionStatus = useMemo(() => {
     if (loading) return 'loading'
     if (isExpired) return 'session_expired'
-    if (dataMode === 'local' && localAuthenticated) return 'authenticated'
     if (session) return 'authenticated'
     return 'unauthenticated'
-  }, [isExpired, loading, localAuthenticated, session])
+  }, [isExpired, loading, session])
 
   const value = useMemo<AuthContextValue>(() => ({
     session,
@@ -134,37 +113,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     async signIn(email, password) {
       setIsExpired(false)
-      if (dataMode === 'local') {
-        if (!email.trim() || !password) throw new Error('Ingresa tu correo y contraseña para continuar.')
-        setLocalAuthenticated(true)
-        saveLocalAuthenticationState(true)
-        return
-      }
       const { error } = await requireSupabase().auth.signInWithPassword({ email: email.trim(), password })
       if (error) throw new Error(error.message || 'No fue posible iniciar sesión. Verifica tus credenciales.')
     },
     async signUp(email, password) {
-      if (dataMode === 'local') {
-        if (!email.trim() || !password) throw new Error('Ingresa tu correo y contraseña para continuar.')
-        setLocalAuthenticated(true)
-        saveLocalAuthenticationState(true)
-        return 'authenticated'
-      }
       const redirectTo = `${window.location.origin}/`
       const { data, error } = await requireSupabase().auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: redirectTo } })
       if (error) throw new Error(error.message)
       return data.session ? 'authenticated' : 'confirmation_required'
     },
     async requestPasswordReset(email) {
-      if (dataMode === 'local') {
-        if (!email.trim()) throw new Error('Ingresa tu correo para continuar.')
-        return
-      }
       const { error } = await requireSupabase().auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/` })
       if (error) throw new Error(error.message || 'No fue posible enviar el enlace de recuperación.')
     },
     async updatePassword(password) {
-      if (dataMode === 'local') return
       const client = requireSupabase()
       let currentSession = (await client.auth.getSession()).data.session
 
@@ -216,18 +178,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsExpired(false)
       setIsRecovery(false)
       setSession(null)
-      setLocalAuthenticated(false)
-      saveLocalAuthenticationState(false)
-      if (dataMode !== 'supabase' || !supabase) {
-        return
-      }
+      if (!supabase) return
       try {
         await requireSupabase().auth.signOut({ scope: 'local' })
       } catch (err) {
         console.warn('Error al invocar signOut en Supabase:', err)
       }
     },
-  }), [isRecovery, loading, localAuthenticated, session, status])
+  }), [isRecovery, loading, session, status])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

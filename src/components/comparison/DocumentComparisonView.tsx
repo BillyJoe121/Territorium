@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, CircleAlert, Eye, FilePlus2, Files, LoaderCircle, Scale, Trash2, UploadCloud } from 'lucide-react'
 import { toast } from '../ui/ToastLayer'
-import { dataMode } from '../../lib/supabase'
 import type { Project } from '../../types'
 import {
   describeComparisonError, listComparisonDocuments, listComparisonJobs, requestComparison, retireComparisonDocument,
@@ -35,15 +34,13 @@ export function DocumentComparisonView({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const remote = dataMode === 'supabase'
 
   const refresh = useCallback(async () => {
-    if (!remote) { setLoading(false); return }
     const [nextDocuments, nextJobs] = await Promise.all([
       listComparisonDocuments(project.id), listComparisonJobs(project.id),
     ])
     setDocuments(nextDocuments); setJobs(nextJobs); setLoading(false); setLoadError(null)
-  }, [project.id, remote])
+  }, [project.id])
 
   useEffect(() => {
     setLoading(true); setLoadError(null); setDocuments([]); setJobs([]); setLeftId(''); setRightId(''); setActiveJobId('')
@@ -92,7 +89,7 @@ export function DocumentComparisonView({
   const shownRightId = activeJob?.right_document_id ?? rightId
   const left = documents.find((document) => document.id === shownLeftId)
   const right = documents.find((document) => document.id === shownRightId)
-  const canCompare = leftId && rightId && leftId !== rightId && !busy && remote && !loadError
+  const canCompare = leftId && rightId && leftId !== rightId && !busy && !loadError
   const recentJobs = useMemo(() => jobs.slice(0, 8), [jobs])
 
   const upload = async (files: FileList | null) => {
@@ -160,16 +157,15 @@ export function DocumentComparisonView({
         </div>
       </header>
 
-      {!remote && <div className="comparison-notice" role="status"><CircleAlert size={18} />El cotejo requiere la conexión segura de Supabase y el worker. El modo local no genera resultados simulados.</div>}
       {loadError && <div className="comparison-error" role="alert"><CircleAlert size={18} /><span>{loadError}</span><button type="button" className="comparison-retry" onClick={() => { setLoading(true); void refresh().catch((caught) => { setLoading(false); setLoadError(describeComparisonError(caught, 'No se pudo cargar el módulo.')) }) }}>Reintentar</button></div>}
       {error && <div className="comparison-error" role="alert"><CircleAlert size={18} /><span>{error}</span><button type="button" onClick={() => setError(null)} aria-label="Cerrar error">×</button></div>}
 
       <div className="comparison-setup">
         <section className="comparison-card comparison-files">
           <div className="comparison-card-heading"><div><span className="comparison-step">01</span><h2>Originales disponibles</h2></div><span>PDF y DOCX · 50 MB máx.</span></div>
-          <label className={`comparison-upload ${!remote || busy || loading || loadError || activeDocuments.length >= 10 ? 'is-disabled' : ''}`}>
+          <label className={`comparison-upload ${busy || loading || loadError || activeDocuments.length >= 10 ? 'is-disabled' : ''}`}>
             <UploadCloud size={21} /><span><strong>Añadir documentos</strong><small>Puede seleccionar varios archivos</small></span>
-            <input type="file" multiple accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={!remote || busy || loading || !!loadError || activeDocuments.length >= 10} onChange={(event) => { void upload(event.target.files); event.target.value = '' }} />
+            <input type="file" multiple accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={busy || loading || !!loadError || activeDocuments.length >= 10} onChange={(event) => { void upload(event.target.files); event.target.value = '' }} />
           </label>
           {uploadProgress && <p className="comparison-subtle" role="status"><LoaderCircle size={16} className="spin" />{uploadProgress}</p>}
           {loading ? <p className="comparison-subtle"><LoaderCircle size={16} className="spin" /> Cargando documentos…</p> : activeDocuments.length === 0 ? <p className="comparison-empty"><FilePlus2 size={20} />Todavía no hay documentos para este proyecto.</p> :
@@ -179,9 +175,9 @@ export function DocumentComparisonView({
         <section className="comparison-card comparison-pair">
           <div className="comparison-card-heading"><div><span className="comparison-step">02</span><h2>Elegir el par</h2></div><span>Uno contra uno</span></div>
           <div className="comparison-selects">
-            <label>Documento A<select value={leftId} disabled={!remote || busy} onChange={(event) => { setLeftId(event.target.value); setActiveJobId('') }}><option value="">Seleccione el primer archivo</option>{activeDocuments.map((document) => <option key={document.id} value={document.id}>{shortName(document)}</option>)}</select></label>
+            <label>Documento A<select value={leftId} disabled={busy} onChange={(event) => { setLeftId(event.target.value); setActiveJobId('') }}><option value="">Seleccione el primer archivo</option>{activeDocuments.map((document) => <option key={document.id} value={document.id}>{shortName(document)}</option>)}</select></label>
             <ArrowRight size={18} aria-hidden="true" />
-            <label>Documento B<select value={rightId} disabled={!remote || busy} onChange={(event) => { setRightId(event.target.value); setActiveJobId('') }}><option value="">Seleccione el segundo archivo</option>{activeDocuments.filter((document) => document.id !== leftId).map((document) => <option key={document.id} value={document.id}>{shortName(document)}</option>)}</select></label>
+            <label>Documento B<select value={rightId} disabled={busy} onChange={(event) => { setRightId(event.target.value); setActiveJobId('') }}><option value="">Seleccione el segundo archivo</option>{activeDocuments.filter((document) => document.id !== leftId).map((document) => <option key={document.id} value={document.id}>{shortName(document)}</option>)}</select></label>
           </div>
           {leftId && rightId && leftId === rightId && <p className="comparison-validation">Seleccione dos archivos distintos.</p>}
           <div className="comparison-pair-actions">

@@ -326,16 +326,6 @@ export const OFFICIAL_PREDIAL_TEMPLATE_V1: ExpedienteDocumentTemplate = {
 }
 
 /**
- * Historical and active registry of available templates.
- */
-const TEMPLATE_REGISTRY: Record<string, ExpedienteDocumentTemplate> = {
-  'tpl-informe-predial-v1': OFFICIAL_PREDIAL_TEMPLATE_V1,
-  'tpl-escritura-publica': ESCRITURA_TOL_ANZ_045_TEMPLATE,
-  'tpl-descripcion-linderos': DESCRIPCION_LINDEROS_TEMPLATE,
-  'tpl-minuta-tipo': MINUTA_TIPO_TERRITORIUM_TEMPLATE,
-}
-
-/**
  * The 3 official final document templates matching `plantillas documentos finales`.
  */
 export const OFFICIAL_FINAL_DOCUMENT_TEMPLATES: ExpedienteDocumentTemplate[] = [
@@ -343,89 +333,3 @@ export const OFFICIAL_FINAL_DOCUMENT_TEMPLATES: ExpedienteDocumentTemplate[] = [
   DESCRIPCION_LINDEROS_TEMPLATE,
   MINUTA_TIPO_TERRITORIUM_TEMPLATE,
 ]
-
-export function getFinalDocumentTemplates(): ExpedienteDocumentTemplate[] {
-  return OFFICIAL_FINAL_DOCUMENT_TEMPLATES
-}
-
-export function getActiveDocumentTemplate(): ExpedienteDocumentTemplate {
-  return OFFICIAL_PREDIAL_TEMPLATE_V1
-}
-
-export function getTemplateById(id: string): ExpedienteDocumentTemplate | null {
-  return TEMPLATE_REGISTRY[id] ?? null
-}
-
-export function getTemplateByVersion(version: number): ExpedienteDocumentTemplate | null {
-  const tpl = Object.values(TEMPLATE_REGISTRY).find((t) => t.version === version && t.status === 'published')
-  return tpl ?? null
-}
-
-export interface TemplateValidationResult {
-  isValid: boolean
-  missingFields: (keyof ConsolidatedMasterRecord)[]
-  fieldErrors: Partial<Record<keyof ConsolidatedMasterRecord, string>>
-}
-
-/**
- * Validates that a ConsolidatedMasterRecord meets all required fields
- * stipulated by the active template before document compilation (HU-V2-047).
- */
-export function validateConsolidatedAgainstTemplate(
-  record: ConsolidatedMasterRecord | null | undefined,
-  template: ExpedienteDocumentTemplate = OFFICIAL_PREDIAL_TEMPLATE_V1,
-): TemplateValidationResult {
-  if (!record) {
-    return {
-      isValid: false,
-      missingFields: [...template.requiredFields],
-      fieldErrors: {
-        folio: 'El expediente no tiene registro consolidado disponible.',
-      },
-    }
-  }
-
-  const missingFields: (keyof ConsolidatedMasterRecord)[] = []
-  const fieldErrors: Partial<Record<keyof ConsolidatedMasterRecord, string>> = {}
-
-  for (const field of template.requiredFields) {
-    const rawVal = record[field]
-    const strVal = typeof rawVal === 'string' ? rawVal.trim() : String(rawVal ?? '').trim()
-
-    if (!strVal || strVal === '—' || strVal.toLowerCase() === 'no identificado') {
-      missingFields.push(field)
-      fieldErrors[field] = `El campo requerido '${String(field)}' no posee un valor válido o consolidado.`
-    }
-  }
-
-  return {
-    isValid: missingFields.length === 0,
-    missingFields,
-    fieldErrors,
-  }
-}
-
-/**
- * Creates a new published template version without mutating historical templates (HU-V2-047).
- */
-export function publishNewTemplateVersion(
-  baseTemplate: ExpedienteDocumentTemplate,
-  updates: Partial<Omit<ExpedienteDocumentTemplate, 'id' | 'version' | 'status' | 'publishedAt'>>,
-  publishedBy: string,
-): ExpedienteDocumentTemplate {
-  const nextVersion = baseTemplate.version + 1
-  const newTemplate: ExpedienteDocumentTemplate = {
-    ...baseTemplate,
-    ...updates,
-    id: `tpl-informe-predial-v${nextVersion}`,
-    version: nextVersion,
-    status: 'published',
-    publishedAt: new Date().toISOString(),
-    publishedBy,
-    requiredFields: updates.requiredFields ?? [...baseTemplate.requiredFields],
-    sections: updates.sections ?? [...baseTemplate.sections],
-  }
-
-  TEMPLATE_REGISTRY[newTemplate.id] = newTemplate
-  return newTemplate
-}

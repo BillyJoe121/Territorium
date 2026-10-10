@@ -8,7 +8,6 @@
  */
 
 export const NEGOTIATED_NUMBERS_EXAMPLE = '$ 93.468.040'
-export const NEGOTIATED_LETTERS_EXAMPLE = 'Noventa y tres millones cuatrocientos sesenta y ocho mil cuarenta pesos'
 
 const MAX_AMOUNT = 999_999_999_999_999
 

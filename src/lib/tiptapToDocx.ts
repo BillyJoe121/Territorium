@@ -174,10 +174,6 @@ function buildZip(content: JSONContent, options: DocxBuildOptions): JSZip {
   return zip
 }
 
-export function buildDocxBytes(content: JSONContent, options: DocxBuildOptions = {}): Promise<Uint8Array> {
-  return buildZip(content, options).generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
-}
-
 export function buildDocxBlob(content: JSONContent, options: DocxBuildOptions = {}): Promise<Blob> {
   return buildZip(content, options).generateAsync({ type: 'blob', mimeType: DOCX_MIME, compression: 'DEFLATE' })
 }

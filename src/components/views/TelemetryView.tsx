@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Activity, Play, RefreshCw, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { Activity, Play, RefreshCw, Sparkles } from 'lucide-react'
 import type { AiExecutionLog, ExtractorConfig, PromptVersion } from '../../types'
 import {
   DEFAULT_EXTRACTOR_CONFIGS,
@@ -14,7 +14,6 @@ export interface TelemetryViewProps {
   onRecordAiLog?: (log: AiExecutionLog) => Promise<void> | void
   configs?: ExtractorConfig[]
   promptVersions?: PromptVersion[]
-  isLocalMode?: boolean
 }
 
 const extractorLabels: Record<'title_study' | 'plan' | 'negotiation', { label: string; desc: string }> = {
@@ -37,7 +36,6 @@ export function TelemetryView({
   onRecordAiLog,
   configs = DEFAULT_EXTRACTOR_CONFIGS,
   promptVersions = DEFAULT_PROMPT_VERSIONS,
-  isLocalMode = false,
 }: TelemetryViewProps) {
   const [isTestingTelemetry, setIsTestingTelemetry] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
@@ -132,7 +130,7 @@ PROPIETARIO: ROSA ELENA RONCANCIO DE GARCÍA con C.C. 28.586.080`
         <div className="card summary-metric-card">
           <span className="metric-label">Total Ejecuciones Registradas</span>
           <span className="metric-value">{aiLogs.length}</span>
-          <span className="metric-sub">{isLocalMode ? 'Modo local activo' : 'En lotes procesados'}</span>
+          <span className="metric-sub">En lotes procesados</span>
         </div>
         <div className="card summary-metric-card">
           <span className="metric-label">Tokens Consumidos</span>

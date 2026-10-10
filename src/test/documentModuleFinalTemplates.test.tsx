@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  OFFICIAL_FINAL_DOCUMENT_TEMPLATES,
-  getFinalDocumentTemplates,
-} from '../lib/expedienteDocumentTemplates'
+import { OFFICIAL_FINAL_DOCUMENT_TEMPLATES } from '../lib/expedienteDocumentTemplates'
 import {
   compileConsolidatedToTiptap,
 } from '../lib/expedienteDocumentCompiler'
@@ -46,25 +43,6 @@ const mockConsolidatedRecord: ConsolidatedMasterRecord = {
 }
 
 describe('Document Module Final Templates Specification', () => {
-  it('exposes exactly 3 official templates corresponding to plantillas documentos finales', () => {
-    const templates = getFinalDocumentTemplates()
-    expect(templates).toHaveLength(3)
-
-    const ids = templates.map((t) => t.id)
-    expect(ids).toEqual(['tpl-escritura-publica', 'tpl-descripcion-linderos', 'tpl-minuta-tipo'])
-
-    const filenames = templates.map((t) => t.targetFilename)
-    expect(filenames).toEqual([
-      'ESCRITURA TOL-ANZ-045.docx',
-      'ID02 descripción de linderos.docx',
-      'MINUTA_TIPO_TERRITORIUM.doc',
-    ])
-
-    const names = templates.map((t) => t.name)
-    expect(names).toContain('Escritura Pública de Adquisición / Servidumbre')
-    expect(names).toContain('Ficha Técnica de Descripción de Linderos')
-    expect(names).toContain('Minuta Tipo Territorium')
-  })
 
   it('compiles Template 1: Escritura Pública TOL-ANZ-045 with all notarial clauses', () => {
     const tpl1 = OFFICIAL_FINAL_DOCUMENT_TEMPLATES[0]

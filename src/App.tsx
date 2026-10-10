@@ -2,10 +2,9 @@ import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { Activity, AlertTriangle, ChevronLeft, ChevronRight, FolderKanban, LoaderCircle, LogOut, Scale, WifiOff, X, XCircle } from 'lucide-react'
 import { ToastLayer, toast as sonnerToast } from './components/ui/ToastLayer'
 import { ThemeToggle } from './components/ui/ThemeToggle'
-import { ProjectDetailView } from './components/views/ProjectDetailView'
+import { RemoteExpedienteWorkspace } from './components/expediente/RemoteExpedienteWorkspace'
 import { TelemetryView } from './components/views/TelemetryView'
-import { dataMode, isSupabaseConfigured } from './lib/supabase'
-import { loadState, saveState } from './lib/storage'
+import { isSupabaseConfigured } from './lib/supabase'
 import { useAuth } from './auth/AuthContext'
 import { AuthScreen } from './auth/AuthScreen'
 import { SessionGuard } from './auth/SessionGuard'
@@ -19,7 +18,7 @@ import {
   updateRemoteProject,
 } from './data/platformRepository'
 import { DEFAULT_EXTRACTOR_CONFIGS, DEFAULT_PROMPT_VERSIONS } from './lib/extractorConfig'
-import type { AiExecutionLog, AuditEvent, PlatformState, Project, ProjectMetadataInput } from './types'
+import type { AiExecutionLog, PlatformState, ProjectMetadataInput } from './types'
 
 export type Screen = 'comparador' | 'expedientes' | 'proyecto_detalle' | 'telemetria'
 
@@ -63,9 +62,6 @@ const navShortLabels: Partial<Record<Screen, string>> = {
   telemetria: 'Telemetría',
 }
 
-const makeId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`
-const date = () => new Date().toISOString()
-
 function Brand() {
   return (
     <div className="brand" aria-label="Territorium, gestión predial y derecho de tierras">
@@ -80,27 +76,22 @@ function Brand() {
 
 function App() {
   const { user, status: authStatus, signOut, isRecovery } = useAuth()
-  const remote = dataMode === 'supabase'
   const [screen, setScreen] = useState<Screen>('comparador')
-  const [state, setState] = useState<PlatformState>(() =>
-    remote
-      ? {
-          projects: [],
-          batches: [],
-          documents: [],
-          records: [],
-          reviews: [],
-          audit: [],
-          tasks: [],
-          extractorConfigs: [...DEFAULT_EXTRACTOR_CONFIGS],
-          promptVersions: [...DEFAULT_PROMPT_VERSIONS],
-          aiLogs: [],
-        }
-      : loadState()
-  )
+  const [state, setState] = useState<PlatformState>(() => ({
+    projects: [],
+    batches: [],
+    documents: [],
+    records: [],
+    reviews: [],
+    audit: [],
+    tasks: [],
+    extractorConfigs: [...DEFAULT_EXTRACTOR_CONFIGS],
+    promptVersions: [...DEFAULT_PROMPT_VERSIONS],
+    aiLogs: [],
+  }))
   const [activeProjectId, setActiveProjectId] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(remote)
+  const [loading, setLoading] = useState(true)
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [online, setOnline] = useState(navigator.onLine)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -171,8 +162,6 @@ function App() {
     setActiveProjectId('')
     setScreen('expedientes')
   }
-  const update = (next: PlatformState) => { setState(next); saveState(next) }
-  const audit = (projectId: string, action: string, detail: string): AuditEvent => ({ id: makeId('audit'), projectId, at: date(), action, detail })
   const toast = (message: string) => {
     sonnerToast.success(message)
   }
@@ -181,7 +170,6 @@ function App() {
       await signOut()
       setActiveProjectId('')
       setScreen('comparador')
-      if (!remote) toast('Sesión local cerrada.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible cerrar la sesión.')
     }
@@ -198,80 +186,39 @@ function App() {
   }, [activeProject, screen])
 
   const refresh = useCallback(async (silent = false) => {
-    if (!remote || !user) return
+    if (!user) return
     if (!silent) setLoading(true)
     try {
       const next = await loadPlatformState(); setState(next); setError(null)
       setActiveProjectId((current) => next.projects.some((project) => project.id === current) ? current : next.projects[0]?.id ?? '')
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'No fue posible sincronizar los datos.') }
     finally { setLoading(false) }
-  }, [remote, user])
+  }, [user])
 
-  useEffect(() => { if (remote && user) void refresh() }, [refresh, remote, user])
-  useEffect(() => { const onOnline = () => { setOnline(true); if (remote && user) void refresh(true) }; const onOffline = () => setOnline(false); window.addEventListener('online', onOnline); window.addEventListener('offline', onOffline); return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline) } }, [refresh, remote, user])
-  useEffect(() => { if (!remote || !user || !activeProjectId) return; return subscribeToProject(activeProjectId, () => void refresh(true)) }, [activeProjectId, refresh, remote, user])
+  useEffect(() => { if (user) void refresh() }, [refresh, user])
+  useEffect(() => { const onOnline = () => { setOnline(true); if (user) void refresh(true) }; const onOffline = () => setOnline(false); window.addEventListener('online', onOnline); window.addEventListener('offline', onOffline); return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline) } }, [refresh, user])
+  useEffect(() => { if (!user || !activeProjectId) return; return subscribeToProject(activeProjectId, () => void refresh(true)) }, [activeProjectId, refresh, user])
 
   async function handleCreateProject(input: ProjectMetadataInput) {
-    if (remote) {
-      setBusyAction('create-project')
-      try {
-        const id = await createRemoteProject(input)
-        await refresh(true)
-        setActiveProjectId(id)
-        setScreen('proyecto_detalle')
-        toast('Proyecto creado con éxito. Abriendo la ficha del proyecto.')
-      } catch (caught) {
-        setError(caught instanceof Error ? caught.message : 'No fue posible crear el proyecto.')
-      } finally {
-        setBusyAction(null)
-      }
-      return
+    setBusyAction('create-project')
+    try {
+      const id = await createRemoteProject(input)
+      await refresh(true)
+      setActiveProjectId(id)
+      setScreen('proyecto_detalle')
+      toast('Proyecto creado con éxito. Abriendo la ficha del proyecto.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No fue posible crear el proyecto.')
+    } finally {
+      setBusyAction(null)
     }
-    const project: Project = {
-      id: makeId('proyecto'),
-      name: input.name,
-      clientName: input.clientName || undefined,
-      municipality: input.municipality,
-      department: input.department,
-      responsibleName: input.responsibleName,
-      createdAt: date(),
-      isArchived: false,
-    }
-    update({
-      ...state,
-      projects: [...state.projects, project],
-      audit: [...state.audit, audit(project.id, 'Proyecto creado', `Se creó el proyecto ${input.name} con metadatos completos.`)]
-    })
-    setActiveProjectId(project.id)
-    setScreen('proyecto_detalle')
-    toast('Proyecto creado con éxito. Abriendo la ficha del proyecto.')
   }
 
   async function handleUpdateProjectMetadata(projectId: string, input: ProjectMetadataInput) {
     setBusyAction(`edit:${projectId}`)
     try {
-      if (remote) {
-        await updateRemoteProject(projectId, input)
-        await refresh(true)
-      } else {
-        update({
-          ...state,
-          projects: state.projects.map((p) =>
-            p.id === projectId
-              ? {
-                  ...p,
-                  name: input.name,
-                  clientName: input.clientName || undefined,
-                  municipality: input.municipality,
-                  department: input.department,
-                  responsibleName: input.responsibleName,
-                  updatedAt: date(),
-                }
-              : p
-          ),
-          audit: [...state.audit, audit(projectId, 'Metadatos actualizados', `Se actualizaron metadatos del proyecto ${input.name} sin alterar extracciones.`)]
-        })
-      }
+      await updateRemoteProject(projectId, input)
+      await refresh(true)
       toast('Metadatos del proyecto actualizados correctamente.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible actualizar los metadatos.')
@@ -281,32 +228,11 @@ function App() {
   }
 
   async function handleToggleArchiveProject(projectId: string, isArchived: boolean) {
-    const project = state.projects.find((p) => p.id === projectId)
-    if (!project) return
-
+    if (!state.projects.some((p) => p.id === projectId)) return
     setBusyAction(`archive:${projectId}`)
     try {
-      if (remote) {
-        await toggleArchiveRemoteProject(projectId, isArchived)
-        await refresh(true)
-      } else {
-        update({
-          ...state,
-          projects: state.projects.map((p) =>
-            p.id === projectId
-              ? { ...p, isArchived, archivedAt: isArchived ? date() : null, updatedAt: date() }
-              : p
-          ),
-          audit: [
-            ...state.audit,
-            audit(
-              projectId,
-              isArchived ? 'Proyecto archivado' : 'Proyecto restaurado',
-              isArchived ? `Se archivó el proyecto ${project.name} de forma recuperable.` : `Se restauró el proyecto ${project.name} a estado activo.`
-            )
-          ]
-        })
-      }
+      await toggleArchiveRemoteProject(projectId, isArchived)
+      await refresh(true)
       toast(isArchived ? 'Proyecto archivado de forma recuperable.' : 'Proyecto restaurado con éxito.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible cambiar el estado de archivado.')
@@ -320,16 +246,11 @@ function App() {
       ...log,
       projectId: log.projectId || activeProjectId || null,
     }
-    update({
-      ...state,
-      aiLogs: [enrichedLog, ...(state.aiLogs || [])],
-    })
-    if (remote) {
-      try {
-        await recordRemoteAiExecutionLog(enrichedLog)
-      } catch (err) {
-        console.error('Error al registrar telemetría de IA en Supabase:', err)
-      }
+    setState((current) => ({ ...current, aiLogs: [enrichedLog, ...(current.aiLogs || [])] }))
+    try {
+      await recordRemoteAiExecutionLog(enrichedLog)
+    } catch (err) {
+      console.error('Error al registrar telemetría de IA en Supabase:', err)
     }
   }
 
@@ -349,7 +270,9 @@ function App() {
       />
     ),
     proyecto_detalle: activeProject ? (
-      <ProjectDetailView project={activeProject} onBack={() => setScreen('expedientes')} />
+      <div className="project-detail-layout" style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+        <RemoteExpedienteWorkspace project={activeProject} onBack={() => setScreen('expedientes')} />
+      </div>
     ) : (
       <ProjectRequired onSelect={() => setScreen('expedientes')} />
     ),
@@ -392,12 +315,11 @@ function App() {
         onRecordAiLog={handleRecordAiLog}
         configs={state.extractorConfigs || DEFAULT_EXTRACTOR_CONFIGS}
         promptVersions={state.promptVersions || DEFAULT_PROMPT_VERSIONS}
-        isLocalMode={dataMode === 'local'}
       />
     ),
   }[screen]
 
-  if (remote && !isSupabaseConfigured) return <div className="loading-page error-page"><XCircle /><h2>Falta configurar Supabase</h2><p>Define la URL y la clave publicable en el entorno de despliegue.</p></div>
+  if (!isSupabaseConfigured) return <div className="loading-page error-page"><XCircle /><h2>Falta configurar Supabase</h2><p>Define la URL y la clave publicable en el entorno de despliegue.</p></div>
 
   const roleBadgeLabels: Record<string, string> = {
     owner: 'Propietario',

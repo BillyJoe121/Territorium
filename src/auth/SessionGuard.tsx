@@ -1,5 +1,5 @@
 import { ReactNode } from 'react'
-import { AlertOctagon, KeyRound, LoaderCircle, LogIn, RefreshCcw, ShieldAlert } from 'lucide-react'
+import { KeyRound, LoaderCircle, LogIn, ShieldAlert } from 'lucide-react'
 import { useAuth } from './AuthContext'
 import type { ProjectRole } from '../types'
 
@@ -84,17 +84,4 @@ export function SessionGuard({ children, requiredRole, currentRole, onReauthenti
   }
 
   return <>{children}</>
-}
-
-export function AccessDeniedNotice({ message, roleNeeded }: { message?: string; roleNeeded?: string }) {
-  return (
-    <div className="warning" role="alert">
-      <AlertOctagon size={20} />
-      <div>
-        <strong>Permisos insuficientes</strong>
-        <p>{message ?? 'No tienes permisos suficientes para realizar esta acción en el expediente.'}</p>
-        {roleNeeded && <small>Rol requerido: {roleNeeded}</small>}
-      </div>
-    </div>
-  )
 }

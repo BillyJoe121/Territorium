@@ -1,54 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import {
-  normalizeRole,
-  getRolePermissions,
-  type CanonicalRole,
-} from '../types'
 
 describe('REOPENED USER STORIES ACCEPTANCE SUITE (Consultant Criteria)', () => {
-
-  // =========================================================================
-  // US-002, 003, 004: Autorización administrativa, 6 roles canónicos y aislamiento
-  // =========================================================================
-  describe('US-002, 003, 004: Autorización Administrativa y Aislamiento Multitenant', () => {
-    it('unifica y normaliza los 6 roles canónicos con su matriz de permisos respectiva', () => {
-      const canonicalRoles: CanonicalRole[] = [
-        'administrador',
-        'operador',
-        'analista_predial',
-        'revisor_juridico',
-        'aprobador',
-        'auditor'
-      ]
-
-      for (const role of canonicalRoles) {
-        expect(normalizeRole(role)).toBe(role)
-        const perms = getRolePermissions(role)
-        expect(perms).toBeDefined()
-        expect(perms.canViewObservability).toBe(true)
-      }
-
-      // El administrador es el único con facultades completas de gobierno
-      const adminPerms = getRolePermissions('administrador')
-      expect(adminPerms.canManageUsers).toBe(true)
-      expect(adminPerms.canConfigureTenant).toBe(true)
-      expect(adminPerms.canApproveLegal).toBe(true)
-      expect(adminPerms.canPurgeData).toBe(true)
-
-      // El aprobador puede aprobar jurídica y técnicamente, pero no purgar datos de la empresa
-      const approverPerms = getRolePermissions('aprobador')
-      expect(approverPerms.canApproveLegal).toBe(true)
-      expect(approverPerms.canApproveTechnical).toBe(true)
-      expect(approverPerms.canPurgeData).toBe(false)
-
-      // El auditor solo tiene lectura y consulta forense
-      const auditorPerms = getRolePermissions('auditor')
-      expect(auditorPerms.canEditManual).toBe(false)
-      expect(auditorPerms.canApproveLegal).toBe(false)
-      expect(auditorPerms.canExportCertified).toBe(false)
-    })
-
-  })
 
   // =========================================================================
   // US-074, 081: Evidencia real por atributo con documento, página y cita

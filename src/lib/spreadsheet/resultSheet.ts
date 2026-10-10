@@ -143,12 +143,6 @@ const valueOf = (row: EditableResultRow, column: ResultColumn) =>
 
 const headerTextOf = (column: ResultColumn) => (column.required ? `${column.label} *` : column.label)
 
-/** Columna del contrato cuyo encabezado es este texto (o undefined). */
-export function contractColumnFor(columns: ResultColumn[], headerText: string): ResultColumn | undefined {
-  const target = normalizeHeader(headerText)
-  return target ? [...columns, ID_COLUMN].find((column) => normalizeHeader(column.label) === target) : undefined
-}
-
 /** Texto visible de una celda tal como lo guarda la base de datos. */
 export function cellText(cell: ICellData | null | undefined): string {
   if (!cell) return ''

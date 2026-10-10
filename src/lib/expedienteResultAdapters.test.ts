@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  adaptCanonicalPayloadToTable,
-  adaptTableRowsToPayload,
-  TITLE_COLUMNS_CONTRACT,
-  PLAN_COLUMNS_CONTRACT,
-  NEGOTIATION_COLUMNS_CONTRACT,
-  CONSOLIDATED_COLUMNS_CONTRACT,
-} from './expedienteResultAdapters'
+import { adaptCanonicalPayloadToTable, adaptTableRowsToPayload, TITLE_COLUMNS_CONTRACT, PLAN_COLUMNS_CONTRACT, CONSOLIDATED_COLUMNS_CONTRACT } from './expedienteResultAdapters'
 
 describe('expedienteResultAdapters (HU-V2-042)', () => {
   it('adapta el payload de títulos al contrato de tabla con 20 campos y validaciones', () => {
@@ -121,29 +114,6 @@ describe('expedienteResultAdapters (HU-V2-042)', () => {
     const backToPayload = adaptTableRowsToPayload('plans', adapted.rows)
     expect((backToPayload.plans as any[])).toHaveLength(2)
     expect((backToPayload.plans as any[])[0].plan_name).toBe('Plano Servidumbre Tramo 1')
-  })
-
-  it('adapta el payload de negociación con comparación números vs letras', () => {
-    const payload = {
-      property_code: 'PREDIO-001',
-      first_offer_numbers: '$ 218.450.000',
-      first_offer_letters: 'Doscientos dieciocho millones cuatrocientos cincuenta mil pesos',
-      second_offer_numbers: '$ 232.800.000',
-      second_offer_letters: 'Doscientos treinta y dos millones ochocientos mil pesos',
-      third_offer_numbers: '—',
-      third_offer_letters: '—',
-      values_match: 'Sí, coinciden',
-    }
-
-    const adapted = adaptCanonicalPayloadToTable('negotiation', payload)
-    expect(adapted.columns).toEqual(NEGOTIATION_COLUMNS_CONTRACT)
-    expect(adapted.rows).toHaveLength(1)
-    expect(adapted.rows[0].firstOfferNumbers).toBe('$ 218.450.000')
-    expect(adapted.rows[0].valuesMatch).toBe('Sí, coinciden')
-
-    const backToPayload = adaptTableRowsToPayload('negotiation', adapted.rows)
-    expect(backToPayload.first_offer_numbers).toBe('$ 218.450.000')
-    expect(backToPayload.values_match).toBe('Sí, coinciden')
   })
 
   it('adapta el registro consolidado a la vista de tabla maestra', () => {

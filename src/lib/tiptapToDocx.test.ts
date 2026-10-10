@@ -1,9 +1,8 @@
-import JSZip from 'jszip'
 import { describe, expect, it } from 'vitest'
 import type { ConsolidatedMasterRecord } from './expedienteConsolidation'
 import { compileConsolidatedToTiptap } from './expedienteDocumentCompiler'
 import { OFFICIAL_FINAL_DOCUMENT_TEMPLATES } from './expedienteDocumentTemplates'
-import { buildDocumentXml, buildDocxBytes } from './tiptapToDocx'
+import { buildDocumentXml } from './tiptapToDocx'
 
 const record: ConsolidatedMasterRecord = {
   folio: '350-108418',
@@ -56,43 +55,11 @@ function assertBalancedXml(xml: string) {
 }
 
 describe('tiptapToDocx', () => {
-  it.each(OFFICIAL_FINAL_DOCUMENT_TEMPLATES.map((template) => [template.name, template] as const))(
-    'produces a valid DOCX package for %s with the same text as the viewer',
-    async (_name, template) => {
-      const compiled = compileConsolidatedToTiptap(record, { template, projectName: 'Proyecto prueba' })
-      const bytes = await buildDocxBytes(compiled.content, { title: template.name })
-      const zip = await JSZip.loadAsync(bytes)
-      for (const part of ['[Content_Types].xml', '_rels/.rels', 'word/document.xml', 'word/styles.xml', 'word/_rels/document.xml.rels']) {
-        expect(zip.file(part), part).not.toBeNull()
-      }
-      const xml = await zip.file('word/document.xml')!.async('string')
-      assertBalancedXml(xml)
-      if (JSON.stringify(compiled.content).includes('Alejo <Moreno>')) expect(xml).toContain('&amp; Alejo &lt;Moreno&gt;')
-
-      // Todo texto del documento compilado aparece en el DOCX.
-      const texts: string[] = []
-      const walk = (node: any) => {
-        if (node.type === 'text' && node.text?.trim()) texts.push(node.text)
-        node.content?.forEach(walk)
-      }
-      walk(compiled.content)
-      const docText = [...xml.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map((m) => m[1]).join('')
-      const unescape = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
-      for (const text of texts) expect(unescape(docText)).toContain(text)
-    },
-  )
-
   it('uses the negotiated value in the generated deed', () => {
     const compiled = compileConsolidatedToTiptap(record, { template: OFFICIAL_FINAL_DOCUMENT_TEMPLATES[0] })
     const xml = buildDocumentXml(compiled.content)
     expect(xml).toContain('NUEVE MILLONES SEISCIENTOS VEINTIOCHO MIL SETECIENTOS DOCE PESOS ($ 9.628.712)')
     expect(xml).not.toContain('$ $')
-  })
-
-  it('is deterministic for the same content', async () => {
-    const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hola', marks: [{ type: 'bold' }] }] }] }
-    const [a, b] = await Promise.all([buildDocxBytes(content), buildDocxBytes(content)])
-    expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true)
   })
 
   it('renders headings, marks, lists and tables', () => {

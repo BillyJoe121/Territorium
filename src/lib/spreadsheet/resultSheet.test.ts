@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ICellData, IWorkbookData } from '@univerjs/presets'
 import type { EditableResultRow } from '../../components/expediente/types'
 import { TITLE_COLUMNS_CONTRACT } from '../expedienteResultAdapters'
-import { buildResultWorkbook, contractColumnFor, readResultRows, reconcileResultWorkbook, sheetNameFor, workbookFingerprint, type SheetContract } from './resultSheet'
+import { buildResultWorkbook, readResultRows, reconcileResultWorkbook, sheetNameFor, workbookFingerprint, type SheetContract } from './resultSheet'
 import { workbookDataToXlsx, xlsxToWorkbookData } from './univerXlsx'
 
 const columns = TITLE_COLUMNS_CONTRACT
@@ -150,14 +150,5 @@ describe('workbookFingerprint', () => {
     expect(workbookFingerprint(b)).toBe(workbookFingerprint(a))
     setCell(b, 1, col('owners'), { v: 'cambio' })
     expect(workbookFingerprint(b)).not.toBe(workbookFingerprint(a))
-  })
-})
-
-describe('contractColumnFor', () => {
-  it('finds contract columns by header ignoring case, accents and the required mark', () => {
-    expect(contractColumnFor(columns, 'CEDULA CATASTRAL')?.key).toBe('cadastralId')
-    expect(contractColumnFor(columns, ' documento fuente * ')?.key).toBe('sourceDocument')
-    expect(contractColumnFor(columns, 'Mis notas')).toBeUndefined()
-    expect(contractColumnFor(columns, '')).toBeUndefined()
   })
 })

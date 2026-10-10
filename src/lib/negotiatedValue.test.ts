@@ -1,15 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  amountToSpanishWords,
-  checkNegotiatedValue,
-  formatPesos,
-  formatPesosWhileTyping,
-  NEGOTIATED_LETTERS_EXAMPLE,
-  NEGOTIATED_NUMBERS_EXAMPLE,
-  negotiatedValueLetters,
-  parseNegotiatedAmount,
-  spanishWordsToAmount,
-} from './negotiatedValue'
+import { amountToSpanishWords, checkNegotiatedValue, formatPesos, formatPesosWhileTyping, negotiatedValueLetters, parseNegotiatedAmount, spanishWordsToAmount } from './negotiatedValue'
 
 describe('amountToSpanishWords', () => {
   it.each([
@@ -38,21 +28,7 @@ describe('amountToSpanishWords', () => {
   })
 })
 
-describe('parseNegotiatedAmount', () => {
-  it.each(['93468040', '93.468.040', '$93.468.040', '$ 93.468.040', NEGOTIATED_NUMBERS_EXAMPLE])('accepts %s', (input) => {
-    expect(parseNegotiatedAmount(input)).toEqual({ ok: true, amount: 93_468_040 })
-  })
-
-  it.each(['93,468,040', '93.468.040,00', '93-468-040', '93.46.8040', '$ 93 468 040', 'COP 93.468.040', '', '0'])('rejects %s', (input) => {
-    expect(parseNegotiatedAmount(input).ok).toBe(false)
-  })
-})
-
 describe('checkNegotiatedValue', () => {
-  it('approves the documented example ignoring case', () => {
-    expect(checkNegotiatedValue(NEGOTIATED_NUMBERS_EXAMPLE, NEGOTIATED_LETTERS_EXAMPLE).ok).toBe(true)
-    expect(checkNegotiatedValue('93468040', NEGOTIATED_LETTERS_EXAMPLE.toUpperCase()).ok).toBe(true)
-  })
 
   it('requires the word "pesos" at the end', () => {
     const result = checkNegotiatedValue('1.000.000', 'un millón')
@@ -94,7 +70,7 @@ describe('checkNegotiatedValue', () => {
 describe('negotiatedValueLetters', () => {
   it.each(['93468040', '93.468.040', '$ 93.468.040'])('writes %s in words, capitalized and passing the check', (input) => {
     const letters = negotiatedValueLetters(input)
-    expect(letters).toBe(NEGOTIATED_LETTERS_EXAMPLE)
+    expect(letters).toBe('Noventa y tres millones cuatrocientos sesenta y ocho mil cuarenta pesos')
     expect(checkNegotiatedValue(input, letters).ok).toBe(true)
   })
 

@@ -61,9 +61,6 @@ export const PLAN_COLUMNS_CONTRACT: ResultColumn[] = [
   { key: 'voltageLevel', label: 'Nivel de tensión', width: 150 },
 ]
 
-/** Tabla de negociación: una fila por predio, vinculada por FMI, con el valor negociado al final. */
-export const NEGOTIATION_COLUMNS_CONTRACT: ResultColumn[] = buildNegotiationColumns()
-
 export const CONSOLIDATED_COLUMNS_CONTRACT: ResultColumn[] = [
   { key: 'field', label: 'Campo maestro', editable: false, width: 210 },
   { key: 'value', label: 'Valor consolidado', width: 380 },

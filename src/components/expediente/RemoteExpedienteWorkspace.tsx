@@ -275,7 +275,7 @@ export function RemoteExpedienteWorkspace({ project, onBack }: { project: Projec
   })
   const generatedTotal = Object.values(generatedDocuments.documents).reduce((sum, files) => sum + files.length, 0)
   const mounted = useRef(true)
-  const repo: ExpedienteV2Repository = useMemo(() => createExpedienteV2Repository({ mode: 'supabase' }), [])
+  const repo: ExpedienteV2Repository = useMemo(() => createExpedienteV2Repository(), [])
 
   const refresh = useCallback(async () => {
     try {

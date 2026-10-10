@@ -1,4 +1,3 @@
-import { normalizeFmi } from './planTitleLinking'
 
 export interface ConsolidatedMasterRecord {
   // Identity and legal background from Titles
@@ -55,93 +54,5 @@ export interface ConsolidatedMasterRecord {
     consolidated_at: string
     consolidated_by?: string
     is_valid: boolean
-  }
-}
-
-export interface ConsolidationInputs {
-  titlesApprovedPayload: Record<string, unknown>
-  titlesVersionId: string
-  plansApprovedPayload: Record<string, unknown>
-  plansVersionId: string
-  negotiationApprovedPayload: Record<string, unknown>
-  negotiationVersionId: string
-  userId?: string
-}
-
-export function consolidateApprovedGroups({
-  titlesApprovedPayload: t,
-  titlesVersionId,
-  plansApprovedPayload: p,
-  plansVersionId,
-  negotiationApprovedPayload: n,
-  negotiationVersionId,
-  userId,
-}: ConsolidationInputs): ConsolidatedMasterRecord {
-  // El plano principal es el que comparte FMI con el estudio de títulos (vínculo 1 a 1).
-  const plansList = Array.isArray(p.plans) && p.plans.length > 0 ? p.plans : [p]
-  const titleFmi = normalizeFmi(String(t.folio ?? ''))
-  const primaryPlan = (titleFmi && plansList.find((plan: any) => normalizeFmi(String(plan?.folio ?? '')) === titleFmi)) || plansList[0] || {}
-
-  // Format owners string
-  const ownersList = Array.isArray(t.owners) ? t.owners : []
-  const formattedOwners = ownersList
-    .map((o: any) => `${o.name || ''} (${o.document_type || 'CC'} ${o.document_number || ''})`.trim())
-    .filter((s: string) => s.length > 5)
-    .join('; ') || String(t.owners_str || t.owners || 'no identificado')
-
-  return {
-    // 1. TÍTULOS
-    folio: String(t.folio || 'no identificado'),
-    cadastral_id: String(t.cadastral_id || t.cadastralId || 'no identificado'),
-    property_name: String(t.property_name || t.propertyName || 'no identificado'),
-    municipality: String(t.municipality || 'no identificado'),
-    department: String(t.department || 'no identificado'),
-    village: String(t.village || 'no identificado'),
-    owners: formattedOwners,
-    area_numbers: String(t.area_numbers || t.areaNumbers || 'no identificado'),
-    area_letters: String(t.area_letters || t.areaLetters || 'no identificado'),
-    registry_office: String(t.registry_office || t.registryOffice || 'no identificado'),
-    acquisition_mode: String(t.acquisition_mode || t.acquisitionMode || 'no identificado'),
-    boundaries: String(t.boundaries || 'no identificado'),
-    boundaries_document: String(t.boundaries_document || t.boundariesDocument || 'no identificado'),
-    legal_conditions: String(t.legal_conditions || t.legalConditions || 'sin condiciones jurídicas vigentes'),
-    justice_ministry_case: String(t.justice_ministry_case || t.justiceMinistryCase || 'no identificado'),
-    urt_case: String(t.urt_case || t.urtCase || 'no identificado'),
-    urt_territorial_direction: String(t.urt_territorial_direction || t.urtTerritorialDirection || 'no identificado'),
-
-    // 2. PLANOS
-    easement_area: String(primaryPlan.easement_area_numbers || primaryPlan.easementAreaNumbers || p.total_easement_area_numbers || '—'),
-    easement_area_letters: String(primaryPlan.easement_area_letters || primaryPlan.easementAreaLetters || p.total_easement_area_letters || '—'),
-    easement_length: String(primaryPlan.easement_length_numbers || primaryPlan.easementLengthNumbers || p.total_easement_length_numbers || '—'),
-    easement_length_letters: String(primaryPlan.easement_length_letters || primaryPlan.easementLengthLetters || p.total_easement_length_letters || '—'),
-    easement_width: String(primaryPlan.easement_width_numbers || primaryPlan.easementWidthNumbers || '—'),
-    easement_width_letters: String(primaryPlan.easement_width_letters || primaryPlan.easementWidthLetters || '—'),
-    infrastructure_count: String(primaryPlan.infrastructure_count_numbers || primaryPlan.infrastructureCountNumbers || p.total_infrastructure_count || '0'),
-    infrastructure_count_letters: String(primaryPlan.infrastructure_count_letters || primaryPlan.infrastructureCountLetters || 'cero'),
-    plan_name: String(primaryPlan.plan_name || primaryPlan.planName || '—'),
-    plan_scale: String(primaryPlan.plan_scale || primaryPlan.planScale || '—'),
-    voltage_level: String(primaryPlan.voltage_level || primaryPlan.voltageLevel || '—'),
-
-    // 3. NEGOCIACIÓN
-    property_code: String(n.property_code || n.propertyCode || '—'),
-    first_offer: String(n.first_offer_numbers || n.firstOfferNumbers || '—'),
-    first_offer_letters: String(n.first_offer_letters || n.firstOfferLetters || '—'),
-    second_offer: String(n.second_offer_numbers || n.secondOfferNumbers || '—'),
-    second_offer_letters: String(n.second_offer_letters || n.secondOfferLetters || '—'),
-    third_offer: String(n.third_offer_numbers || n.thirdOfferNumbers || '—'),
-    third_offer_letters: String(n.third_offer_letters || n.thirdOfferLetters || '—'),
-    values_match: String(n.values_match || n.valuesMatch || 'Sí, coinciden'),
-    appraisal_value: String(n.appraisal_value || n.appraisalValue || '—'),
-    negotiated_value: String(n.negotiated_value_numbers || '—'),
-    negotiated_value_letters: String(n.negotiated_value_letters || '—'),
-
-    metadata: {
-      titles_result_version_id: titlesVersionId,
-      plans_result_version_id: plansVersionId,
-      negotiation_result_version_id: negotiationVersionId,
-      consolidated_at: new Date().toISOString(),
-      consolidated_by: userId,
-      is_valid: true,
-    },
   }
 }

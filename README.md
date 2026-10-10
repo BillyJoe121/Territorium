@@ -18,7 +18,6 @@ Variables públicas del frontend:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
-- `VITE_DATA_MODE=supabase`
 
 Nunca exponga `SUPABASE_SECRET_KEY` ni `OPENAI_API_KEY` en variables `VITE_*`.
 

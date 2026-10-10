@@ -1,14 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildCorrespondencia,
-  CORRESPONDENCIA_COLUMNS,
-  correspondenciaRowToMasterRecord,
-  correspondenciaTableColumns,
-  decimalWords,
-  defaultProjectConstants,
-  deriveCorrespondenciaRow,
-  formatLongDate,
-} from './correspondencia'
+import { buildCorrespondencia, CORRESPONDENCIA_COLUMNS, correspondenciaRowToMasterRecord, correspondenciaTableColumns, defaultProjectConstants, deriveCorrespondenciaRow } from './correspondencia'
 
 const titlesPayload = {
   titles: [
@@ -91,13 +82,6 @@ describe('CORRESPONDENCIA', () => {
     expect(row.BG).toBe('1200000')
     expect(row.BJ).toBe('OCHOCIENTOS MIL PESOS')
     expect(row.AD).toBe('DIECISÉIS METROS')
-  })
-
-  it('formats long dates and decimal words like the template', () => {
-    expect(formatLongDate('2024/11/07')).toBe('siete (07) de noviembre de 2024')
-    expect(formatLongDate('2024-10-01')).toBe('uno (01) de octubre de 2024')
-    expect(decimalWords(306.43)).toBe('TRESCIENTOS SEIS CON CUARENTA Y TRES')
-    expect(decimalWords(21, 'metros')).toBe('VEINTIÚN METROS')
   })
 
   it('maps a row to the master record used by the final documents', () => {
