@@ -245,6 +245,49 @@ class DocumentComparisonTests(unittest.IsolatedAsyncioTestCase):
         }]}, doc_a, doc_b)
         self.assertEqual(result['fields'][0]['status'], 'near')
 
+    def test_area_in_other_unit_is_exact_with_reason(self):
+        doc_a = make_document('a.docx', 'ÁREA TÍTULOS 22991 m2')
+        doc_b = make_document('b.docx', 'Área (Títulos) DOS HECTÁREAS Y DOS MIL NOVECIENTOS NOVENTA Y UN METROS CUADRADOS (2 Ha. 2991 M2).')
+        result = validate_comparison({'fields': [{
+            'key': 'area', 'label': 'Área según títulos',
+            'left': side(doc_a, '22991 m2'),
+            'right': side(doc_b, 'DOS HECTÁREAS Y DOS MIL NOVECIENTOS NOVENTA Y UN METROS CUADRADOS (2 Ha. 2991 M2)'),
+        }]}, doc_a, doc_b)
+        self.assertEqual(result['version'], 2)
+        self.assertEqual(result['fields'][0]['status'], 'exact')
+        self.assertIn('22.991 m²', result['fields'][0]['reason'])
+
+    def test_relabeled_cadastral_fields_are_paired_for_review(self):
+        doc_a = make_document('a.docx', 'NÚMERO PREDIAL 730430002000000006000700000000')
+        doc_b = make_document('b.docx', 'Cédula catastral 73043000200060007000 (englobado en mayor extensión)')
+        result = validate_comparison({'fields': [
+            {'key': 'npn', 'label': 'Número predial nacional', 'left': side(doc_a, '730430002000000006000700000000'), 'right': None},
+            {'key': 'cedula', 'label': 'Cédula catastral', 'left': None, 'right': side(doc_b, '73043000200060007000')},
+        ]}, doc_a, doc_b)
+        self.assertEqual(len(result['fields']), 1)
+        field = result['fields'][0]
+        self.assertEqual((field['label'], field['status']), ('Número predial nacional / Cédula catastral', 'near'))
+        self.assertEqual(field['right']['value'], '73043000200060007000')
+
+    def test_ai_equivalence_alone_is_only_a_review_with_its_reason(self):
+        doc_a = make_document('a.docx', 'Vereda: Santa Bárbara')
+        doc_b = make_document('b.docx', 'Vereda: Sta. Bbra.')
+        field = {'key': 'vereda', 'label': 'Vereda', 'left': side(doc_a, 'Santa Bárbara'), 'right': side(doc_b, 'Sta. Bbra.')}
+        plain = validate_comparison({'fields': [field]}, doc_a, doc_b)['fields'][0]
+        self.assertEqual((plain['status'], plain['reason']), ('different', None))
+        judged = validate_comparison({'fields': [{**field, 'equivalence': 'equivalent', 'reason': 'Abreviatura de Santa Bárbara.'}]}, doc_a, doc_b)['fields'][0]
+        self.assertEqual(judged['status'], 'near')
+        self.assertIn('Abreviatura de Santa Bárbara.', judged['reason'])
+
+    def test_ai_cannot_override_a_proven_difference(self):
+        doc_a = make_document('a.docx', 'Área 22991 m2')
+        doc_b = make_document('b.docx', 'Área 68643 m2')
+        result = validate_comparison({'fields': [{
+            'key': 'area', 'label': 'Área', 'left': side(doc_a, '22991 m2'), 'right': side(doc_b, '68643 m2'),
+            'equivalence': 'equivalent', 'reason': 'Son iguales.',
+        }]}, doc_a, doc_b)
+        self.assertEqual(result['fields'][0]['status'], 'different')
+
 
 if __name__ == '__main__':
     unittest.main()

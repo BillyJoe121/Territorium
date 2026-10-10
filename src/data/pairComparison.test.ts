@@ -10,8 +10,9 @@ const doc = (id: string, file: ComparisonSourceFile, active = true): ComparisonD
   id, project_id: PROJECT, storage_path: `p1/comparison/${id}/${file.name}`, original_name: file.name, mime_type: file.mimeType, size_bytes: file.sizeBytes,
   document_label: null, is_active: active, created_at: '2026-10-08T00:00:00Z',
 })
-const job = (id: string, left: string, right: string, status: ComparisonJob['status']): ComparisonJob => ({
-  id, project_id: PROJECT, left_document_id: left, right_document_id: right, status, result: null, error_code: null, created_at: '2026-10-08T00:00:00Z',
+const job = (id: string, left: string, right: string, status: ComparisonJob['status'], version = 2): ComparisonJob => ({
+  id, project_id: PROJECT, left_document_id: left, right_document_id: right, status, error_code: null, created_at: '2026-10-08T00:00:00Z',
+  result: status === 'completed' ? { version, fields: [], counts: { exact: 0, near: 0, different: 0 }, documents: { left: { sha256: '', scan_status: 'textual' }, right: { sha256: '', scan_status: 'textual' } }, disclaimer: '' } : null,
 })
 
 function fakeService(documents: ComparisonDocument[], jobs: ComparisonJob[], options: { failRequest?: boolean } = {}) {
@@ -53,6 +54,12 @@ describe('findReusableComparison', () => {
     expect(findReusableComparison(documents, [job('j-failed', 'd1', 'd2', 'failed')], plan, study)).toBeNull()
     expect(findReusableComparison(documents, [job('j-ok', 'd1', 'd2', 'completed')], plan, study)?.id).toBe('j-ok')
     expect(findReusableComparison(documents, [job('j-rev', 'd2', 'd1', 'completed')], plan, study)).toBeNull()
+  })
+
+  it('re-analyzes a pair whose result predates the current worker rules', () => {
+    const documents = [doc('d1', plan, false), doc('d2', study, false)]
+    expect(findReusableComparison(documents, [job('j-old', 'd1', 'd2', 'completed', 1)], plan, study)).toBeNull()
+    expect(findReusableComparison(documents, [job('j-run', 'd1', 'd2', 'running')], plan, study)?.id).toBe('j-run')
   })
 })
 

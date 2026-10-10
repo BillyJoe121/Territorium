@@ -4,6 +4,8 @@ import { requireSupabase } from '../lib/supabase'
 import { expedienteTusEndpoint } from './expedienteUpload'
 
 export type MatchStatus = 'exact' | 'near' | 'different'
+/** Versión del resultado que produce el worker; las anteriores no conocen unidades, letras ni formatos catastrales. */
+export const COMPARISON_RESULT_VERSION = 2
 export interface Evidence {
   value: string
   quote: string
@@ -15,6 +17,8 @@ export interface ComparedField {
   key: string
   label: string
   status: MatchStatus
+  /** Por qué se marcó así cuando los valores se escriben distinto (p. ej. "22.991 m² en ambos documentos"). */
+  reason?: string | null
   left: Evidence | null
   right: Evidence | null
 }

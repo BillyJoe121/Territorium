@@ -11,9 +11,12 @@ from typing import Any
 from .models.canonical import CanonicalDocument
 from .preprocessing.docx_parser import parse_docx
 from .preprocessing.pdf_parser import parse_pdf
+from .utils.value_equivalence import compare_equivalent
 
 logger = logging.getLogger(__name__)
 MAX_TEXT_CHARS = 60000
+# 2: estados con motivo, equivalencias de unidad/letras/formato y veredicto de la IA.
+RESULT_VERSION = 2
 
 SPANISH_MONTHS = {
     'enero': 1, 'ene': 1,
@@ -121,6 +124,61 @@ def verified_evidence(raw: Any, document: CanonicalDocument) -> dict[str, Any] |
     }
 
 
+def _ai_reason(candidate: dict[str, Any]) -> str | None:
+    reason = candidate.get('reason')
+    if not isinstance(reason, str):
+        return None
+    reason = ' '.join(reason.split())[:300]
+    return reason or None
+
+
+def classify_values(a: str, b: str, candidate: dict[str, Any]) -> tuple[str, str | None]:
+    """Estado y motivo. Verde solo con prueba determinista; la IA sola nunca pasa de amarillo."""
+    if are_values_semantically_equal(a, b):
+        return 'exact', None
+    rule = compare_equivalent(a, b)
+    if rule:
+        return rule[0], rule[1]
+    if parse_spanish_date(a) and parse_spanish_date(b):
+        return 'different', None
+    status = 'near' if SequenceMatcher(None, a.lower(), b.lower()).ratio() >= 0.82 else 'different'
+    reason = _ai_reason(candidate)
+    if candidate.get('equivalence') == 'equivalent':
+        return 'near', f'La IA los considera equivalentes: {reason}' if reason else 'La IA los considera equivalentes; confirme en los originales.'
+    return status, None
+
+
+def _same_label(a: str, b: str) -> bool:
+    simple = lambda text: re.sub(r'[^a-z0-9]', '', unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode().lower())
+    return simple(a) == simple(b)
+
+
+def pair_relabeled_fields(fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Une un atributo hallado solo en A con otro hallado solo en B cuando son el mismo dato.
+
+    Pasa con rótulos distintos ("Número predial" en el plano, "Cédula catastral" en el estudio):
+    la IA los deja como dos faltantes. Solo se unen si una regla de área o de código catastral
+    demuestra la relación; un número suelto igual no basta.
+    """
+    left_only = [field for field in fields if field['left'] and not field['right']]
+    right_only = [field for field in fields if field['right'] and not field['left']]
+    absorbed: set[int] = set()
+    for field in left_only:
+        for other in right_only:
+            if id(other) in absorbed:
+                continue
+            rule = compare_equivalent(field['left']['value'], other['right']['value'])
+            if not rule or rule[2] == 'number' or rule[0] == 'different':
+                continue
+            absorbed.add(id(other))
+            field.update({
+                'label': field['label'] if _same_label(field['label'], other['label']) else f"{field['label']} / {other['label']}"[:120],
+                'right': other['right'], 'status': rule[0], 'reason': rule[1],
+            })
+            break
+    return [field for field in fields if id(field) not in absorbed]
+
+
 def validate_comparison(raw: Any, left: CanonicalDocument, right: CanonicalDocument) -> dict[str, Any]:
     if not isinstance(raw, dict) or not isinstance(raw.get('fields'), list):
         raise ValueError('INVALID_AI_RESPONSE')
@@ -140,26 +198,18 @@ def validate_comparison(raw: Any, left: CanonicalDocument, right: CanonicalDocum
         if not left_evidence and not right_evidence:
             continue
         seen.add(key)
+        status, reason = 'different', None
         if left_evidence and right_evidence:
-            a, b = left_evidence['value'], right_evidence['value']
-            if are_values_semantically_equal(a, b):
-                status = 'exact'
-            elif parse_spanish_date(a) and parse_spanish_date(b) and parse_spanish_date(a) != parse_spanish_date(b):
-                status = 'different'
-            elif SequenceMatcher(None, a.lower(), b.lower()).ratio() >= 0.82:
-                status = 'near'
-            else:
-                status = 'different'
-        else:
-            status = 'different'
+            status, reason = classify_values(left_evidence['value'], right_evidence['value'], candidate)
         fields.append({
-            'key': key, 'label': label, 'status': status,
+            'key': key, 'label': label, 'status': status, 'reason': reason,
             'left': left_evidence, 'right': right_evidence,
         })
+    fields = pair_relabeled_fields(fields)
     if not fields:
         raise ValueError('NO_VERIFIABLE_FIELDS')
     return {
-        'version': 1,
+        'version': RESULT_VERSION,
         'fields': fields,
         'counts': {state: sum(item['status'] == state for item in fields) for state in ('exact', 'near', 'different')},
         'documents': {
@@ -196,7 +246,17 @@ async def compare_documents(ai_client: Any, model: str, left: CanonicalDocument,
         'identificadores, área, fechas, ubicación, etc.) sin inventar una lista fija. Responde solo JSON '
         '{"fields":[{"key":"clave_estable","label":"Nombre legible",'
         '"left":{"fragment_id":"...","quote":"cita literal corta","value":"valor literal"},'
-        '"right":{"fragment_id":"...","quote":"cita literal corta","value":"valor literal"}}]}. '
+        '"right":{"fragment_id":"...","quote":"cita literal corta","value":"valor literal"},'
+        '"equivalence":"equivalent|different|unsure","reason":"frase corta"}]}. '
+        'Un mismo dato puede tener rótulos distintos en cada documento (número predial nacional y '
+        'cédula catastral; FMI y folio de matrícula inmobiliaria; área títulos y área según títulos): '
+        'emparéjalos en un solo atributo. Antes de dejar un lado en null, busca en el otro documento '
+        'el mismo dato escrito en otra unidad (m², hectáreas, fanegadas), en letras en lugar de cifras, '
+        'o en otro formato (número predial de 30 dígitos frente a cédula catastral de 20). '
+        'Cuando ambos lados existan, convierte unidades y lee las cifras en letras antes de decidir: '
+        '"equivalence" es "equivalent" si representan el mismo dato aunque cambie la forma de '
+        'escribirlo, "different" si difieren de verdad y "unsure" si no puedes saberlo; "reason" '
+        'explica la conversión o la diferencia (p. ej. "2 ha + 2.991 m² = 22.991 m²"). '
         'Usa null cuando el atributo no exista en un lado. Cada cita y valor deben ser subcadenas '
         'exactas de un fragmento suministrado. No infieras texto ausente. Máximo 30 atributos.'
     )

@@ -272,6 +272,7 @@ export function ComparisonResults({ job, left, right, onBack, errorMessage, load
                                 : statusText[visualStatus]}
                             </span>
                           </div>
+                          {field.reason && <p className="comparison-detail-reason">{field.reason}</p>}
                           <div className="comparison-values">
                             <div className="comparison-value-row">
                               <span className="comparison-val-label">Doc A:</span>

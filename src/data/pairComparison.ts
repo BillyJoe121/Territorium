@@ -14,6 +14,7 @@ import {
   requestComparison,
   retireComparisonDocument,
   uploadComparisonDocument,
+  COMPARISON_RESULT_VERSION,
   type ComparisonDocument,
   type ComparisonJob,
 } from './documentComparison'
@@ -62,11 +63,12 @@ export const supabaseComparisonService: ComparisonService = {
 const isCopyOf = (document: ComparisonDocument, file: ComparisonSourceFile) =>
   document.original_name === file.name && document.size_bytes === file.sizeBytes
 
-/** Cotejo más reciente de este par que terminó bien o sigue en curso. */
+/** Cotejo más reciente de este par que sigue en curso o terminó con las reglas vigentes del worker. */
 export function findReusableComparison(documents: ComparisonDocument[], jobs: ComparisonJob[], left: ComparisonSourceFile, right: ComparisonSourceFile): ComparisonJob | null {
   const leftIds = new Set(documents.filter((document) => isCopyOf(document, left)).map((document) => document.id))
   const rightIds = new Set(documents.filter((document) => isCopyOf(document, right)).map((document) => document.id))
-  return jobs.find((job) => job.status !== 'failed' && leftIds.has(job.left_document_id) && rightIds.has(job.right_document_id)) ?? null
+  const current = (job: ComparisonJob) => job.status !== 'failed' && (job.status !== 'completed' || (job.result?.version ?? 0) >= COMPARISON_RESULT_VERSION)
+  return jobs.find((job) => current(job) && leftIds.has(job.left_document_id) && rightIds.has(job.right_document_id)) ?? null
 }
 
 async function runComparison(projectId: string, left: ComparisonSourceFile, right: ComparisonSourceFile, service: ComparisonService): Promise<ComparisonJob> {

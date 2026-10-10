@@ -34,9 +34,8 @@ def _ascii(text: str) -> str:
 
 def _segments(text: str) -> list[str]:
     """Texto principal y cada paréntesis por separado: "DOS HECTÁREAS (2 Ha.)" se lee dos veces."""
-    inner = re.findall(r'\(([^)]*)\)', text)
-    main = re.sub(r'\([^)]*\)', ' ', text)
-    return [segment for segment in (main, *inner) if segment.strip()]
+    # Cualquier paréntesis separa, aunque la cita lo deje sin cerrar.
+    return [segment for segment in re.split(r'[()]', text) if any(char.isalnum() for char in segment)]
 
 
 def _decimal_candidates(token: str) -> set[float]:
@@ -125,7 +124,7 @@ def parse_number(text: str) -> set[float] | None:
 
 
 def _cadastral_digits(text: str) -> str | None:
-    main = re.sub(r'\([^)]*\)', ' ', text).strip()
+    main = text.split('(')[0].strip()
     if not re.fullmatch(r'[\d\s.\-]+', main):
         return None
     digits = re.sub(r'\D', '', main)

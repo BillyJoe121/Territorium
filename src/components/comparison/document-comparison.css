@@ -511,6 +511,12 @@
 .comparison-status-tag.is-near { color: #885f09; background: #fdf3d6; }
 .comparison-status-tag.is-different { color: #9c2e27; background: #fce8e6; }
 .comparison-status-tag.is-absent { color: #c2410c; background: #ffedd5; border: 1px solid #fed7aa; }
+.comparison-detail-reason {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ui-ink-soft);
+}
 
 .comparison-values {
   display: flex;
