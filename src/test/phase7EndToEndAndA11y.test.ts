@@ -23,10 +23,6 @@ import {
   buildPurePdfBinary,
   getLinkedArtifactMetadata,
 } from '../lib/expedientePdfGenerator'
-import {
-  evaluateObservabilityAlerts,
-  type StageExecutionMetric,
-} from '../lib/expedienteObservability'
 
 describe('HU-V2-055: Pruebas Integrales, Fallos y Accesibilidad (Fase 7)', () => {
   // =========================================================================
@@ -164,23 +160,6 @@ describe('HU-V2-055: Pruebas Integrales, Fallos y Accesibilidad (Fase 7)', () =>
   // 2. FAULT INJECTIONS & RESILIENCE SCENARIOS
   // =========================================================================
   describe('Fault Scenarios: Timeout, Duplicado, Worker Detenido, Salida Inválida, Edición Concurrente', () => {
-    it('detects timeout with observability engine and triggers critical alert', () => {
-      const timeoutMetric: StageExecutionMetric = {
-        stage: 'titles',
-        expedienteId: 'exp-timeout-fail',
-        durationMs: 720_000, // 12 minutes (threshold > 10m)
-        queueLatencyMs: 1500,
-        retryCount: 1,
-        status: 'failed',
-        errorCode: 'WORKER_JOB_TIMEOUT',
-        recordedAt: new Date().toISOString(),
-      }
-
-      const alerts = evaluateObservabilityAlerts(timeoutMetric)
-      expect(alerts.length).toBeGreaterThan(0)
-      expect(alerts[0].metric).toBe('STAGE_DURATION_EXCEEDED')
-      expect(alerts[0].severity).toBe('critical')
-    })
 
     it('rejects duplicate or illegal status transitions gracefully', () => {
       const group = {

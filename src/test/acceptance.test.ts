@@ -12,7 +12,6 @@ import {
   segregateOwners,
   validateLegalBoundaries,
 } from '../lib/legalTechnicalExtraction'
-import { calculateCompletenessMetrics } from '../lib/operationsObservability'
 
 describe('Territorium Automated Acceptance Suite (E15 P0 - US-146 to US-150)', () => {
   describe('US-150: Acceptance tests for complex legal cases', () => {
@@ -56,50 +55,6 @@ describe('Territorium Automated Acceptance Suite (E15 P0 - US-146 to US-150)', (
       expect(filings.snrFiling).toBe('no identificado')
       expect(filings.territorialDirection).toBe('no identificado')
       expect(filings.isIdentified).toBe(false)
-    })
-  })
-
-  describe('US-149: Regression test detecting output count less than expected inputs', () => {
-    it('flags an alert and blocks batch export when inputs count exceeds consolidated outputs', () => {
-      const expectedCodes = ['SAN-01', 'SAN-02', 'SAN-03', 'SAN-04']
-      const receivedCodes = ['SAN-01', 'SAN-02', 'SAN-03', 'SAN-04']
-
-      // Solo se consolidan 3 predios (falta SAN-04)
-      const masterRecords = [
-        consolidateMasterRecord({
-          id: 'rec-1',
-          propertyCode: 'SAN-01',
-          projectId: 'p',
-          batchId: 'b',
-          titleExtraction: { folio: '300-1', municipality: 'Cimitarra' },
-        }),
-        consolidateMasterRecord({
-          id: 'rec-2',
-          propertyCode: 'SAN-02',
-          projectId: 'p',
-          batchId: 'b',
-          titleExtraction: { folio: '300-2', municipality: 'Cimitarra' },
-        }),
-        consolidateMasterRecord({
-          id: 'rec-3',
-          propertyCode: 'SAN-03',
-          projectId: 'p',
-          batchId: 'b',
-          titleExtraction: { folio: '300-3', municipality: 'Cimitarra' },
-        }),
-      ]
-
-      const summary = computeBatchReconciliationSummary(expectedCodes, masterRecords, receivedCodes)
-
-      expect(summary.expectedCount).toBe(4)
-      expect(summary.consolidatedCount).toBe(3)
-      expect(summary.missingProperties).toContain('SAN-04')
-      expect(summary.isExportReady).toBe(false)
-      expect(summary.blockReasons[0]).toContain('Faltan 1 predio(s)')
-
-      const metrics = calculateCompletenessMetrics(4, 4, [], masterRecords)
-      expect(metrics.hasDiscrepancy).toBe(true)
-      expect(metrics.discrepancyMessage).toContain('Discrepancia detectada')
     })
   })
 

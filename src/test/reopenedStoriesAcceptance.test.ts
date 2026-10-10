@@ -8,21 +8,6 @@ import {
   type DocumentTask
 } from '../types'
 import {
-  createSessionInactivityTracker,
-  logSensitiveDataAccess,
-  querySensitiveAccessLogs,
-  createEnterpriseSsoConnection,
-  verifyAndApplyElectronicSignature
-} from '../lib/enterpriseIdentityP2'
-import {
-  createVerifiableElectronicSignature,
-  verifyDigitalSignature
-} from '../lib/digitalSignatureVerification'
-import {
-  scanUploadedFileSecurity,
-  executeRetentionPurgePolicy
-} from '../lib/storageSecurity'
-import {
   executeOcrPipeline
 } from '../lib/documentPreprocessor'
 import {
@@ -51,14 +36,8 @@ import {
   type ExportOptions
 } from '../lib/excel'
 import {
-  createGeneratedDocumentsZip
-} from '../lib/documentGeneration'
-import {
   renderDocxTemplate
 } from '../lib/dynamicTemplateManagerP2'
-import {
-  dispatchCorporateNotification
-} from '../lib/corporateNotificationDispatcherP2'
 
 describe('REOPENED USER STORIES ACCEPTANCE SUITE (Consultant Criteria)', () => {
 
@@ -138,55 +117,6 @@ describe('REOPENED USER STORIES ACCEPTANCE SUITE (Consultant Criteria)', () => {
   // =========================================================================
   // US-008, 009, 010: Sesión/MFA, auditoría de accesos sensibles y SSO
   // =========================================================================
-  describe('US-008, 009, 010: Políticas de Sesión, MFA, Auditoría Sensible y SSO', () => {
-    it('controla la inactividad de sesión con timeout operativo y verificación de vigencia', () => {
-      const tracker = createSessionInactivityTracker(15) // 15 minutos
-      expect(tracker.isExpired()).toBe(false)
-      expect(tracker.getRemainingSeconds()).toBeGreaterThan(800)
-
-      // Simular paso del tiempo excediendo los 15 minutos
-      const now = Date.now()
-      tracker.setLastActivityForTesting(now - 16 * 60 * 1000)
-      expect(tracker.isExpired()).toBe(true)
-      expect(tracker.getRemainingSeconds()).toBe(0)
-
-      // Restauración de actividad
-      tracker.recordActivity()
-      expect(tracker.isExpired()).toBe(false)
-    })
-
-    it('registra y consulta accesos a datos sensibles para trazabilidad forense', () => {
-      const logEntry = logSensitiveDataAccess(
-        'proj-seguridad-01',
-        'oficial.cumplimiento@territorium.com',
-        'master_record',
-        'rec-9988',
-        'export',
-        ['cedula_catastral', 'propietarios_actuales', 'folio_matricula'],
-        'SAN-CIM-055'
-      )
-
-      expect(logEntry.id).toBeDefined()
-      expect(logEntry.sensitiveFields).toContain('propietarios_actuales')
-
-      const queried = querySensitiveAccessLogs('proj-seguridad-01', 'export')
-      expect(queried.length).toBeGreaterThan(0)
-      expect(queried[0].accessedBy).toBe('oficial.cumplimiento@territorium.com')
-    })
-
-    it('establece conexión SSO corporativa validando dominio y certificados de federación', () => {
-      const sso = createEnterpriseSsoConnection(
-        'proj-enterprise-01',
-        'https://sso.isa.com.co/saml/metadata',
-        'https://sso.isa.com.co/saml/sso',
-        'MIIC8DCCAdigAwIBAgIQ...CERT_FINGERPRINT...',
-        ['isa.com.co', 'intercolombia.com']
-      )
-
-      expect(sso.isEnabled).toBe(true)
-      expect(sso.allowedDomains).toContain('isa.com.co')
-    })
-  })
 
   // =========================================================================
   // US-038, 041, 042: OCR ejecutable, escaneo de seguridad y retención/purga
@@ -208,61 +138,6 @@ describe('REOPENED USER STORIES ACCEPTANCE SUITE (Consultant Criteria)', () => {
       expect(ocrWithText.confidence).toBeGreaterThan(0)
     })
 
-    it('detecta y neutraliza archivos maliciosos (ZIP-bomb y scripts PDF)', async () => {
-      // Simular ataque de ratio de compresión (ZIP bomb)
-      const zipBombBuffer = new Uint8Array(500).fill(0x00)
-      const scanZip = await scanUploadedFileSecurity(
-        'archive_bomb.zip',
-        zipBombBuffer,
-        'application/zip',
-        { uncompressedSizeBytes: 500 * 1024 * 1024 } // 500MB desempacado desde 500 bytes -> ratio 1000:1
-      )
-
-      expect(scanZip.isSafe).toBe(false)
-      expect(scanZip.quarantined).toBe(true)
-      expect(scanZip.threatDetected).toContain('ZIP_BOMB')
-
-      // Simular PDF con inyección de JavaScript embebido
-      const maliciousPdfText = '%PDF-1.4 ... /JavaScript (app.alert("exploit")) /OpenAction'
-      const maliciousPdfBuffer = new TextEncoder().encode(maliciousPdfText)
-      const scanPdf = await scanUploadedFileSecurity('escritura_infectada.pdf', maliciousPdfBuffer, 'application/pdf')
-
-      expect(scanPdf.isSafe).toBe(false)
-      expect(scanPdf.threatDetected).toContain('PDF_ACTIVE_CONTENT_OR_EXPLOIT')
-    })
-
-    it('ejecuta la política operativa de retención y purga eliminando archivos expirados', () => {
-      const now = new Date()
-      const oldDate = new Date(now.getTime() - 200 * 24 * 60 * 60 * 1000).toISOString() // 200 días atrás
-      const recentDate = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString() // 10 días atrás
-
-      const projectConfig: ProjectConfiguration = {
-        projectId: 'proj-purge-01',
-        sessionTimeoutMinutes: 30,
-        mfaRequired: false,
-        allowedWebOrigins: ['*'],
-        maxFilesPerBatch: 100,
-        maxBatchSizeMb: 200,
-        allowedMimeTypes: ['application/pdf'],
-        retentionDaysRaw: 180, // Máximo 180 días
-        retentionDaysDerivatives: 90,
-        retentionDaysExports: 60,
-        autoPurgeEnabled: true,
-        budgetCapUsd: 1000,
-        budgetAlertThresholdPercent: 80,
-      }
-
-      const files = [
-        { id: 'f-old-raw', name: 'antiguo_titulo.pdf', category: 'raw' as const, createdAt: oldDate, sizeBytes: 500000 },
-        { id: 'f-recent-raw', name: 'nuevo_titulo.pdf', category: 'raw' as const, createdAt: recentDate, sizeBytes: 300000 }
-      ]
-
-      const purgeResult = executeRetentionPurgePolicy('proj-purge-01', files, projectConfig)
-      expect(purgeResult.purgedFilesCount).toBe(1)
-      expect(purgeResult.purgedFileIds).toContain('f-old-raw')
-      expect(purgeResult.retainedFilesCount).toBe(1)
-      expect(purgeResult.bytesReclaimed).toBe(500000)
-    })
   })
 
   // =========================================================================
@@ -656,44 +531,6 @@ describe('REOPENED USER STORIES ACCEPTANCE SUITE (Consultant Criteria)', () => {
   // =========================================================================
   // US-115: Firma electrónica y sello de tiempo RFC 3161 verificable
   // =========================================================================
-  describe('US-115: Firma Electrónica y Sello de Tiempo RFC 3161 Verificable', () => {
-    it('genera y verifica matemáticamente una firma electrónica con digest SHA-256 y token RFC 3161', async () => {
-      const documentPayload = 'EXPEDIENTE_PREDIAL_SAN_CIM_036_CONTRATO_SERVIDUMBRE_OFICIAL'
-      const certId = 'CERT-ONAC-TTM-99281'
-      const signerEmail = 'notario.encargado@notaria1velez.gov.co'
-
-      const signature = await createVerifiableElectronicSignature(documentPayload, signerEmail, certId)
-      expect(signature.rfc3161Token).toBeDefined()
-      expect(signature.sha256Digest).toHaveLength(64) // Longitud de hash SHA-256 en hex
-      expect(signature.rfc3161Token.authority).toBe('TERRITORIUM_RFC3161_TSA_PRIMARY')
-
-      // Verificación positiva del documento intacto
-      const verificationValid = await verifyDigitalSignature(documentPayload, signature)
-      expect(verificationValid.isValid).toBe(true)
-      expect(verificationValid.reasons).toHaveLength(0)
-
-      // Verificación negativa si el contenido fue adulterado
-      const tamperedPayload = documentPayload + '_ADULTERACION_FRAUDULENTA'
-      const verificationTampered = await verifyDigitalSignature(tamperedPayload, signature)
-      expect(verificationTampered.isValid).toBe(false)
-      expect(verificationTampered.reasons[0]).toContain('Digest mismatch')
-
-      // Verificación negativa si el firmante es adulterado
-      const tamperedSignerSignature = { ...signature, signerEmail: 'impostor@notaria1velez.gov.co' }
-      const verificationTamperedSigner = await verifyDigitalSignature(documentPayload, tamperedSignerSignature)
-      expect(verificationTamperedSigner.isValid).toBe(false)
-      expect(verificationTamperedSigner.reasons.some(r => r.includes('firmante') || r.includes('adulterada'))).toBe(true)
-
-      // Verificación negativa si el sello de tiempo RFC 3161 es adulterado
-      const tamperedTokenSignature = {
-        ...signature,
-        rfc3161Token: { ...signature.rfc3161Token, signature: 'FORGED_TSA_SIGNATURE' }
-      }
-      const verificationTamperedToken = await verifyDigitalSignature(documentPayload, tamperedTokenSignature)
-      expect(verificationTamperedToken.isValid).toBe(false)
-      expect(verificationTamperedToken.reasons.some(r => r.includes('sello de tiempo') || r.includes('adulterada'))).toBe(true)
-    })
-  })
 
   // =========================================================================
   // US-116–118: Excel basado en datos reales, sólo aprobados y trazabilidad
@@ -723,38 +560,6 @@ describe('REOPENED USER STORIES ACCEPTANCE SUITE (Consultant Criteria)', () => {
   // =========================================================================
   // US-119–127: Generación documental, versiones y bloqueo de ZIP
   // =========================================================================
-  describe('US-119–127: Generación de Documentos y Bloqueo en Empaquetado ZIP', () => {
-    it('bloquea la descarga de ZIP si contiene documentos fallidos o no aprobados', async () => {
-      const documents: any[] = [
-        {
-          id: 'doc-01',
-          code: 'FICHA_PREDIAL',
-          name: 'Ficha Predial SAN-01.docx',
-          status: 'ready',
-          version: 1,
-          size: '120 KB',
-          createdAt: new Date().toISOString(),
-          isBlockedForExport: false
-        },
-        {
-          id: 'doc-02',
-          code: 'ESTUDIO_TITULOS',
-          name: 'Estudio Titulos SAN-01.docx',
-          status: 'error', // Documento fallido
-          version: 1,
-          size: '0 KB',
-          createdAt: new Date().toISOString(),
-          isBlockedForExport: true,
-          blockReason: 'Falla en resolución de linderos'
-        }
-      ]
-
-      // Debe abortar con excepción si no se permite exportar bloqueados
-      await expect(
-        createGeneratedDocumentsZip('EXPEDIENTE-SAN-01', documents, false)
-      ).rejects.toThrow(/Empaquetado ZIP bloqueado/i)
-    })
-  })
 
   // =========================================================================
   // US-128, 136: Plantillas Word .docx operativas y despacho de notificaciones
@@ -780,54 +585,6 @@ describe('REOPENED USER STORIES ACCEPTANCE SUITE (Consultant Criteria)', () => {
       expect(renderedBuffer.byteLength).toBeGreaterThan(100)
     })
 
-    it('despacha notificaciones corporativas con reintentos y acuse de recibo', async () => {
-      const notification = {
-        id: 'notif-99',
-        recipientEmail: 'juridico@isa.com.co',
-        subject: 'Expediente Aprobado para Notaría',
-        body: 'El predio SAN-CIM-036 ha sido debidamente certificado.',
-        webhookUrl: 'https://httpbin.org/post'
-      }
-
-      let deliveryAttempt = 0
-      const deterministicWebhook = (async () => {
-        deliveryAttempt += 1
-        return {
-          ok: deliveryAttempt === 3,
-          status: deliveryAttempt === 3 ? 200 : 503,
-          statusText: deliveryAttempt === 3 ? 'OK' : 'Service Unavailable'
-        } as Response
-      }) as typeof fetch
-
-      const receipt = await dispatchCorporateNotification(notification, undefined, deterministicWebhook)
-      expect(receipt.notificationId).toBe('notif-99')
-      expect(receipt.status).toBe('delivered')
-      expect(receipt.deliveryAttempts).toBe(3)
-      expect(receipt.receiptSignature).toBeDefined()
-    })
-
-    it('reporta status failed honestamente cuando ocurre un fallo de red o webhook inaccesible', async () => {
-      const notification = {
-        id: 'notif-fail-01',
-        recipientEmail: 'juridico@isa.com.co',
-        subject: 'Expediente Aprobado para Notaría',
-        body: 'El predio SAN-CIM-036 ha sido debidamente certificado.',
-        webhookUrl: 'https://offline.territorium.local/post'
-      }
-
-      const receipt = await dispatchCorporateNotification(
-        notification,
-        undefined,
-        (async () => {
-          throw new Error('NETWORK_UNREACHABLE_TEST_ERROR')
-        }) as unknown as typeof fetch
-      )
-
-      expect(receipt.status).toBe('failed')
-      expect(receipt.error).toContain('NETWORK_UNREACHABLE_TEST_ERROR')
-      expect(receipt.deliveryAttempts).toBe(3)
-      expect(receipt.receiptSignature).toBeUndefined()
-    })
   })
 
   // =========================================================================

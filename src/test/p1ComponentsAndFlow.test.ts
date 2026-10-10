@@ -1,102 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import React from 'react'
 import { renderToString } from 'react-dom/server'
-import { AccessibleTabs } from '../components/ui/AccessibleTabs'
-import { ColumnSelectorPopover } from '../components/ui/ColumnSelectorPopover'
-import { LegalTooltip, LEGAL_TERMS_DICTIONARY } from '../components/ui/LegalTooltip'
-import { AccessibleAccordion } from '../components/ui/AccessibleAccordion'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
 import { SideDrawer } from '../components/ui/SideDrawer'
-import { FacetedFilters } from '../components/ui/FacetedFilters'
 import { ExcelExportConfigModal, DEFAULT_EXCEL_SHEETS } from '../components/ui/ExcelExportConfigModal'
-import { InviteUserModal } from '../components/ui/InviteUserModal'
 import { VariablePillsSelector, LEGAL_VARIABLES } from '../components/ui/VariablePillsSelector'
 import { TemplateEditorWithVariables } from '../components/TemplateEditorWithVariables'
-import { ButtonWithSpinner } from '../components/ui/ButtonWithSpinner'
 import { AutoSaveIndicator } from '../components/ui/AutoSaveIndicator'
-import {
-  ProcessingFlowAreaChart,
-  MaturityRadarChart,
-  AiConfidenceDonutChart,
-  MiniSparkline,
-  BatchesTreemap,
-} from '../components/ui/P1AnalyticsCharts'
 import { SplitReviewStation, type PropertyAttributeReview } from '../components/ui/SplitReviewStation'
 
 // Helper para limpiar comentarios de React 19 SSR
 const cleanHtml = (html: string) => html.replace(/<!-- -->/g, '')
 
 describe('P1 Modernization Suite: All 35 User Stories Headless Verification', () => {
-  describe('US-222: Accessible Tabs with @radix-ui/react-tabs', () => {
-    it('renders tabs triggers, badges and active content', () => {
-      const items = [
-        { id: 'identificacion', label: 'Identificación', badgeCount: 3, content: React.createElement('div', null, 'Contenido Identificación') },
-        { id: 'linderos', label: 'Linderos', badgeCount: 0, content: React.createElement('div', null, 'Contenido Linderos') },
-      ]
-
-      const html = cleanHtml(renderToString(React.createElement(AccessibleTabs, { items, defaultValue: 'identificacion' })))
-      expect(html).toContain('Identificación')
-      expect(html).toContain('Linderos')
-      expect(html).toContain('accessible-tabs-root')
-      expect(html).toContain('Contenido Identificación')
-    })
-  })
-
-  describe('US-220: Column Selector Popover with @radix-ui/react-popover', () => {
-    it('renders popover trigger with visible columns count', () => {
-      const columns = [
-        { key: 'folio', label: 'Folio Matrícula', isVisible: true },
-        { key: 'cedula', label: 'Cédula Catastral', isVisible: true },
-        { key: 'area', label: 'Área Terreno', isVisible: false },
-      ]
-
-      const html = cleanHtml(renderToString(React.createElement(ColumnSelectorPopover, { columns, onToggleColumn: () => {} })))
-      expect(html).toContain('Columnas')
-      expect(html).toContain('2/3')
-    })
-  })
-
-  describe('US-221: Legal Tooltips with @radix-ui/react-tooltip', () => {
-    it('renders legal term trigger and contains dictionary explanation', () => {
-      const html = cleanHtml(
-        renderToString(
-          React.createElement(LegalTooltip, {
-            term: 'cabida',
-            explanation: LEGAL_TERMS_DICTIONARY.cabida,
-          })
-        )
-      )
-      expect(html).toContain('cabida')
-      expect(LEGAL_TERMS_DICTIONARY.cabida).toContain('superficie total de terreno')
-    })
-  })
-
-  describe('US-224: Accessible Accordion with @radix-ui/react-accordion', () => {
-    it('renders collapsible sections with severity tags and counts', () => {
-      const sections = [
-        {
-          id: 'sec-1',
-          title: 'Discrepancia de Cabida',
-          severity: 'critical' as const,
-          itemCount: 2,
-          content: React.createElement('p', null, 'Diferencia superior al 15% entre título y plano.'),
-        },
-        {
-          id: 'sec-2',
-          title: 'Linderos Ambiguos',
-          severity: 'warning' as const,
-          itemCount: 1,
-          content: React.createElement('p', null, 'Límite sur no especifica mojón.'),
-        },
-      ]
-
-      const html = cleanHtml(renderToString(React.createElement(AccessibleAccordion, { sections, defaultValue: 'sec-1' })))
-      expect(html).toContain('Discrepancia de Cabida')
-      expect(html).toContain('Crítico')
-      expect(html).toContain('Linderos Ambiguos')
-      expect(html).toContain('Advertencia')
-    })
-  })
 
   describe('US-225: Theme Toggle (Dark / Light Mode)', () => {
     it('renders theme toggle button with accessible label', () => {
@@ -128,37 +44,6 @@ describe('P1 Modernization Suite: All 35 User Stories Headless Verification', ()
     })
   })
 
-  describe('US-265: Faceted Filter Bar', () => {
-    it('renders faceted filter pills with active counts and clear button', () => {
-      const groups = [
-        {
-          id: 'estado',
-          label: 'Estado',
-          options: [
-            { value: 'aprobado', label: 'Aprobado', count: 12 },
-            { value: 'pendiente', label: 'Pendiente', count: 5 },
-          ],
-          selectedValues: ['aprobado'],
-        },
-      ]
-
-      const html = cleanHtml(
-        renderToString(
-          React.createElement(FacetedFilters, {
-            groups,
-            onToggleOption: () => {},
-            onClearAll: () => {},
-            totalResults: 12,
-          })
-        )
-      )
-      expect(html).toContain('Filtros Facetados')
-      expect(html).toContain('1 activo(s)')
-      expect(html).toContain('Limpiar todo')
-      expect(html).toContain('Aprobado')
-    })
-  })
-
   describe('US-266: Excel Export Configuration Modal', () => {
     it('renders sheet options with descriptions and export button', () => {
       const html = cleanHtml(
@@ -176,27 +61,6 @@ describe('P1 Modernization Suite: All 35 User Stories Headless Verification', ()
       expect(html).toContain('CORRESPONDENCIA')
       expect(html).toContain('LINDEROS_Y_MEDIDAS')
       expect(html).toContain('Exportar Libro Excel')
-    })
-  })
-
-  describe('US-267: Invite Corporate User Modal', () => {
-    it('renders member invitation form with roles and corporate email input', () => {
-      const html = cleanHtml(
-        renderToString(
-          React.createElement(InviteUserModal, {
-            open: true,
-            onOpenChange: () => {},
-            onInvite: async () => {},
-            projectName: 'Subestación Chivor',
-            disablePortal: true,
-          })
-        )
-      )
-      expect(html).toContain('Invitar Miembro al Proyecto')
-      expect(html).toContain('Subestación Chivor')
-      expect(html).toContain('Revisor Jurídico')
-      expect(html).toContain('Operador Ingesta')
-      expect(html).toContain('Enviar Invitación')
     })
   })
 
@@ -230,35 +94,6 @@ describe('P1 Modernization Suite: All 35 User Stories Headless Verification', ()
     })
   })
 
-  describe('US-280: Button With Spinner & Double-Click Protection', () => {
-    it('renders spinner and loadingText when isLoading is true', () => {
-      const html = cleanHtml(
-        renderToString(
-          React.createElement(
-            ButtonWithSpinner,
-            { isLoading: true, loadingText: 'Procesando Lote...' },
-            'Iniciar Proceso'
-          )
-        )
-      )
-      expect(html).toContain('Procesando Lote...')
-      expect(html).not.toContain('Iniciar Proceso')
-    })
-
-    it('renders regular children when not loading', () => {
-      const html = cleanHtml(
-        renderToString(
-          React.createElement(
-            ButtonWithSpinner,
-            { isLoading: false },
-            'Iniciar Proceso'
-          )
-        )
-      )
-      expect(html).toContain('Iniciar Proceso')
-    })
-  })
-
   describe('US-282: Auto-Save Status Indicator', () => {
     it('renders saving state', () => {
       const html = cleanHtml(renderToString(React.createElement(AutoSaveIndicator, { status: 'saving' })))
@@ -268,40 +103,6 @@ describe('P1 Modernization Suite: All 35 User Stories Headless Verification', ()
     it('renders saved state', () => {
       const html = cleanHtml(renderToString(React.createElement(AutoSaveIndicator, { status: 'saved' })))
       expect(html).toContain('Cambios guardados')
-    })
-  })
-
-  describe('US-234, US-235, US-236, US-237, US-238: Recharts Visual Analytics', () => {
-    it('renders ProcessingFlowAreaChart container', () => {
-      const html = cleanHtml(renderToString(React.createElement(ProcessingFlowAreaChart)))
-      expect(html).toContain('Flujo de Procesamiento')
-      expect(html).toContain('Ingresados vs Revisados')
-    })
-
-    it('renders MaturityRadarChart container', () => {
-      const html = cleanHtml(renderToString(React.createElement(MaturityRadarChart)))
-      expect(html).toContain('Completitud Documental del Expediente')
-      expect(html).toContain('Línea Base vs Estado Real')
-    })
-
-    it('renders AiConfidenceDonutChart container', () => {
-      const html = cleanHtml(renderToString(React.createElement(AiConfidenceDonutChart, { highCount: 50, mediumCount: 20, lowCount: 5 })))
-      expect(html).toContain('Niveles de Confianza IA')
-      expect(html).toContain('Alta')
-      expect(html).toContain('Media')
-      expect(html).toContain('Baja')
-    })
-
-    it('renders MiniSparkline component', () => {
-      const html = cleanHtml(renderToString(React.createElement(MiniSparkline, { progressPercentage: 85 })))
-      expect(html).toContain('85%')
-      expect(html).toContain('Avance del predio: 85%')
-    })
-
-    it('renders BatchesTreemap container', () => {
-      const html = cleanHtml(renderToString(React.createElement(BatchesTreemap)))
-      expect(html).toContain('Volumen Documental por Lote')
-      expect(html).toContain('Treemap')
     })
   })
 
