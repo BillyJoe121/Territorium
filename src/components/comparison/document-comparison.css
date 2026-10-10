@@ -266,11 +266,6 @@
 }
 
 /* El comparador (tanto pantalla inicial como resultados) ocupa la ventana exacta y NO tiene scroll general */
-.app-main:has(.comparison-workspace) {
-  height: 100vh !important;
-  max-height: 100vh !important;
-  overflow: hidden !important;
-}
 .page-content:has(.comparison-workspace) {
   max-width: 100% !important;
   padding: 8px 18px 8px !important;
